@@ -1,6 +1,5 @@
 # Algoria: Go-to-Market and Sustainability Plan
 
-*Prepared for the SCF #45 resubmission. Last verified 2026-09-02. All figures below are targets or scenario assumptions unless explicitly labeled as current evidence.*
 
 ## Executive plan
 
