@@ -1,0 +1,11 @@
+{
+  "tasks": {
+    "check": "deno check supabase/functions/api/index.ts scripts/*.ts",
+    "test": "deno test --allow-env --allow-read supabase/functions/api",
+    "dev": "deno run --allow-env --allow-net --env-file=.env.local supabase/functions/api/index.ts"
+  },
+  "compilerOptions": { "strict": true, "lib": ["deno.ns", "dom", "esnext"] },
+  "fmt": { "lineWidth": 110, "singleQuote": true },
+  "nodeModulesDir": "auto",
+  "lint": { "rules": { "exclude": ["no-import-prefix"] } }
+}

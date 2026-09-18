@@ -1,0 +1,22 @@
+{
+  "verified_date": "2026-09-18",
+  "purpose": "Public API reference copies for Algoria skill integration, based on the recorded live responses. Runtime clients must read current discovery and their actual 402 challenge.",
+  "files": [
+    {
+      "file": "openapi.json",
+      "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/openapi.json",
+      "sha256": "928a4f7a7c665621e1cc89ebbc95396959b7969f10d42a4ae1c9b78afe5e14c1"
+    },
+    {
+      "file": "discovery.json",
+      "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/discovery/resources",
+      "sha256": "4b422750ae1f4bb063d938691d7fcd43165522ac4668b18a59f5088c1d2d0196"
+    },
+    {
+      "file": "image.generate.json",
+      "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate",
+      "sha256": "2ad0314a991ad22ab856206233092988b151bed3e9d6c2794149a3cac33a1e49"
+    }
+  ],
+  "local_changes": "Discovery tags in discovery.json and image.generate.json were translated to English to match repository metadata. These two reference copies are not unmodified live responses; the deployed API may retain the previous tag until the next deployment. Endpoint and payment contracts are unchanged."
+}

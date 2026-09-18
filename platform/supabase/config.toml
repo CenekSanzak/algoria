@@ -1,0 +1,6 @@
+project_id = "algoria-platform"
+
+[functions.api]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/api/index.ts"

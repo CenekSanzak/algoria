@@ -1,0 +1,630 @@
+{
+  "x402Version": 2,
+  "resources": [
+    {
+      "id": "image.generate",
+      "version": "1",
+      "name": "Algoria Image Generation",
+      "description": "Generate one square 1K PNG image from a text prompt.",
+      "tags": [
+        "image",
+        "generation",
+        "design",
+        "art",
+        "visual"
+      ],
+      "type": "http",
+      "x402Version": 2,
+      "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "service_id",
+          "status",
+          "status_url",
+          "payment",
+          "output",
+          "error"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_id": {
+            "const": "image.generate"
+          },
+          "status": {
+            "enum": [
+              "awaiting_payment",
+              "settling",
+              "payment-uncertain",
+              "paid",
+              "submitting",
+              "submission-uncertain",
+              "queued",
+              "running",
+              "saving",
+              "succeeded",
+              "failed",
+              "result-ready"
+            ]
+          },
+          "status_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "poll_after_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "payment": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "success",
+                  "network",
+                  "transaction"
+                ],
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "network": {
+                    "const": "stellar:testnet"
+                  },
+                  "transaction": {
+                    "type": "string"
+                  },
+                  "payer": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "errorReason": {
+                    "type": "string"
+                  },
+                  "errorMessage": {
+                    "type": "string"
+                  },
+                  "extensions": {
+                    "type": "object"
+                  },
+                  "extra": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "images",
+                  "url_expires_in"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "images": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "url",
+                        "content_type"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "content_type": {
+                          "enum": [
+                            "image/png",
+                            "image/jpeg",
+                            "image/webp"
+                          ]
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "height": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  },
+                  "url_expires_in": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Signed image URL lifetime in seconds."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "job_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "payment": {
+                    "type": "object",
+                    "required": [
+                      "success",
+                      "network",
+                      "transaction"
+                    ],
+                    "properties": {
+                      "success": {
+                        "type": "boolean"
+                      },
+                      "network": {
+                        "const": "stellar:testnet"
+                      },
+                      "transaction": {
+                        "type": "string"
+                      },
+                      "payer": {
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^\\d+$"
+                      },
+                      "errorReason": {
+                        "type": "string"
+                      },
+                      "errorMessage": {
+                        "type": "string"
+                      },
+                      "extensions": {
+                        "type": "object"
+                      },
+                      "extra": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "execution": {
+        "supported": [
+          "sync",
+          "async"
+        ],
+        "default": "sync",
+        "default_wait_ms": 45000,
+        "max_wait_ms": 60000
+      },
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "stellar:testnet",
+          "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+          "amount": "100000",
+          "payTo": "GCTVT52AAFK7KYO74JAO3QOLNT6BUYTCZYHTRD7C2VZG6C5CJNRVEV6Y",
+          "maxTimeoutSeconds": 120,
+          "extra": {
+            "areFeesSponsored": true
+          }
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "info": {
+            "input": {
+              "type": "http",
+              "method": "POST",
+              "bodyType": "json",
+              "body": {
+                "prompt": "A small red sailboat on a calm turquoise sea, watercolor illustration."
+              },
+              "queryParams": {
+                "mode": "sync"
+              },
+              "headers": {
+                "Idempotency-Key": "YOUR_UUID_V4",
+                "X-Recovery-Token": "YOUR_RANDOM_32_BYTE_BASE64URL_TOKEN"
+              }
+            },
+            "output": {
+              "type": "json",
+              "example": {
+                "job_id": "00000000-0000-4000-8000-000000000001",
+                "service_id": "image.generate",
+                "status": "succeeded",
+                "status_url": "https://api.example.com/v1/jobs/00000000-0000-4000-8000-000000000001",
+                "payment": {
+                  "success": true,
+                  "network": "stellar:testnet",
+                  "transaction": "0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                "output": {
+                  "images": [
+                    {
+                      "url": "https://storage.example.com/image.png?token=example",
+                      "content_type": "image/png",
+                      "width": 1024,
+                      "height": 1024
+                    }
+                  ],
+                  "url_expires_in": 3600
+                },
+                "error": null
+              }
+            }
+          },
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "required": [
+              "input"
+            ],
+            "properties": {
+              "input": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "method",
+                  "bodyType",
+                  "body"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "const": "http"
+                  },
+                  "method": {
+                    "const": "POST"
+                  },
+                  "bodyType": {
+                    "const": "json"
+                  },
+                  "body": {
+                    "type": "object",
+                    "properties": {
+                      "prompt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      }
+                    },
+                    "required": [
+                      "prompt"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "queryParams": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "enum": [
+                          "sync",
+                          "async"
+                        ]
+                      },
+                      "wait_ms": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "output": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "json"
+                  },
+                  "example": {
+                    "type": "object",
+                    "required": [
+                      "job_id",
+                      "service_id",
+                      "status",
+                      "status_url",
+                      "payment",
+                      "output",
+                      "error"
+                    ],
+                    "properties": {
+                      "job_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "service_id": {
+                        "const": "image.generate"
+                      },
+                      "status": {
+                        "enum": [
+                          "awaiting_payment",
+                          "settling",
+                          "payment-uncertain",
+                          "paid",
+                          "submitting",
+                          "submission-uncertain",
+                          "queued",
+                          "running",
+                          "saving",
+                          "succeeded",
+                          "failed",
+                          "result-ready"
+                        ]
+                      },
+                      "status_url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "poll_after_ms": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "payment": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "success",
+                              "network",
+                              "transaction"
+                            ],
+                            "properties": {
+                              "success": {
+                                "type": "boolean"
+                              },
+                              "network": {
+                                "const": "stellar:testnet"
+                              },
+                              "transaction": {
+                                "type": "string"
+                              },
+                              "payer": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "errorReason": {
+                                "type": "string"
+                              },
+                              "errorMessage": {
+                                "type": "string"
+                              },
+                              "extensions": {
+                                "type": "object"
+                              },
+                              "extra": {
+                                "type": "object"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "output": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "images",
+                              "url_expires_in"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                              "images": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 1,
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "url",
+                                    "content_type"
+                                  ],
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "url": {
+                                      "type": "string",
+                                      "format": "uri"
+                                    },
+                                    "content_type": {
+                                      "enum": [
+                                        "image/png",
+                                        "image/jpeg",
+                                        "image/webp"
+                                      ]
+                                    },
+                                    "width": {
+                                      "type": "integer",
+                                      "minimum": 1
+                                    },
+                                    "height": {
+                                      "type": "integer",
+                                      "minimum": 1
+                                    }
+                                  }
+                                }
+                              },
+                              "url_expires_in": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "Signed image URL lifetime in seconds."
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "error": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "code"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "job_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "payment": {
+                                "type": "object",
+                                "required": [
+                                  "success",
+                                  "network",
+                                  "transaction"
+                                ],
+                                "properties": {
+                                  "success": {
+                                    "type": "boolean"
+                                  },
+                                  "network": {
+                                    "const": "stellar:testnet"
+                                  },
+                                  "transaction": {
+                                    "type": "string"
+                                  },
+                                  "payer": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "errorReason": {
+                                    "type": "string"
+                                  },
+                                  "errorMessage": {
+                                    "type": "string"
+                                  },
+                                  "extensions": {
+                                    "type": "object"
+                                  },
+                                  "extra": {
+                                    "type": "object"
+                                  }
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "Required UUID v4; preserve it on retries.",
+        "X-Recovery-Token": "Required random 32-byte base64url secret; preserve locally. Never put in a URL.",
+        "PAYMENT-SIGNATURE": "Standard x402 v2 payment authorization, after receiving 402."
+      },
+      "responses": {
+        "200": "Completed result and payment receipt",
+        "202": "Same job continues; poll status_url with recovery token",
+        "402": "Payment required; no generation started"
+      },
+      "recovery": {
+        "method": "GET",
+        "url_template": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/jobs/{job_id}",
+        "authorization": "Bearer <recovery token>",
+        "polling_interval_ms": 3000
+      }
+    }
+  ],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "total": 1,
+    "cursor": null
+  }
+}
