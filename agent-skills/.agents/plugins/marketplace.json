@@ -1,0 +1,20 @@
+{
+  "name": "algoria-skills",
+  "interface": {
+    "displayName": "Algoria"
+  },
+  "plugins": [
+    {
+      "name": "algoria",
+      "source": {
+        "source": "local",
+        "path": "./plugins/algoria"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

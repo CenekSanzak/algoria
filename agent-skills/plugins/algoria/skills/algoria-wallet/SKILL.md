@@ -9,10 +9,22 @@ A Stellar wallet held on the user's own machine, in `~/.algoria/wallet.json`.
 The seed never leaves this computer — no Algoria server, no API, no network
 call carries it. One wallet per network, created on first use.
 
+## Running these commands
+
+Resolve the script path once, then reuse it. This works in both Claude and Codex:
+
+```bash
+WALLET="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-wallet/scripts/wallet.mjs"
+```
+
+In Claude, `CLAUDE_PLUGIN_ROOT` is set for you. In Codex it is unset and the
+path falls back to `.`, so run from the plugin root — the directory holding
+`.codex-plugin/`. Every command below is written against `$WALLET`.
+
 ## Getting a working wallet
 
 ```bash
-node scripts/wallet.mjs onboard --network testnet
+node "$WALLET" onboard --network testnet
 ```
 
 One command: creates the wallet if there is none, funds it from Friendbot, adds
@@ -48,7 +60,7 @@ Use `--json` whenever the result feeds another step:
 ## Before paying for anything
 
 ```bash
-node scripts/wallet.mjs balance --network testnet --json
+node "$WALLET" balance --network testnet --json
 ```
 
 Check `trustline` is `true` and `usdc` covers the price. A wallet with XLM but

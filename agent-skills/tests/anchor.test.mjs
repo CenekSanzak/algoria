@@ -13,17 +13,17 @@ import { join } from 'node:path';
 const home = await mkdtemp(join(tmpdir(), 'algoria-anchor-'));
 process.env.ALGORIA_HOME = home;
 
-const { assertAnchorNetwork, estimateUsdc, normaliseTryAmount } = await import('../lib/anchor/anchor.mjs');
-const { isSuccess, isTerminal } = await import('../lib/anchor/sep6.mjs');
+const { assertAnchorNetwork, estimateUsdc, normaliseTryAmount } = await import('../plugins/algoria/lib/anchor/anchor.mjs');
+const { isSuccess, isTerminal } = await import('../plugins/algoria/lib/anchor/sep6.mjs');
 const { anchorStatePath, findDeposit, latestDeposit, readState, recordDeposit, updateDeposit } = await import(
-  '../lib/anchor/state.mjs'
+  '../plugins/algoria/lib/anchor/state.mjs'
 );
-const { NETWORKS } = await import('../lib/stellar/network.mjs');
+const { NETWORKS } = await import('../plugins/algoria/lib/stellar/network.mjs');
 
 afterAll(() => rm(home, { recursive: true, force: true }));
 beforeEach(() => rm(anchorStatePath(), { force: true }));
 
-/** @type {import('../lib/anchor/anchor.mjs').AnchorStatus} */
+/** @type {import('../plugins/algoria/lib/anchor/anchor.mjs').AnchorStatus} */
 const STATUS = {
   environment: 'sandbox',
   tryLimits: { min: '50.00', max: '3000' },

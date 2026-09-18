@@ -15,12 +15,24 @@ describe any of this as money.
 Requires a funded testnet wallet with a USDC trustline. If there is none, run
 `algoria-wallet`'s `onboard` first; this skill will say so and stop.
 
+## Running these commands
+
+Resolve the script path once, then reuse it. This works in both Claude and Codex:
+
+```bash
+TOPUP="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-topup/scripts/topup.mjs"
+```
+
+In Claude, `CLAUDE_PLUGIN_ROOT` is set for you. In Codex it is unset and the
+path falls back to `.`, so run from the plugin root — the directory holding
+`.codex-plugin/`. Every command below is written against `$TOPUP`.
+
 ## The flow
 
 It is two steps because a bank transfer is two steps.
 
 ```bash
-node scripts/topup.mjs start --try 200
+node "$TOPUP" start --try 200
 ```
 
 Opens a deposit and prints an IBAN, an amount and a reference. **Nothing has
@@ -32,7 +44,7 @@ stands in for their bank.
 this skill has no command that does it.
 
 ```bash
-node scripts/topup.mjs status --wait
+node "$TOPUP" status --wait
 ```
 
 Follows the deposit until the USDC lands, then reports the amount received, the
@@ -79,7 +91,7 @@ keep polling. `error`, `refunded` and `expired` are final failures. Anything
 unrecognised is not success.
 
 `pending_trust` means the trustline went missing; fix it with
-`wallet.mjs trustline` and keep the **same** deposit.
+`algoria-wallet`'s `trustline` and keep the **same** deposit.
 
 Do not say the top-up is done until `status` reports `completed` **and** shows
 the balance. The skill checks Horizon itself, so the balance in its output is

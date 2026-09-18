@@ -5,6 +5,14 @@ to users who will point them at real money.
 
 ## Shape
 
+Everything below is relative to the plugin root, `plugins/algoria/`.
+
+**Nothing goes in the plugin root that does not ship to users.** Both hosts
+install a plugin by copying its directory wholesale and neither reads
+`.gitignore`, so a test file or a stray `node_modules` is shipped to every user
+who installs it. The harness — `package.json`, `tests/`, `build/`,
+`node_modules` — therefore lives one level up, at the marketplace root.
+
 ```
 skills/<skill-name>/
   SKILL.md              required
@@ -27,18 +35,39 @@ description: Create and manage a local Stellar wallet on this machine — ...
   USDC, a funded testnet account, or a way to pay for Algoria services.
 ```
 
+Those two keys are the whole budget. Claude accepts more and Codex accepts a
+different more; `name` and `description` are the intersection, and a skill that
+stays inside it installs into both hosts unchanged. Codex rejects a description
+containing `<` or `>`, and caps it at 1024 characters.
+
 The body is instructions for an agent that has already decided to act. Lead with
 what must be true before anything runs, then the commands, then the guardrails.
 Detail that is only occasionally needed goes in `references/` so it costs
 nothing until it is wanted.
+
+**Never write a command that assumes a working directory.** Claude exports
+`CLAUDE_PLUGIN_ROOT`; Codex expects to be run from the plugin root and sets
+nothing. Open the body by resolving one variable that covers both, then write
+every command against it:
+
+```bash
+WALLET="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-wallet/scripts/wallet.mjs"
+```
 
 ## Scripts
 
 - **Node 22+. Reach for a dependency only when the alternative is hand-rolling
   cryptography or wire formats.** Creating a key and reading a balance need
   nothing; signing a transaction needs the SDK. When a command does need one,
-  import it lazily and fail with a message naming the fix, so the commands that
-  do not need it keep working uninstalled.
+  import it lazily, so the commands that do not need it keep working.
+- **A runtime dependency must be bundled, not installed.** A user who installed
+  this plugin from a marketplace never ran `pnpm install`, so `node_modules` is
+  not there. The Stellar SDK reaches runtime through `loadSdk()` in
+  `lib/stellar/sdk.mjs`, which loads the committed bundle at
+  `lib/vendor/stellar-sdk.mjs`. Needing a new symbol means adding it to
+  `build/stellar-sdk-entry.mjs`, running `pnpm bundle:sdk`, and committing the
+  result — a symbol that is not in the entry point does not exist at runtime.
+  Verify by hiding `node_modules` and running the command.
 - **Shared code lives in `lib/`**, imported by relative path. Two skills needing
   the same logic is the signal to move it there, not to copy it.
 - **One entry point per skill**, with subcommands named for what they do — the
@@ -73,7 +102,9 @@ nothing until it is wanted.
 
 ## Tests
 
-Every module in `lib/` has tests in `tests/`. Where a hand-rolled implementation
+Every module in `lib/` has tests in the harness's `tests/`, at the marketplace
+root, importing across into `plugins/algoria/lib/`. They are deliberately not
+inside the plugin, because anything in there ships. Where a hand-rolled implementation
 replaces a standard library — as `strkey.mjs` replaces `@stellar/stellar-sdk` —
 the test cross-checks against that library, which stays a devDependency.
 
@@ -81,7 +112,34 @@ Tests never touch real user state. Redirect `ALGORIA_HOME` to a temp directory
 before importing any module that reads it, and never call a network endpoint
 that writes.
 
+## Two hosts
+
+The plugin ships one `skills/` tree and one `lib/`, described by two manifests:
+`.claude-plugin/plugin.json` for Claude and `.codex-plugin/plugin.json` for
+Codex. They are maintained side by side, not generated from each other, because
+Codex validates its manifest against a strict schema — unknown fields are
+rejected, and a full `interface` block plus strict semver is required.
+
+Adding a skill means nothing more than a new `skills/<name>/`: both hosts
+discover the directory, and neither manifest lists skills individually.
+
+Before pushing a change to either manifest or any `SKILL.md`, run Codex's own
+validators — they are stricter than Claude's and they ship with Codex:
+
+```bash
+python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/algoria
+python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
+  plugins/algoria/skills/<name>
+```
+
+Validation is necessary but not sufficient: it reads manifests, not behaviour.
+Before shipping, install the plugin and run the skill from the *installed* copy,
+which has no `node_modules` and no harness — that is what catches a file that
+never shipped or a dependency that was never bundled. `README.md` has the
+commands.
+
 ## Versioning
 
-`.claude-plugin/plugin.json` carries the version for the whole package. Bump it
-when a skill's behaviour changes in a way a user would notice.
+The version lives in **both** manifests and the two must agree. Bump them
+together when a skill's behaviour changes in a way a user would notice. Codex
+requires strict semver, so that is the format for both.

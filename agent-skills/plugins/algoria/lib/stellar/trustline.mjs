@@ -6,24 +6,13 @@
  * a `changeTrust` operation. A freshly created wallet holds XLM and nothing
  * else, so every x402 flow is blocked until this runs.
  *
- * Signing and submitting a transaction needs real XDR, so this module — and
- * only this module — loads `@stellar/stellar-sdk`. It is imported lazily so
- * that creating a wallet, reading a balance, or exporting a seed keeps working
- * on a machine where dependencies were never installed.
+ * Signing and submitting a transaction needs real XDR, so this module is one of
+ * the two that reach for the Stellar SDK, through `loadSdk()` in `sdk.mjs`. The
+ * load is lazy, so creating a wallet, reading a balance, or exporting a seed
+ * keeps working even if the SDK cannot be found at all.
  */
 
-/**
- * @returns {Promise<typeof import('@stellar/stellar-sdk')>}
- */
-async function loadSdk() {
-  try {
-    return await import('@stellar/stellar-sdk');
-  } catch {
-    throw new Error(
-      'this command needs @stellar/stellar-sdk. Run `pnpm install` in the agent-skills directory, then try again.'
-    );
-  }
-}
+import { loadSdk } from './sdk.mjs';
 
 /**
  * Does this account already trust the network's USDC?

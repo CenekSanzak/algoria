@@ -8,22 +8,13 @@
  *
  * Two things this must never do: submit the challenge to the network (it is a
  * signature, not a payment), and sign a challenge that failed verification.
- * Real XDR is involved, so this module loads the SDK, lazily, like
- * `lib/stellar/trustline.mjs` does.
+ * Real XDR is involved, so this module reaches for the Stellar SDK through
+ * `loadSdk()`, lazily, like `lib/stellar/trustline.mjs` does.
  */
 
 import { ANCHOR, anchorFetch } from './anchor.mjs';
+import { loadSdk } from '../stellar/sdk.mjs';
 
-/** @returns {Promise<typeof import('@stellar/stellar-sdk')>} */
-async function loadSdk() {
-  try {
-    return await import('@stellar/stellar-sdk');
-  } catch {
-    throw new Error(
-      'this command needs @stellar/stellar-sdk. Run `pnpm install` in the agent-skills directory, then try again.'
-    );
-  }
-}
 
 /**
  * Log in to the anchor and return a bearer token.

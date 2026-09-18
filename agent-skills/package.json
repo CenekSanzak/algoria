@@ -1,19 +1,21 @@
 {
   "name": "@algoria/agent-skills",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Algoria's shipped Agent Skills. Wallet creation, funding and USDC readiness on Stellar.",
+  "description": "Algoria's shipped Agent Skills, and the harness that tests and builds them. The plugin itself is plugins/algoria.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "bundle:sdk": "esbuild build/stellar-sdk-entry.mjs --bundle --format=esm --platform=node --target=node22 --tsconfig-raw={} --legal-comments=none --minify --banner:js=\"// @ts-nocheck -- generated file, do not edit; see build/stellar-sdk-entry.mjs\" --outfile=plugins/algoria/lib/vendor/stellar-sdk.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.0",
     "vitest": "4.1.5"
   },

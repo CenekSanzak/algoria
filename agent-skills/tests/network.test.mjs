@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Asset, Networks } from '@stellar/stellar-sdk';
-import { NETWORKS, resolveNetwork } from '../lib/stellar/network.mjs';
-import { isValidPublicKey } from '../lib/stellar/strkey.mjs';
+import { NETWORKS, resolveNetwork } from '../plugins/algoria/lib/stellar/network.mjs';
+import { isValidPublicKey } from '../plugins/algoria/lib/stellar/strkey.mjs';
 
 describe('network profiles', () => {
   it('uses the passphrases the SDK defines', () => {

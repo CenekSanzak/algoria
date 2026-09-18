@@ -1,3 +1,8 @@
 node_modules/
 *.log
 .DS_Store
+
+# The repository root ignores `build/` for SvelteKit's output. This package's
+# `build/` is the Stellar SDK bundle's entry point, which is source and has to
+# be committed, so re-include it here.
+!build/

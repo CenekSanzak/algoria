@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "algoria",
-      "source": "./",
+      "source": "./plugins/algoria",
       "description": "Algoria skills for the agent economy on Stellar."
     }
   ]

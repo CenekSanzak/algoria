@@ -59,13 +59,13 @@ money never share a key.
 
 **Their default `$5` autonomous spend cap.** AgentCash's `fetch` pays up to $5
 without asking. That is a product decision about autonomy, and Algoria's is the
-opposite: separate, explicit payment approval ([docs/PRODUCT.md](../../../../docs/PRODUCT.md)).
+opposite: separate, explicit payment approval ([docs/PRODUCT.md](../../../../../../docs/PRODUCT.md)).
 When a payment skill is added here, the cap belongs on the client *and* the
 server, and consent stays explicit.
 
 **"Payment failed → retry the request."** Algoria re-derives every receipt from
 the ledger and keeps an unresolved payment visibly uncertain rather than assuming
-it settled ([docs/SECURITY.md](../../../../docs/SECURITY.md)). That rigour is
+it settled ([docs/SECURITY.md](../../../../../../docs/SECURITY.md)). That rigour is
 worth keeping even though it is more work.
 
 **No passphrase on the real network.** They store a spendable mainnet key with

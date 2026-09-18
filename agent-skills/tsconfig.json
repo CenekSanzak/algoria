@@ -8,7 +8,17 @@
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["lib/**/*.mjs", "skills/**/*.mjs", "tests/**/*.mjs"]
+  "include": [
+    "plugins/algoria/lib/**/*.mjs",
+    "plugins/algoria/skills/**/*.mjs",
+    "tests/**/*.mjs",
+    "build/**/*.mjs"
+  ],
+  "exclude": [
+    "plugins/algoria/lib/vendor/**"
+  ]
 }

@@ -12,8 +12,8 @@ const home = await mkdtemp(join(tmpdir(), 'algoria-keystore-'));
 process.env.ALGORIA_HOME = home;
 
 const { algoriaHome, deleteWallet, ensureWallet, getWallet, importWallet, listWallets, readKeystore, unlockWallet, walletPath } =
-  await import('../lib/stellar/keystore.mjs');
-const { generateKeypair } = await import('../lib/stellar/keypair.mjs');
+  await import('../plugins/algoria/lib/stellar/keystore.mjs');
+const { generateKeypair } = await import('../plugins/algoria/lib/stellar/keypair.mjs');
 
 const PASSPHRASE = 'correct horse battery staple';
 

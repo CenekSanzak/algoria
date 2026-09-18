@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
-import { encodePublicKey, encodeSecretSeed, decodePublicKey, decodeSecretSeed, isValidPublicKey, isValidSecretSeed } from '../lib/stellar/strkey.mjs';
-import { fromSecretSeed, generateKeypair, publicKeyFromSeed } from '../lib/stellar/keypair.mjs';
+import { encodePublicKey, encodeSecretSeed, decodePublicKey, decodeSecretSeed, isValidPublicKey, isValidSecretSeed } from '../plugins/algoria/lib/stellar/strkey.mjs';
+import { fromSecretSeed, generateKeypair, publicKeyFromSeed } from '../plugins/algoria/lib/stellar/keypair.mjs';
 
 describe('strkey', () => {
   it('encodes public keys the way the SDK does', () => {

@@ -101,7 +101,7 @@ path against `@stellar/stellar-sdk`.
 
 The SDK *is* a runtime dependency, but only `trustline.mjs` loads it, and only
 lazily: signing and submitting a `changeTrust` transaction needs real XDR. Every
-other command still runs on a machine where `pnpm install` was never run.
+other command still runs on a machine with no dependencies installed at all.
 
 ## The USDC trustline
 
@@ -128,14 +128,17 @@ control, and a low one silently bounces incoming payments later.
 The seed is the only recovery material. There is no backup, no escrow, and no
 "forgot passphrase" path — Algoria holds nothing that could restore a wallet.
 
+`$WALLET` below is the path resolved at the top of
+[SKILL.md](../SKILL.md#running-these-commands).
+
 ```bash
-node scripts/wallet.mjs export --network pubnet --out ~/algoria-seed.txt
+node "$WALLET" export --network pubnet --out ~/algoria-seed.txt
 ```
 
 To restore on another machine:
 
 ```bash
-node scripts/wallet.mjs import --network pubnet --seed-file ~/algoria-seed.txt
+node "$WALLET" import --network pubnet --seed-file ~/algoria-seed.txt
 ```
 
 ## Deleting a wallet
