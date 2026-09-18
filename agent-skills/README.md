@@ -193,5 +193,6 @@ it, and the warning disappears once the root app has been built.
 - A top-up is never simulated for the user. Sending the money is their step.
 
 See [keystore.md](plugins/algoria/skills/algoria-wallet/references/keystore.md)
-for the on-disk format and threat model, and [CONVENTIONS.md](CONVENTIONS.md) for
-the rules every skill in this package follows.
+for the on-disk format and threat model, [CONVENTIONS.md](CONVENTIONS.md) for
+the rules every skill in this package follows, and [TEST_GUIDE.md](TEST_GUIDE.md)
+for how to check all of it by hand before a demo.
