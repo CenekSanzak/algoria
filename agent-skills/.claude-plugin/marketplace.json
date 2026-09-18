@@ -1,0 +1,13 @@
+{
+  "name": "algoria-skills",
+  "owner": {
+    "name": "Algoria"
+  },
+  "plugins": [
+    {
+      "name": "algoria",
+      "source": "./",
+      "description": "Algoria skills for the agent economy on Stellar."
+    }
+  ]
+}

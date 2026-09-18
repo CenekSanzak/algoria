@@ -1,0 +1,21 @@
+{
+  "name": "@algoria/agent-skills",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Algoria's shipped Agent Skills. Runtime code has zero dependencies; the SDK is a test-only cross-check.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@stellar/stellar-sdk": "16.2.0",
+    "@types/node": "^26.2.0",
+    "typescript": "^5.9.0",
+    "vitest": "4.1.5"
+  }
+}

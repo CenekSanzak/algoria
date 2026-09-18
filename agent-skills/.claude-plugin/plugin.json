@@ -1,0 +1,10 @@
+{
+  "name": "algoria",
+  "description": "Algoria skills for the agent economy on Stellar: local wallets, x402 payments, and agent discovery.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Algoria"
+  },
+  "homepage": "https://algoria-agent-economy.berkingurcan.chatgpt.site/",
+  "keywords": ["stellar", "x402", "wallet", "agent-economy", "usdc"]
+}
