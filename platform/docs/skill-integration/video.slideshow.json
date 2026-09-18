@@ -1,32 +1,54 @@
 {
-  "id": "image.generate",
+  "id": "video.slideshow",
   "version": "1",
-  "name": "Algoria Image Generation",
-  "description": "Generate one square 1K PNG image from a text prompt.",
+  "name": "Algoria Video Slideshow",
+  "description": "Sequence 1–6 Algoria images of matching dimensions into a silent 1–30 second MP4 slideshow.",
   "tags": [
-    "image",
-    "generation",
-    "design",
-    "art",
-    "visual"
+    "video",
+    "slideshow",
+    "sequence",
+    "advertisement",
+    "reel"
   ],
   "type": "http",
   "x402Version": 2,
-  "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate",
+  "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/video.slideshow",
   "method": "POST",
   "input_schema": {
     "type": "object",
-    "properties": {
-      "prompt": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 4000
-      }
-    },
+    "additionalProperties": false,
     "required": [
-      "prompt"
+      "images"
     ],
-    "additionalProperties": false
+    "properties": {
+      "images": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 6,
+        "description": "Ordered still images of matching dimensions; total duration must be 1–30 seconds.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url",
+            "duration_seconds"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 4096,
+              "description": "A current signed output URL from a completed Algoria job. External uploads are not accepted."
+            },
+            "duration_seconds": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 30
+            }
+          }
+        }
+      }
+    }
   },
   "output_schema": {
     "type": "object",
@@ -46,7 +68,7 @@
         "format": "uuid"
       },
       "service_id": {
-        "const": "image.generate"
+        "const": "video.slideshow"
       },
       "service_version": {
         "const": "1"
@@ -125,51 +147,44 @@
           {
             "type": "object",
             "required": [
-              "images",
+              "video",
               "url_expires_in"
             ],
             "additionalProperties": false,
             "properties": {
-              "images": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 1,
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "url",
-                    "content_type"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "url": {
-                      "type": "string",
-                      "format": "uri"
-                    },
-                    "file_size": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "duration": {
-                      "type": "number",
-                      "exclusiveMinimum": 0,
-                      "description": "Media duration in seconds."
-                    },
-                    "content_type": {
-                      "enum": [
-                        "image/png",
-                        "image/jpeg",
-                        "image/webp"
-                      ]
-                    },
-                    "width": {
-                      "type": "integer",
-                      "minimum": 1
-                    },
-                    "height": {
-                      "type": "integer",
-                      "minimum": 1
-                    }
+              "video": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "content_type"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "file_size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "duration": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Media duration in seconds."
+                  },
+                  "content_type": {
+                    "enum": [
+                      "video/mp4"
+                    ]
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 }
               },
@@ -270,7 +285,7 @@
       "network": "stellar:testnet",
       "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
       "amount": "100000",
-      "payTo": "GCTVT52AAFK7KYO74JAO3QOLNT6BUYTCZYHTRD7C2VZG6C5CJNRVEV6Y",
+      "payTo": "GBYSYF3F5Q3L6HKRTLSHFNPOIE5ROEOLNL26Q433TFTI7CPFKVLHDIKT",
       "maxTimeoutSeconds": 120,
       "extra": {
         "areFeesSponsored": true
@@ -285,7 +300,12 @@
           "method": "POST",
           "bodyType": "json",
           "body": {
-            "prompt": "A small red sailboat on a calm turquoise sea, watercolor illustration."
+            "images": [
+              {
+                "url": "https://storage.example.com/image.png?token=example",
+                "duration_seconds": 20
+              }
+            ]
           },
           "queryParams": {
             "mode": "sync"
@@ -299,7 +319,7 @@
           "type": "json",
           "example": {
             "job_id": "00000000-0000-4000-8000-000000000001",
-            "service_id": "image.generate",
+            "service_id": "video.slideshow",
             "service_version": "1",
             "status": "succeeded",
             "status_url": "https://api.example.com/v1/jobs/00000000-0000-4000-8000-000000000001",
@@ -309,14 +329,14 @@
               "transaction": "0000000000000000000000000000000000000000000000000000000000000000"
             },
             "output": {
-              "images": [
-                {
-                  "url": "https://storage.example.com/image.png?token=example",
-                  "content_type": "image/png",
-                  "width": 1024,
-                  "height": 1024
-                }
-              ],
+              "video": {
+                "url": "https://storage.example.com/video.mp4?token=example",
+                "content_type": "video/mp4",
+                "width": 1024,
+                "height": 1024,
+                "file_size": 1500000,
+                "duration": 20
+              },
               "url_expires_in": 3600
             },
             "error": null
@@ -351,17 +371,39 @@
               },
               "body": {
                 "type": "object",
-                "properties": {
-                  "prompt": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
+                "additionalProperties": false,
                 "required": [
-                  "prompt"
+                  "images"
                 ],
-                "additionalProperties": false
+                "properties": {
+                  "images": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "description": "Ordered still images of matching dimensions; total duration must be 1–30 seconds.",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "url",
+                        "duration_seconds"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "maxLength": 4096,
+                          "description": "A current signed output URL from a completed Algoria job. External uploads are not accepted."
+                        },
+                        "duration_seconds": {
+                          "type": "number",
+                          "minimum": 0.5,
+                          "maximum": 30
+                        }
+                      }
+                    }
+                  }
+                }
               },
               "queryParams": {
                 "type": "object",
@@ -409,7 +451,7 @@
                     "format": "uuid"
                   },
                   "service_id": {
-                    "const": "image.generate"
+                    "const": "video.slideshow"
                   },
                   "service_version": {
                     "const": "1"
@@ -488,51 +530,44 @@
                       {
                         "type": "object",
                         "required": [
-                          "images",
+                          "video",
                           "url_expires_in"
                         ],
                         "additionalProperties": false,
                         "properties": {
-                          "images": {
-                            "type": "array",
-                            "minItems": 1,
-                            "maxItems": 1,
-                            "items": {
-                              "type": "object",
-                              "required": [
-                                "url",
-                                "content_type"
-                              ],
-                              "additionalProperties": false,
-                              "properties": {
-                                "url": {
-                                  "type": "string",
-                                  "format": "uri"
-                                },
-                                "file_size": {
-                                  "type": "integer",
-                                  "minimum": 0
-                                },
-                                "duration": {
-                                  "type": "number",
-                                  "exclusiveMinimum": 0,
-                                  "description": "Media duration in seconds."
-                                },
-                                "content_type": {
-                                  "enum": [
-                                    "image/png",
-                                    "image/jpeg",
-                                    "image/webp"
-                                  ]
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                }
+                          "video": {
+                            "type": "object",
+                            "required": [
+                              "url",
+                              "content_type"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                              "url": {
+                                "type": "string",
+                                "format": "uri"
+                              },
+                              "file_size": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "duration": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "description": "Media duration in seconds."
+                              },
+                              "content_type": {
+                                "enum": [
+                                  "video/mp4"
+                                ]
+                              },
+                              "width": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "height": {
+                                "type": "integer",
+                                "minimum": 1
                               }
                             }
                           },

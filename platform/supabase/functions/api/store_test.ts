@@ -33,6 +33,9 @@ Deno.test('SQL store preserves payment reservations, replay guards, and completi
     await db.exec(
       await Deno.readTextFile(new URL('../../migrations/202609180001_platform.sql', import.meta.url)),
     );
+    await db.exec(
+      await Deno.readTextFile(new URL('../../migrations/202609180002_speech_service.sql', import.meta.url)),
+    );
     const rpc = async <K extends keyof Results>(name: K, args: unknown[] = []): Promise<Results[K]> => {
       const result = await db.query<{ result: Results[K] }>(
         `select public.${name}(${args.map((_, i) => `$${i + 1}`).join(',')}) as result`,
@@ -53,6 +56,19 @@ Deno.test('SQL store preserves payment reservations, replay guards, and completi
       expires_at: new Date(Date.now() + 3_600_000).toISOString(),
     });
     const create = (n: number) => rpc('platform_create_job', [candidate(n)]);
+    const speech = {
+      ...candidate(99),
+      service_id: 'speech.generate',
+      input: { text: 'Hello', voice: 'Craig (en)' },
+    };
+    const createdSpeech = await rpc('platform_create_job', [speech]);
+    assert.deepEqual(createdSpeech.job.input, speech.input);
+    await db.query('delete from public.jobs where id = $1', [speech.id]);
+    const bucket = (await db.query<{ allowed_mime_types: string[] }>(
+      "select allowed_mime_types from storage.buckets where id='outputs'",
+    )).rows[0];
+    assert.ok(bucket.allowed_mime_types.includes('audio/wav'));
+    assert.ok(bucket.allowed_mime_types.includes('video/mp4'));
     const claim = (n: number, fingerprint = `fp${n}`) =>
       rpc('platform_claim_payment', [uuid(n), fingerprint, 'GPAYER', {}]);
     const finish = (n: number, outcome: 'success' | 'failed' | 'uncertain') =>

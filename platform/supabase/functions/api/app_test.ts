@@ -1,12 +1,17 @@
 import { deepEqual, equal, ok } from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { decodePaymentRequiredHeader, decodePaymentResponseHeader } from 'npm:@x402/core@2.22.0/http';
+import { StrKey } from 'npm:@stellar/stellar-sdk@16.2.0';
 import { createApp, type Dependencies } from './app.ts';
-import { type FalPollResult, FalSubmissionError } from './fal.ts';
+import { getService, LEGACY_COMPOSE_SERVICE } from './catalog.ts';
+import { type FalPollResult, FalSubmissionError, type FalTarget } from './fal.ts';
 import { ASSET, NETWORK, PaymentGateway, type PaymentPayload, type PaymentRequirements } from './payments.ts';
+import { hash } from './security.ts';
 import type { ClaimResult, CompletionClaim, Job, NewJob } from './store.ts';
 
 const RECIPIENT = 'GCTVT52AAFK7KYO74JAO3QOLNT6BUYTCZYHTRD7C2VZG6C5CJNRVEV6Y';
 const PAYER = 'GDSGS53IUWOSFIW7EWW5NJ4WJLUNVRSH3MYQ3YFGWEJI7VZCVE3C6JDT';
+const MEDIA_RECIPIENTS = [1, 2, 3, 4].map((value) => StrKey.encodeEd25519PublicKey(Buffer.alloc(32, value)));
 const REQUIREMENTS: PaymentRequirements = {
   scheme: 'exact',
   network: NETWORK,
@@ -179,9 +184,11 @@ class MemoryStore implements JobStore {
   }
 }
 
-function harness() {
+function harness(allServices = false) {
   const store = new MemoryStore();
   const downloadedUrls: string[] = [];
+  const submissions: { input: Record<string, unknown>; target?: FalTarget }[] = [];
+  const pollTargets: (FalTarget | undefined)[] = [];
   const calls = {
     requirements: 0,
     verify: 0,
@@ -218,12 +225,20 @@ function harness() {
       baseUrl: 'https://api.example.test/functions/v1/api',
       facilitatorUrl: 'https://facilitator.example.test',
       priceAtomic: '100000',
+      servicePayments: allServices
+        ? {
+          'speech.generate': { payTo: MEDIA_RECIPIENTS[0], priceAtomic: '200000' },
+          'video.slideshow': { payTo: MEDIA_RECIPIENTS[1], priceAtomic: '100000' },
+          'video.compose': { payTo: MEDIA_RECIPIENTS[2], priceAtomic: '100000' },
+          'video.caption': { payTo: MEDIA_RECIPIENTS[3], priceAtomic: '200000' },
+        }
+        : {},
     },
     store,
     payments: {
-      requirements: () => {
+      requirements: (payTo, amount) => {
         calls.requirements++;
-        return Promise.resolve(copy(REQUIREMENTS));
+        return Promise.resolve({ ...copy(REQUIREMENTS), payTo, amount });
       },
       challenge: paymentGateway.challenge.bind(paymentGateway),
       parse: (signature) => {
@@ -248,15 +263,17 @@ function harness() {
       },
     },
     fal: {
-      submit: () => {
+      submit: (input, _webhookUrl, target) => {
         calls.submit++;
+        submissions.push(copy({ input, target }));
         if (state.submission !== 'success') {
           return Promise.reject(new FalSubmissionError('submission test', state.submission));
         }
         return Promise.resolve({ requestId: `fal-request-${calls.submit}` });
       },
-      poll: () => {
+      poll: (_requestId, _signal, target) => {
         calls.poll++;
+        pollTargets.push(copy(target));
         if (state.pollError) return Promise.reject(new Error('provider temporarily unavailable'));
         return Promise.resolve(copy(state.result));
       },
@@ -292,6 +309,10 @@ function harness() {
       downloadedUrls.push(image.url);
       return Promise.resolve({ bytes: new Uint8Array([137, 80, 78, 71]), contentType: 'image/png' });
     },
+    downloadAudio: () =>
+      Promise.resolve({ bytes: new Uint8Array(44), contentType: 'audio/wav', duration: 15 }),
+    downloadVideo: () =>
+      Promise.resolve({ bytes: new Uint8Array(64), contentType: 'video/mp4', duration: 20 }),
   };
   const app = createApp(dependencies);
   async function post(
@@ -302,6 +323,7 @@ function harness() {
       input?: unknown;
       query?: string;
       contentType?: string;
+      service?: string;
     } = {},
   ) {
     const headers: Record<string, string> = {
@@ -310,7 +332,7 @@ function harness() {
       'Content-Type': options.contentType ?? 'application/json',
     };
     if (options.payment !== false) headers['PAYMENT-SIGNATURE'] = options.payment ?? `payment-${id}`;
-    return await app.request(`/v1/services/image.generate${options.query ?? ''}`, {
+    return await app.request(`/v1/services/${options.service ?? 'image.generate'}${options.query ?? ''}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(options.input ?? INPUT),
@@ -332,7 +354,49 @@ function harness() {
       }),
     });
   }
-  return { app, store, calls, state, downloadedUrls, post, status, webhook };
+  return {
+    app,
+    store,
+    calls,
+    state,
+    dependencies,
+    downloadedUrls,
+    submissions,
+    pollTargets,
+    post,
+    status,
+    webhook,
+  };
+}
+
+/** A durable paid snapshot from a prior request, with no external source or payment I/O. */
+async function paidMediaJob(h: ReturnType<typeof harness>, kind: 'audio' | 'video') {
+  const id = crypto.randomUUID();
+  const service = kind === 'audio' ? 'speech.generate' : 'video.compose';
+  const source = (file: string) =>
+    `https://db.example.test/storage/v1/object/sign/outputs/${crypto.randomUUID()}/${file}?token=admitted`;
+  const input = kind === 'audio' ? { text: 'A short narration.', voice: 'Craig (en)' } : {
+    video_url: source('video.mp4'),
+    audio_url: source('audio.wav'),
+  };
+  const payment = h.dependencies.config.servicePayments![service];
+  await h.store.create({
+    id,
+    service_id: service,
+    service_version: getService(service)!.version,
+    input,
+    input_hash: await hash(JSON.stringify({ service, input })),
+    recovery_token_hash: await hash(TOKEN),
+    requirements: { ...REQUIREMENTS, payTo: payment.payTo, amount: payment.priceAtomic },
+    resource_url: `${h.dependencies.config.baseUrl}/v1/services/${service}`,
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+  });
+  await h.store.claimPayment(id, `payment-${id}`, PAYER, {});
+  await h.store.finishPayment(id, 'success', RECEIPT);
+  h.state.result = kind === 'audio'
+    ? { status: 'succeeded', audio: { url: 'https://fal.media/audio.wav' } }
+    : { status: 'succeeded', video: { url: 'https://fal.media/video.mp4' } };
+  return { id, service, input };
 }
 
 Deno.test('unpaid request returns standard 402 without settlement or fal work', async () => {
@@ -596,4 +660,341 @@ Deno.test('sync URL-signing deadline returns 202 result-ready and status later d
   equal(h.calls.settle, 1);
   equal(h.calls.submit, 1);
   equal(h.calls.put, 1);
+});
+
+Deno.test('speech has its own quote and recovers the same audio without another payment', async () => {
+  const h = harness(true);
+  const id = crypto.randomUUID();
+  const options = { service: 'speech.generate', input: { text: 'Meet your next adventure.' } };
+  const unpaid = await h.post(id, { ...options, payment: false });
+  equal(unpaid.status, 402);
+  const quote = await unpaid.json();
+  equal(quote.accepts[0].payTo, MEDIA_RECIPIENTS[0]);
+  equal(quote.accepts[0].amount, '200000');
+  equal(quote.extensions.bazaar.info.input.body.voice, 'Craig (en)');
+  h.state.result = { status: 'succeeded', audio: { url: 'https://fal.media/speech.wav' } };
+  equal((await h.post(id, { ...options, query: '?mode=async' })).status, 202);
+  const complete = await (await h.status(id)).json();
+  equal(complete.output.audio.content_type, 'audio/wav');
+  equal(complete.output.audio.duration, 15);
+  equal(complete.output.images, undefined);
+  equal((await h.post(id, { ...options, payment: false })).status, 200);
+  equal(h.calls.settle, 1);
+  equal(h.calls.submit, 1);
+  equal((await h.post(id, { ...options, input: { text: 'Changed text' } })).status, 409);
+  equal((await h.post(id, { input: INPUT })).status, 409);
+});
+
+Deno.test('invalid speech input never creates a quote or spends money', async () => {
+  const h = harness(true);
+  for (
+    const input of [{ text: '' }, { text: 'x'.repeat(1001) }, { text: 'Hello', voice: 'invented' }, {
+      text: 'Hello',
+      audio_url: 'https://example.com/clone.wav',
+    }]
+  ) {
+    equal((await h.post(crypto.randomUUID(), { service: 'speech.generate', input })).status, 400);
+  }
+  equal(h.store.jobs.size, 0);
+  equal(h.calls.settle, 0);
+  equal(h.calls.submit, 0);
+});
+
+Deno.test('five-stage video chain accepts authorized outputs and completes each purchase once', async () => {
+  const h = harness(true);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (input, init) => {
+    const url = String(input);
+    ok(url.startsWith('https://db.example.test/storage/v1/object/sign/outputs/'));
+    equal(init?.method, 'HEAD');
+    const type = url.includes('.wav?') ? 'audio/wav' : url.includes('.mp4?') ? 'video/mp4' : 'image/png';
+    return Promise.resolve(
+      new Response(null, { headers: { 'content-type': type, 'content-length': '1000' } }),
+    );
+  };
+  try {
+    const imageId = crypto.randomUUID();
+    equal((await h.post(imageId)).status, 200);
+    const audioId = crypto.randomUUID();
+    h.state.result = { status: 'succeeded', audio: { url: 'https://fal.media/speech.wav' } };
+    equal(
+      (await h.post(audioId, { service: 'speech.generate', input: { text: 'A short product story.' } }))
+        .status,
+      200,
+    );
+    const source = (id: string, file: string) =>
+      `https://db.example.test/storage/v1/object/sign/outputs/${id}/${file}?token=test`;
+    h.state.result = { status: 'succeeded', video: { url: 'https://fal.media/video.mp4' } };
+    const slideshowId = crypto.randomUUID();
+    const slideshowInput = { images: [{ url: source(imageId, 'image.png'), duration_seconds: 20 }] };
+    const slideshow = await h.post(slideshowId, { service: 'video.slideshow', input: slideshowInput });
+    equal(slideshow.status, 200);
+    equal((await slideshow.json()).output.video.duration, 20);
+    equal(h.submissions.at(-1)!.target!.model, 'fal-ai/ffmpeg-api/images-to-video');
+    equal(h.submissions.at(-1)!.input.fps, 24);
+    const input = { video_url: source(slideshowId, 'video.mp4'), audio_url: source(audioId, 'audio.wav') };
+    const composedId = crypto.randomUUID();
+    const composed = await h.post(composedId, { service: 'video.compose', input });
+    equal(composed.status, 200);
+    const body = await composed.json();
+    equal(body.output.video.duration, 20);
+    equal(body.service_version, '2');
+    equal(h.store.jobs.get(composedId)!.service_version, '2');
+    equal(h.submissions.at(-1)!.target!.model, 'fal-ai/ffmpeg-api/merge-audio-video');
+    equal(h.submissions.at(-1)!.target!.output, 'video');
+    const captionId = crypto.randomUUID();
+    const captionInput = { video_url: source(composedId, 'video.mp4') };
+    equal(
+      (await h.post(captionId, { service: 'video.caption', input: captionInput, query: '?mode=async' }))
+        .status,
+      202,
+    );
+    equal((await (await h.status(captionId)).json()).status, 'succeeded');
+    equal(
+      (await h.post(captionId, { service: 'video.caption', input: captionInput, payment: false })).status,
+      200,
+    );
+    equal(h.calls.settle, 5);
+    equal(h.calls.submit, 5);
+    h.store.jobs.get(audioId)!.output!.duration = 25;
+    const bad = await h.post(crypto.randomUUID(), {
+      service: 'video.compose',
+      input,
+    });
+    equal(bad.status, 400);
+    equal((await bad.json()).code, 'narration-too-long');
+    h.store.jobs.get(audioId)!.output!.duration = 15;
+    const long = await h.post(crypto.randomUUID(), {
+      service: 'video.slideshow',
+      input: { images: [{ ...slideshowInput.images[0], duration_seconds: 31 }] },
+    });
+    equal(long.status, 400);
+    const external = await h.post(crypto.randomUUID(), {
+      service: 'video.caption',
+      input: { video_url: 'https://attacker.example/video.mp4' },
+    });
+    equal(external.status, 400);
+    equal(h.calls.settle, 5);
+    equal(h.store.jobs.size, 5);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+Deno.test('legacy paid composition authenticates before parsing and resumes its original schema and provider', async () => {
+  const h = harness(true);
+  const imageId = crypto.randomUUID();
+  equal((await h.post(imageId)).status, 200);
+  h.state.result = { status: 'succeeded', audio: { url: 'https://fal.media/speech.wav' } };
+  const audioId = crypto.randomUUID();
+  equal(
+    (await h.post(audioId, { service: 'speech.generate', input: { text: 'An existing narration.' } })).status,
+    200,
+  );
+  const source = (id: string, file: string) =>
+    `https://db.example.test/storage/v1/object/sign/outputs/${id}/${file}?token=expired-but-admitted`;
+  const input = {
+    images: [{ url: source(imageId, 'image.png'), duration_seconds: 20 }],
+    audio_url: source(audioId, 'audio.wav'),
+  };
+  const { id, service } = await paidMediaJob(h, 'video');
+  const stored = h.store.jobs.get(id)!;
+  stored.service_version = '1';
+  stored.input = input;
+  stored.input_hash = await hash(JSON.stringify({ service, input }));
+  const before = { ...h.calls };
+
+  equal((await h.post(id, { service, input: { invalid: true }, token: 'b'.repeat(43) })).status, 404);
+  equal((await h.post(id, { service: 'speech.generate', input: { invalid: true } })).status, 409);
+  equal((await h.post(crypto.randomUUID(), { service, input, payment: false })).status, 400);
+  equal((await h.post(id, { service, input, payment: false, query: '?mode=async' })).status, 202);
+  const legacyTarget = {
+    model: LEGACY_COMPOSE_SERVICE.model,
+    queuePath: LEGACY_COMPOSE_SERVICE.queuePath,
+    output: LEGACY_COMPOSE_SERVICE.providerOutput,
+  };
+  deepEqual(h.submissions.at(-1)!.target, legacyTarget);
+  ok(Array.isArray(h.submissions.at(-1)!.input.tracks));
+  const recovered = await (await h.status(id)).json();
+  equal(recovered.status, 'succeeded');
+  equal(recovered.service_version, '1');
+  equal(recovered.output.video.duration, 20);
+  deepEqual(h.pollTargets.at(-1), legacyTarget);
+  equal((await h.post(id, { service, input, payment: false })).status, 200);
+  equal(h.calls.submit, before.submit + 1);
+  equal(h.calls.poll, before.poll + 1);
+  equal(h.calls.settle, before.settle);
+  equal(h.calls.verify, before.verify);
+  equal(h.calls.requirements, before.requirements);
+});
+
+for (const kind of ['audio', 'video'] as const) {
+  Deno.test(`unverifiable ${kind} duration terminates the job and later recovery never retries completion`, async () => {
+    for (const duration of [undefined, 0, -1, NaN, Infinity]) {
+      const h = harness(true);
+      const { id, service, input } = await paidMediaJob(h, kind);
+      await h.store.claimSubmission(id);
+      await h.store.setSubmitted(id, 'fal-request-1');
+      const download = () => {
+        h.calls.download++;
+        return Promise.resolve({
+          bytes: new Uint8Array(64),
+          contentType: kind === 'audio' ? 'audio/wav' : 'video/mp4',
+          duration,
+        });
+      };
+      if (kind === 'audio') h.dependencies.downloadAudio = download;
+      else h.dependencies.downloadVideo = download;
+
+      const result = await (await h.status(id)).json();
+      equal(result.status, 'failed');
+      equal(result.error.code, 'invalid-media-duration');
+      equal(result.output, null);
+      deepEqual(result.payment, RECEIPT);
+      equal(h.store.jobs.get(id)!.status, 'failed');
+      equal(h.store.leases.size, 0);
+      equal((await h.webhook()).status, 200);
+      equal((await (await h.status(id)).json()).status, 'failed');
+      equal((await h.post(id, { service, input, payment: false })).status, 502);
+      deepEqual(
+        {
+          poll: h.calls.poll,
+          download: h.calls.download,
+          put: h.calls.put,
+          submit: h.calls.submit,
+          settle: h.calls.settle,
+        },
+        { poll: 1, download: 1, put: 0, submit: 0, settle: 0 },
+      );
+      equal(h.store.completed, 0);
+    }
+  });
+}
+
+Deno.test('video completion accepts the duration boundary and permanently fails outputs above it', async () => {
+  for (const duration of [30.05, 30.051, 31]) {
+    const h = harness(true);
+    const { id, service, input } = await paidMediaJob(h, 'video');
+    await h.store.claimSubmission(id);
+    await h.store.setSubmitted(id, 'fal-request-1');
+    h.dependencies.downloadVideo = () => {
+      h.calls.download++;
+      return Promise.resolve({ bytes: new Uint8Array(64), contentType: 'video/mp4', duration });
+    };
+    const result = await (await h.status(id)).json();
+    const expected = duration === 30.05 ? 'succeeded' : 'failed';
+    equal(result.status, expected);
+    equal(h.store.leases.size, 0);
+    if (expected === 'failed') {
+      equal(result.error.code, 'output-duration-limit');
+      equal(result.output, null);
+    } else equal(result.output.video.duration, duration);
+    equal((await h.webhook()).status, 200);
+    equal((await (await h.status(id)).json()).status, expected);
+    equal((await h.post(id, { service, input, payment: false })).status, expected === 'failed' ? 502 : 200);
+    equal(h.calls.poll, 1);
+    equal(h.calls.download, 1);
+    equal(h.calls.put, expected === 'failed' ? 0 : 1);
+    equal(h.store.completed, expected === 'failed' ? 0 : 1);
+    equal(h.calls.submit, 0);
+    equal(h.calls.settle, 0);
+  }
+});
+
+Deno.test('slideshow completion permits two frames of timing drift and permanently rejects a wrong duration', async () => {
+  for (const duration of [15 + 2 / 24, 479 / 24, 14.9]) {
+    const h = harness(true);
+    const id = crypto.randomUUID();
+    const service = 'video.slideshow';
+    const input = {
+      images: [1, 2, 3].map(() => ({
+        url:
+          `https://db.example.test/storage/v1/object/sign/outputs/${crypto.randomUUID()}/image.png?token=admitted`,
+        duration_seconds: 5,
+      })),
+    };
+    const payment = h.dependencies.config.servicePayments![service];
+    await h.store.create({
+      id,
+      service_id: service,
+      service_version: '1',
+      input,
+      input_hash: await hash(JSON.stringify({ service, input })),
+      recovery_token_hash: await hash(TOKEN),
+      requirements: { ...REQUIREMENTS, payTo: payment.payTo, amount: payment.priceAtomic },
+      resource_url: `${h.dependencies.config.baseUrl}/v1/services/${service}`,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    });
+    await h.store.claimPayment(id, `payment-${id}`, PAYER, {});
+    await h.store.finishPayment(id, 'success', RECEIPT);
+    await h.store.claimSubmission(id);
+    await h.store.setSubmitted(id, 'fal-request-1');
+    h.state.result = { status: 'succeeded', video: { url: 'https://fal.media/slideshow.mp4', duration: 15 } };
+    h.dependencies.downloadVideo = () => {
+      h.calls.download++;
+      return Promise.resolve({ bytes: new Uint8Array(64), contentType: 'video/mp4', duration });
+    };
+    const result = await (await h.status(id)).json();
+    const expected = duration === 15 + 2 / 24 ? 'succeeded' : 'failed';
+    equal(result.status, expected);
+    equal(h.store.leases.size, 0);
+    deepEqual(result.payment, RECEIPT);
+    if (expected === 'failed') {
+      equal(result.error.code, 'unexpected-video-duration');
+      equal(result.output, null);
+    } else equal(result.output.video.duration, duration);
+    equal((await h.webhook()).status, 200);
+    equal((await (await h.status(id)).json()).status, expected);
+    equal((await h.post(id, { service, input, payment: false })).status, expected === 'failed' ? 502 : 200);
+    equal(h.calls.poll, 1);
+    equal(h.calls.download, 1);
+    equal(h.calls.put, expected === 'failed' ? 0 : 1);
+    equal(h.calls.submit, 0);
+    equal(h.calls.settle, 0);
+  }
+});
+
+Deno.test('a disabled service recovers existing paid and finished jobs but rejects fresh purchases', async () => {
+  const h = harness(true);
+  const { id, service, input } = await paidMediaJob(h, 'audio');
+  const disabled = createApp({
+    ...h.dependencies,
+    config: { ...h.dependencies.config, servicePayments: {} },
+  });
+  const post = (jobId: string, token = TOKEN) =>
+    disabled.request(`/v1/services/${service}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Idempotency-Key': jobId,
+        'X-Recovery-Token': token,
+      },
+      body: JSON.stringify(input),
+    });
+  equal((await disabled.request(`/v1/services/${service}`)).status, 404);
+  equal((await post(crypto.randomUUID())).status, 404);
+  equal((await post(id, 'b'.repeat(43))).status, 404);
+  const paid = await (await disabled.request(`/v1/jobs/${id}`, {
+    headers: { authorization: `Bearer ${TOKEN}` },
+  })).json();
+  equal(paid.status, 'paid');
+  ok(paid.message.includes('Retry the original POST'));
+  equal(h.calls.submit, 0);
+
+  const recovered = await post(id);
+  equal(recovered.status, 200);
+  const first = await recovered.json();
+  equal(first.status, 'succeeded');
+  equal(first.output.audio.duration, 15);
+  deepEqual(decodePaymentResponseHeader(recovered.headers.get('PAYMENT-RESPONSE')!), RECEIPT);
+  const finished = await post(id);
+  equal(finished.status, 200);
+  deepEqual((await finished.json()).output, first.output);
+  equal(h.calls.submit, 1);
+  equal(h.calls.poll, 1);
+  equal(h.calls.put, 1);
+  equal(h.calls.requirements, 0);
+  equal(h.calls.verify, 0);
+  equal(h.calls.settle, 0);
+  equal(h.store.jobs.size, 1);
 });

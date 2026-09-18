@@ -1,25 +1,13 @@
 import type { Config } from './config.ts';
+import { enabledServices, IMAGE_SERVICE, LEGACY_COMPOSE_SERVICE, type Service, SERVICES } from './catalog.ts';
+export { IMAGE_SERVICE, INPUT_SCHEMA } from './catalog.ts';
 
-export const INPUT_SCHEMA = {
-  type: 'object',
-  properties: { prompt: { type: 'string', minLength: 1, maxLength: 4000 } },
-  required: ['prompt'],
-  additionalProperties: false,
-};
 export const MODES = {
   supported: ['sync', 'async'],
   default: 'sync',
   default_wait_ms: 45000,
   max_wait_ms: 60000,
 };
-export const IMAGE_SERVICE = {
-  id: 'image.generate',
-  version: '1',
-  name: 'Algoria Image Generation',
-  description: 'Generate one square 1K PNG image from a text prompt.',
-  tags: ['image', 'generation', 'design', 'art', 'visual'],
-};
-
 const nullable = (schema: unknown) => ({ anyOf: [schema, { type: 'null' }] });
 const PAYMENT_RECEIPT_SCHEMA = {
   type: 'object',
@@ -47,138 +35,210 @@ export const ERROR_SCHEMA = {
   },
   additionalProperties: false,
 };
-export const JOB_SCHEMA = {
-  type: 'object',
-  required: ['job_id', 'service_id', 'status', 'status_url', 'payment', 'output', 'error'],
-  properties: {
-    job_id: { type: 'string', format: 'uuid' },
-    service_id: { const: IMAGE_SERVICE.id },
-    status: {
-      enum: [
-        'awaiting_payment',
-        'settling',
-        'payment-uncertain',
-        'paid',
-        'submitting',
-        'submission-uncertain',
-        'queued',
-        'running',
-        'saving',
-        'succeeded',
-        'failed',
-        'result-ready',
-      ],
-    },
-    status_url: { type: 'string', format: 'uri' },
-    poll_after_ms: { type: 'integer', minimum: 0 },
-    payment: nullable(PAYMENT_RECEIPT_SCHEMA),
-    output: nullable({
-      type: 'object',
-      required: ['images', 'url_expires_in'],
-      additionalProperties: false,
-      properties: {
-        images: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 1,
-          items: {
-            type: 'object',
-            required: ['url', 'content_type'],
-            additionalProperties: false,
-            properties: {
-              url: { type: 'string', format: 'uri' },
-              content_type: { enum: ['image/png', 'image/jpeg', 'image/webp'] },
-              width: { type: 'integer', minimum: 1 },
-              height: { type: 'integer', minimum: 1 },
-            },
-          },
-        },
-        url_expires_in: { type: 'integer', minimum: 1, description: 'Signed image URL lifetime in seconds.' },
-      },
-    }),
-    error: nullable(ERROR_SCHEMA),
-    message: { type: 'string' },
-  },
-  additionalProperties: false,
+const MEDIA_PROPERTIES = {
+  url: { type: 'string', format: 'uri' },
+  file_size: { type: 'integer', minimum: 0 },
+  duration: { type: 'number', exclusiveMinimum: 0, description: 'Media duration in seconds.' },
 };
+function mediaSchema(kind: Service['outputKind']) {
+  return {
+    type: 'object',
+    required: ['url', 'content_type'],
+    additionalProperties: false,
+    properties: {
+      ...MEDIA_PROPERTIES,
+      content_type: {
+        enum: kind === 'images'
+          ? ['image/png', 'image/jpeg', 'image/webp']
+          : kind === 'audio'
+          ? ['audio/wav', 'audio/mpeg']
+          : ['video/mp4'],
+      },
+      ...(kind !== 'audio'
+        ? { width: { type: 'integer', minimum: 1 }, height: { type: 'integer', minimum: 1 } }
+        : {}),
+    },
+  };
+}
+function outputSchema(kind: Service['outputKind']) {
+  const media = mediaSchema(kind);
+  return {
+    type: 'object',
+    required: [kind, 'url_expires_in'],
+    additionalProperties: false,
+    properties: {
+      [kind]: kind === 'images' ? { type: 'array', minItems: 1, maxItems: 1, items: media } : media,
+      url_expires_in: {
+        type: 'integer',
+        minimum: 1,
+        description: 'Signed media URL lifetime in seconds.',
+      },
+    },
+  };
+}
+function jobSchema(services: Service[]) {
+  const kinds = [...new Set(services.map((service) => service.outputKind))];
+  return {
+    type: 'object',
+    required: [
+      'job_id',
+      'service_id',
+      'service_version',
+      'status',
+      'status_url',
+      'payment',
+      'output',
+      'error',
+    ],
+    properties: {
+      job_id: { type: 'string', format: 'uuid' },
+      service_id: services.length === 1
+        ? { const: services[0].id }
+        : { enum: [...new Set(services.map((s) => s.id))] },
+      service_version: services.length === 1
+        ? { const: services[0].version }
+        : { enum: [...new Set(services.map((s) => s.version))] },
+      status: {
+        enum: [
+          'awaiting_payment',
+          'settling',
+          'payment-uncertain',
+          'paid',
+          'submitting',
+          'submission-uncertain',
+          'queued',
+          'running',
+          'saving',
+          'succeeded',
+          'failed',
+          'result-ready',
+        ],
+      },
+      status_url: { type: 'string', format: 'uri' },
+      poll_after_ms: { type: 'integer', minimum: 0 },
+      payment: nullable(PAYMENT_RECEIPT_SCHEMA),
+      output: nullable(kinds.length === 1 ? outputSchema(kinds[0]) : { oneOf: kinds.map(outputSchema) }),
+      error: nullable(ERROR_SCHEMA),
+      message: { type: 'string' },
+    },
+    ...(services.length > 1
+      ? {
+        oneOf: services.map((service) => ({
+          properties: { service_id: { const: service.id }, service_version: { const: service.version } },
+        })),
+      }
+      : {}),
+    additionalProperties: false,
+  };
+}
+export const JOB_SCHEMA = jobSchema([...SERVICES, LEGACY_COMPOSE_SERVICE]);
+export const jobSchemaFor = (service: Service) => jobSchema([service]);
 
 const exampleId = '00000000-0000-4000-8000-000000000001';
-export const BAZAAR = {
-  info: {
-    input: {
-      type: 'http',
-      method: 'POST',
-      bodyType: 'json',
-      body: { prompt: 'A small red sailboat on a calm turquoise sea, watercolor illustration.' },
-      queryParams: { mode: 'sync' },
-      headers: {
-        'Idempotency-Key': 'YOUR_UUID_V4',
-        'X-Recovery-Token': 'YOUR_RANDOM_32_BYTE_BASE64URL_TOKEN',
-      },
-    },
-    output: {
-      type: 'json',
-      example: {
-        job_id: exampleId,
-        service_id: IMAGE_SERVICE.id,
-        status: 'succeeded',
-        status_url: `https://api.example.com/v1/jobs/${exampleId}`,
-        payment: { success: true, network: 'stellar:testnet', transaction: '0'.repeat(64) },
-        output: {
-          images: [{
-            url: 'https://storage.example.com/image.png?token=example',
-            content_type: 'image/png',
-            width: 1024,
-            height: 1024,
-          }],
-          url_expires_in: 3600,
-        },
-        error: null,
-      },
-    },
-  },
-  schema: {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    required: ['input'],
-    properties: {
+function exampleOutput(service: Service) {
+  const media = service.outputKind === 'images'
+    ? {
+      url: 'https://storage.example.com/image.png?token=example',
+      content_type: 'image/png',
+      width: 1024,
+      height: 1024,
+    }
+    : service.outputKind === 'audio'
+    ? {
+      url: 'https://storage.example.com/audio.wav?token=example',
+      content_type: 'audio/wav',
+      file_size: 960044,
+      duration: 20,
+    }
+    : {
+      url: 'https://storage.example.com/video.mp4?token=example',
+      content_type: 'video/mp4',
+      width: 1024,
+      height: 1024,
+      file_size: 1500000,
+      duration: 20,
+    };
+  return {
+    [service.outputKind]: service.outputKind === 'images' ? [media] : media,
+    url_expires_in: 3600,
+  };
+}
+export function bazaarFor(service: Service) {
+  return {
+    info: {
       input: {
-        type: 'object',
-        required: ['type', 'method', 'bodyType', 'body'],
-        additionalProperties: false,
-        properties: {
-          type: { const: 'http' },
-          method: { const: 'POST' },
-          bodyType: { const: 'json' },
-          body: INPUT_SCHEMA,
-          queryParams: {
-            type: 'object',
-            properties: { mode: { enum: ['sync', 'async'] }, wait_ms: { type: 'string' } },
-          },
-          headers: { type: 'object', additionalProperties: { type: 'string' } },
+        type: 'http',
+        method: 'POST',
+        bodyType: 'json',
+        body: service.exampleInput,
+        queryParams: { mode: 'sync' },
+        headers: {
+          'Idempotency-Key': 'YOUR_UUID_V4',
+          'X-Recovery-Token': 'YOUR_RANDOM_32_BYTE_BASE64URL_TOKEN',
         },
       },
       output: {
-        type: 'object',
-        properties: { type: { const: 'json' }, example: JOB_SCHEMA },
-        required: ['type'],
+        type: 'json',
+        example: {
+          job_id: exampleId,
+          service_id: service.id,
+          service_version: service.version,
+          status: 'succeeded',
+          status_url: `https://api.example.com/v1/jobs/${exampleId}`,
+          payment: { success: true, network: 'stellar:testnet', transaction: '0'.repeat(64) },
+          output: exampleOutput(service),
+          error: null,
+        },
       },
     },
-  },
-};
+    schema: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      required: ['input'],
+      properties: {
+        input: {
+          type: 'object',
+          required: ['type', 'method', 'bodyType', 'body'],
+          additionalProperties: false,
+          properties: {
+            type: { const: 'http' },
+            method: { const: 'POST' },
+            bodyType: { const: 'json' },
+            body: service.inputSchema,
+            queryParams: {
+              type: 'object',
+              properties: { mode: { enum: ['sync', 'async'] }, wait_ms: { type: 'string' } },
+            },
+            headers: { type: 'object', additionalProperties: { type: 'string' } },
+          },
+        },
+        output: {
+          type: 'object',
+          properties: { type: { const: 'json' }, example: jobSchemaFor(service) },
+          required: ['type'],
+        },
+      },
+    },
+  };
+}
+export const BAZAAR = bazaarFor(IMAGE_SERVICE);
 
-export function serviceDocument(config: Config, requirements: unknown) {
+export function serviceDocument(config: Config, requirements: unknown, service: Service = IMAGE_SERVICE) {
   return {
-    ...IMAGE_SERVICE,
+    id: service.id,
+    version: service.version,
+    name: service.name,
+    description: service.description,
+    tags: service.tags,
     type: 'http',
     x402Version: 2,
-    resource: `${config.baseUrl}/v1/services/${IMAGE_SERVICE.id}`,
+    resource: `${config.baseUrl}/v1/services/${service.id}`,
     method: 'POST',
-    input_schema: INPUT_SCHEMA,
-    output_schema: JOB_SCHEMA,
+    input_schema: service.inputSchema,
+    output_schema: jobSchemaFor(service),
     execution: MODES,
     accepts: [requirements],
-    extensions: { bazaar: BAZAAR },
+    extensions: { bazaar: bazaarFor(service) },
     headers: {
       'Idempotency-Key': 'Required UUID v4; preserve it on retries.',
       'X-Recovery-Token': 'Required random 32-byte base64url secret; preserve locally. Never put in a URL.',
@@ -187,7 +247,7 @@ export function serviceDocument(config: Config, requirements: unknown) {
     responses: {
       '200': 'Completed result and payment receipt',
       '202': 'Same job continues; poll status_url with recovery token',
-      '402': 'Payment required; no generation started',
+      '402': 'Payment required; no service execution started',
     },
     recovery: {
       method: 'GET',
@@ -237,7 +297,7 @@ const SERVICE_DOCUMENT_SCHEMA = {
     'recovery',
   ],
   properties: {
-    id: { const: IMAGE_SERVICE.id },
+    id: { enum: SERVICES.map((service) => service.id) },
     version: { type: 'string' },
     name: { type: 'string' },
     description: { type: 'string' },
@@ -325,6 +385,22 @@ const PAYMENT_CHALLENGE_SCHEMA = {
 };
 
 export function openApi(config: Config) {
+  const services = enabledServices(config);
+  const serviceSchema = {
+    ...SERVICE_DOCUMENT_SCHEMA,
+    additionalProperties: false,
+    properties: { ...SERVICE_DOCUMENT_SCHEMA.properties, id: { enum: services.map((s) => s.id) } },
+    oneOf: services.map((service) => ({
+      properties: { id: { const: service.id }, version: { const: service.version } },
+    })),
+  };
+  const discoverySchema = {
+    ...DISCOVERY_SCHEMA,
+    properties: {
+      ...DISCOVERY_SCHEMA.properties,
+      resources: { type: 'array', items: serviceSchema },
+    },
+  };
   const health = {
     type: 'object',
     required: ['ok', 'service', 'network', 'version'],
@@ -352,7 +428,7 @@ export function openApi(config: Config) {
     { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
     { name: 'offset', in: 'query', schema: { type: 'integer', minimum: 0, default: 0 } },
   ];
-  return {
+  const document = {
     openapi: '3.1.0',
     info: {
       title: 'Algoria API',
@@ -384,7 +460,7 @@ export function openApi(config: Config) {
         get: {
           parameters: [...discoveryParameters, { name: 'query', in: 'query', schema: { type: 'string' } }],
           responses: {
-            '200': response('Own service catalogue', DISCOVERY_SCHEMA),
+            '200': response('Own service catalogue', discoverySchema),
             '400': response('Invalid pagination', error),
             '503': unavailable,
           },
@@ -399,23 +475,28 @@ export function openApi(config: Config) {
             schema: { type: 'string', minLength: 1 },
           }],
           responses: {
-            '200': response('Matching own services', DISCOVERY_SCHEMA),
+            '200': response('Matching own services', discoverySchema),
             '400': response('Query required or invalid pagination', error),
             '503': unavailable,
           },
         },
       },
       '/v1/services/{service_id}': {
-        parameters: [{ name: 'service_id', in: 'path', required: true, schema: { const: IMAGE_SERVICE.id } }],
+        parameters: [{
+          name: 'service_id',
+          in: 'path',
+          required: true,
+          schema: { enum: services.map((service) => service.id) },
+        }],
         get: {
           responses: {
-            '200': response('Service schema and payment requirements', SERVICE_DOCUMENT_SCHEMA),
+            '200': response('Service schema and payment requirements', serviceSchema),
             '404': response('Unknown service', error),
             '503': unavailable,
           },
         },
         post: {
-          summary: IMAGE_SERVICE.description,
+          summary: 'Execute an enabled service; use its dedicated path for the exact input schema.',
           parameters: [
             {
               name: 'Idempotency-Key',
@@ -437,7 +518,17 @@ export function openApi(config: Config) {
               schema: { type: 'integer', minimum: 0, maximum: 60000, default: 45000 },
             },
           ],
-          requestBody: { required: true, content: { 'application/json': { schema: INPUT_SCHEMA } } },
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { anyOf: services.map((service) => service.inputSchema) },
+                examples: Object.fromEntries(
+                  services.map((service) => [service.id, { value: service.exampleInput }]),
+                ),
+              },
+            },
+          },
           responses: {
             '200': response('Result ready', job),
             '202': response('Accepted or result delivery pending; poll the same job', job),
@@ -476,8 +567,8 @@ export function openApi(config: Config) {
       schemas: {
         Job: JOB_SCHEMA,
         Error: ERROR_SCHEMA,
-        Service: SERVICE_DOCUMENT_SCHEMA,
-        Discovery: DISCOVERY_SCHEMA,
+        Service: serviceSchema,
+        Discovery: discoverySchema,
         PaymentChallenge: PAYMENT_CHALLENGE_SCHEMA,
       },
       securitySchemes: {
@@ -489,4 +580,40 @@ export function openApi(config: Config) {
       },
     },
   };
+  const generic = document.paths['/v1/services/{service_id}'];
+  const specificPaths = Object.fromEntries(services.map((service) => {
+    const specificJob = jobSchemaFor(service);
+    return [`/v1/services/${service.id}`, {
+      get: {
+        ...generic.get,
+        responses: {
+          ...generic.get.responses,
+          '200': response('Service schema and payment requirements', {
+            ...serviceSchema,
+            properties: {
+              ...serviceSchema.properties,
+              id: { const: service.id },
+              version: { const: service.version },
+            },
+          }),
+        },
+      },
+      post: {
+        ...generic.post,
+        operationId: service.id.replaceAll('.', '_'),
+        summary: service.description,
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: service.inputSchema, example: service.exampleInput } },
+        },
+        responses: {
+          ...generic.post.responses,
+          '200': response('Result ready', specificJob),
+          '202': response('Accepted or result delivery pending; poll the same job', specificJob),
+          '502': response('Service failed; existing job and payment receipt are returned', specificJob),
+        },
+      },
+    }];
+  }));
+  return { ...document, paths: { ...document.paths, ...specificPaths } };
 }

@@ -1,23 +1,37 @@
 // Queue and signatures: https://fal.ai/docs/documentation/model-apis/inference/
 // Model schema: https://fal.ai/models/google/nano-banana-2-lite/api
 export const FAL_MODEL = 'google/nano-banana-2-lite';
-const QUEUE_URL = `https://queue.fal.run/${FAL_MODEL}`;
 const JWKS_URL = 'https://rest.fal.ai/.well-known/jwks.json';
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
 const REQUEST_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const MODEL_PATH = /^[A-Za-z0-9][A-Za-z0-9_.-]*(?:\/[A-Za-z0-9][A-Za-z0-9_.-]*)+$/;
 const encoder = new TextEncoder();
 
-export interface FalImage {
+export type FalTarget = {
+  model: string;
+  queuePath: string;
+  output: 'images' | 'audio' | 'video' | 'video_url';
+};
+
+export interface FalMediaFile {
   url: string;
   content_type?: string;
+  file_size?: number;
+  duration?: number;
   width?: number;
   height?: number;
 }
 
+export type FalImage = FalMediaFile;
+
 export type FalPollResult = {
   status: 'queued' | 'running' | 'succeeded' | 'failed';
   images?: FalImage[];
+  audio?: FalMediaFile;
+  video?: FalMediaFile;
   error?: string;
 };
 
@@ -97,25 +111,74 @@ function providerError(data: Record<string, unknown>): string {
     : 'fal generation failed';
 }
 
+function resolvedTarget(target?: FalTarget): FalTarget {
+  if (!target) return { model: FAL_MODEL, queuePath: FAL_MODEL, output: 'images' };
+  if (
+    ![target.model, target.queuePath].every((path) =>
+      typeof path === 'string' && path.length <= 256 && MODEL_PATH.test(path)
+    ) || !['images', 'audio', 'video', 'video_url'].includes(target.output)
+  ) throw new Error('Invalid fal target');
+  return target;
+}
+
+function mediaFile(value: unknown, kind: 'image' | 'audio' | 'video'): FalMediaFile {
+  const source = record(value);
+  if (typeof source.url !== 'string') throw new Error(`fal ${kind} has no URL`);
+  trustedMediaUrl(source.url, kind);
+  const file: FalMediaFile = { url: source.url };
+  if (typeof source.content_type === 'string') file.content_type = source.content_type;
+  for (const dimension of ['width', 'height'] as const) {
+    const size = source[dimension];
+    if (typeof size === 'number' && Number.isSafeInteger(size) && size > 0) file[dimension] = size;
+  }
+  if (
+    typeof source.file_size === 'number' && Number.isSafeInteger(source.file_size) &&
+    source.file_size >= 0
+  ) file.file_size = source.file_size;
+  if (typeof source.duration === 'number' && Number.isFinite(source.duration) && source.duration >= 0) {
+    file.duration = source.duration;
+  }
+  return file;
+}
+
 export class FalProvider {
   constructor(private readonly apiKey: string) {
     if (!apiKey.trim()) throw new Error('FAL_KEY is required');
   }
 
-  async submit(input: { prompt: string }, webhookUrl: string): Promise<{ requestId: string }> {
+  async submit(
+    input: Record<string, unknown>,
+    webhookUrl: string,
+    target?: FalTarget,
+  ): Promise<{ requestId: string }> {
     let callback: URL;
+    let endpoint: FalTarget;
+    let body: string;
     try {
+      endpoint = resolvedTarget(target);
+      record(input);
       callback = new URL(webhookUrl);
       if (callback.protocol !== 'https:' || callback.username || callback.password || callback.hash) {
         throw new Error('Invalid callback URL');
       }
-      if (typeof input.prompt !== 'string' || !input.prompt.trim()) {
+      if (!target && (typeof input.prompt !== 'string' || !input.prompt.trim())) {
         throw new Error('Invalid prompt');
       }
+      body = JSON.stringify(
+        target ? input : {
+          prompt: input.prompt,
+          num_images: 1,
+          aspect_ratio: '1:1',
+          output_format: 'png',
+          limit_generations: true,
+          sync_mode: false,
+          // This model is fixed at 1K. Omitting thinking_level disables thinking.
+        },
+      );
     } catch {
       throw new FalSubmissionError('Invalid fal submission configuration', 'rejected');
     }
-    const url = new URL(QUEUE_URL);
+    const url = new URL(`https://queue.fal.run/${endpoint.model}`);
     url.searchParams.set('fal_webhook', callback.href);
     try {
       return await boundedFetch(
@@ -127,15 +190,7 @@ export class FalProvider {
             authorization: `Key ${this.apiKey}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify({
-            prompt: input.prompt,
-            num_images: 1,
-            aspect_ratio: '1:1',
-            output_format: 'png',
-            limit_generations: true,
-            sync_mode: false,
-            // This model is fixed at 1K. Omitting thinking_level disables thinking.
-          }),
+          body,
         },
         15_000,
         async (response) => {
@@ -162,9 +217,10 @@ export class FalProvider {
     }
   }
 
-  async poll(requestId: string, signal?: AbortSignal): Promise<FalPollResult> {
+  async poll(requestId: string, signal?: AbortSignal, target?: FalTarget): Promise<FalPollResult> {
     if (!REQUEST_ID.test(requestId)) throw new Error('Invalid fal request ID');
-    const base = `${QUEUE_URL}/requests/${requestId}`;
+    const endpoint = resolvedTarget(target);
+    const base = `https://queue.fal.run/${endpoint.queuePath}/requests/${requestId}`;
     const init = { redirect: 'error', signal, headers: { authorization: `Key ${this.apiKey}` } } as const;
     return await boundedFetch(`${base}/status`, init, 8_000, async (response) => {
       if (!response.ok) {
@@ -192,21 +248,19 @@ export class FalProvider {
         if (output.error != null || output.error_type != null) {
           return { status: 'failed', error: providerError(output) };
         }
+        if (endpoint.output === 'audio') {
+          return { status: 'succeeded', audio: mediaFile(output.audio, 'audio') };
+        }
+        if (endpoint.output === 'video') {
+          return { status: 'succeeded', video: mediaFile(output.video, 'video') };
+        }
+        if (endpoint.output === 'video_url') {
+          return { status: 'succeeded', video: mediaFile({ url: output.video_url }, 'video') };
+        }
         if (!Array.isArray(output.images) || output.images.length !== 1) {
           throw new Error('fal returned an unexpected image count');
         }
-        const source = record(output.images[0]);
-        if (typeof source.url !== 'string') throw new Error('fal image has no URL');
-        trustedImageUrl(source.url);
-        const image: FalImage = { url: source.url };
-        if (typeof source.content_type === 'string') image.content_type = source.content_type;
-        for (const dimension of ['width', 'height'] as const) {
-          const value = source[dimension];
-          if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
-            image[dimension] = value;
-          }
-        }
-        return { status: 'succeeded', images: [image] };
+        return { status: 'succeeded', images: [mediaFile(output.images[0], 'image')] };
       });
     });
   }
@@ -301,7 +355,7 @@ export function parseWebhook(rawBody: Uint8Array): { requestId: string; status: 
   return { requestId: payload.request_id, status: payload.status };
 }
 
-function trustedImageUrl(value: string): URL {
+function trustedMediaUrl(value: string, kind: 'image' | 'audio' | 'video'): URL {
   const url = new URL(value);
   // Shared Google storage is limited to fal's documented bucket, not all GCS.
   const falHost = url.hostname === 'fal.media' || /^v\d+[a-z]?\.fal\.media$/.test(url.hostname);
@@ -309,7 +363,7 @@ function trustedImageUrl(value: string): URL {
   if (
     url.protocol !== 'https:' || url.username || url.password || url.port || url.hash ||
     (!falHost && !falBucket)
-  ) throw new Error('Untrusted fal image URL');
+  ) throw new Error(`Untrusted fal ${kind} URL`);
   return url;
 }
 
@@ -320,16 +374,144 @@ function hasImageSignature(bytes: Uint8Array, type: string): boolean {
     new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
 }
 
-export async function downloadImage(
-  image: FalImage,
+function hasAudioSignature(bytes: Uint8Array, type: string): boolean {
+  if (type === 'audio/wav') {
+    return new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' &&
+      new TextDecoder().decode(bytes.slice(8, 12)) === 'WAVE';
+  }
+  if (type !== 'audio/mpeg' || bytes.length < 4) return false;
+  // ID3v2 header, or MPEG audio frame sync with non-reserved version/layer/rate fields.
+  if (bytes[0] === 73 && bytes[1] === 68 && bytes[2] === 51) {
+    return bytes.length >= 10 && [2, 3, 4].includes(bytes[3]) && bytes[4] !== 255 &&
+      bytes.slice(6, 10).every((byte) => byte < 128);
+  }
+  return bytes[0] === 255 && (bytes[1] & 0xe0) === 0xe0 && (bytes[1] & 0x18) !== 0x08 &&
+    (bytes[1] & 0x06) !== 0 && (bytes[2] & 0xf0) !== 0 && (bytes[2] & 0xf0) !== 0xf0 &&
+    (bytes[2] & 0x0c) !== 0x0c;
+}
+
+function hasVideoSignature(bytes: Uint8Array, type: string): boolean {
+  if (type !== 'video/mp4' || bytes.length < 16) return false;
+  const boxSize = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0);
+  return boxSize >= 16 && boxSize <= bytes.length &&
+    new TextDecoder().decode(bytes.slice(4, 8)) === 'ftyp';
+}
+
+/** Duration from the downloaded container, never from provider-reported metadata. */
+export function mediaDuration(bytes: Uint8Array, contentType: string): number | undefined {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (offset: number) => new TextDecoder().decode(bytes.subarray(offset, offset + 4));
+  if (contentType === 'audio/wav' && hasAudioSignature(bytes, contentType)) {
+    const end = view.getUint32(4, true) + 8;
+    if (end < 12 || end > bytes.length) return undefined;
+    let byteRate: number | undefined;
+    let blockAlign: number | undefined;
+    let dataSize = 0;
+    let offset = 12;
+    while (offset + 8 <= end) {
+      const size = view.getUint32(offset + 4, true);
+      const start = offset + 8;
+      if (size > end - start) return undefined;
+      if (tag(offset) === 'fmt ') {
+        if (byteRate !== undefined || size < 16) return undefined;
+        const format = view.getUint16(start, true);
+        const channels = view.getUint16(start + 2, true);
+        const sampleRate = view.getUint32(start + 4, true);
+        byteRate = view.getUint32(start + 8, true);
+        blockAlign = view.getUint16(start + 12, true);
+        const bits = view.getUint16(start + 14, true);
+        // Uncompressed PCM/IEEE float have an exact duration from the data length.
+        if (
+          ![1, 3].includes(format) || channels === 0 || sampleRate === 0 || bits === 0 ||
+          bits % 8 !== 0 || blockAlign !== channels * bits / 8 || byteRate !== sampleRate * blockAlign
+        ) return undefined;
+      } else if (tag(offset) === 'data') {
+        dataSize += size;
+      }
+      offset = start + size + (size % 2);
+    }
+    if (offset !== end || !byteRate || !blockAlign || !dataSize || dataSize % blockAlign !== 0) {
+      return undefined;
+    }
+    return dataSize / byteRate;
+  }
+  if (contentType !== 'video/mp4' || !hasVideoSignature(bytes, contentType)) return undefined;
+
+  type Box = { type: string; start: number; end: number };
+  function boxes(start: number, end: number): Box[] | undefined {
+    const found: Box[] = [];
+    for (let offset = start; offset < end;) {
+      if (end - offset < 8) return undefined;
+      let size = view.getUint32(offset);
+      let header = 8;
+      if (size === 1) {
+        if (end - offset < 16) return undefined;
+        const extended = view.getBigUint64(offset + 8);
+        if (extended > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+        size = Number(extended);
+        header = 16;
+      } else if (size === 0) size = end - offset;
+      if (size < header || size > end - offset) return undefined;
+      found.push({ type: tag(offset + 4), start: offset + header, end: offset + size });
+      // A bounded download should not create an unbounded number of metadata objects.
+      if (found.length > 4096) return undefined;
+      offset += size;
+    }
+    return found;
+  }
+  const moov = boxes(0, bytes.length)?.filter((box) => box.type === 'moov');
+  if (moov?.length !== 1) return undefined;
+  const mvhd = boxes(moov[0].start, moov[0].end)?.filter((box) => box.type === 'mvhd');
+  if (mvhd?.length !== 1) return undefined;
+  const { start, end } = mvhd[0];
+  if (end - start < 20) return undefined;
+  const version = bytes[start];
+  let timescale: number;
+  let ticks: number;
+  if (version === 0) {
+    timescale = view.getUint32(start + 12);
+    ticks = view.getUint32(start + 16);
+    if (ticks === 0xffffffff) return undefined;
+  } else if (version === 1) {
+    if (end - start < 32) return undefined;
+    timescale = view.getUint32(start + 20);
+    const duration = view.getBigUint64(start + 24);
+    if (duration > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+    ticks = Number(duration);
+  } else return undefined;
+  return timescale > 0 && ticks > 0 ? ticks / timescale : undefined;
+}
+
+type MediaKind = 'image' | 'audio' | 'video';
+type DownloadedMedia = { bytes: Uint8Array; contentType: string; duration?: number };
+
+function mediaContentType(value: string | null, kind: MediaKind): string | undefined {
+  const type = value?.split(';')[0].trim().toLowerCase();
+  if (kind === 'image') {
+    return type && ['image/png', 'image/jpeg', 'image/webp'].includes(type) ? type : undefined;
+  }
+  // FFmpeg compose serves MP4 files as generic binary. Accept that MIME only
+  // from the trusted media hosts; the bounded body still must pass MP4 checks.
+  if (kind === 'video') {
+    return type === 'video/mp4' || type === 'application/octet-stream' ? 'video/mp4' : undefined;
+  }
+  if (type && ['audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave'].includes(type)) return 'audio/wav';
+  if (type && ['audio/mpeg', 'audio/mp3'].includes(type)) return 'audio/mpeg';
+}
+
+async function downloadMedia(
+  file: FalMediaFile,
+  kind: MediaKind,
+  limit: number,
+  signature: (bytes: Uint8Array, type: string) => boolean,
   signal?: AbortSignal,
-): Promise<{ bytes: Uint8Array; contentType: string }> {
-  let url = trustedImageUrl(image.url);
+): Promise<DownloadedMedia> {
+  let url = trustedMediaUrl(file.url, kind);
   const deadline = Date.now() + 20_000;
   for (let redirects = 0; redirects <= 3; redirects++) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error('fal image download timed out');
-    const result = await boundedFetch<{ redirect: URL } | { bytes: Uint8Array; contentType: string }>(
+    if (remaining <= 0) throw new Error(`fal ${kind} download timed out`);
+    const result = await boundedFetch<{ redirect: URL } | DownloadedMedia>(
       url,
       { redirect: 'manual', signal },
       remaining,
@@ -337,25 +519,38 @@ export async function downloadImage(
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           await response.body?.cancel();
           const location = response.headers.get('location');
-          if (!location || redirects === 3) throw new Error('Invalid fal image redirect');
-          return { redirect: trustedImageUrl(new URL(location, url).href) };
+          if (!location || redirects === 3) throw new Error(`Invalid fal ${kind} redirect`);
+          return { redirect: trustedMediaUrl(new URL(location, url).href, kind) };
         }
         if (!response.ok) {
           await response.body?.cancel();
-          throw new Error(`fal image unavailable (HTTP ${response.status})`);
+          throw new Error(`fal ${kind} unavailable (HTTP ${response.status})`);
         }
-        const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-        if (!contentType || !['image/png', 'image/jpeg', 'image/webp'].includes(contentType)) {
+        const contentType = mediaContentType(response.headers.get('content-type'), kind);
+        if (!contentType) {
           await response.body?.cancel();
-          throw new Error('Unsupported fal image type');
+          throw new Error(`Unsupported fal ${kind} type`);
         }
-        const bytes = await readBytes(response, MAX_IMAGE_BYTES);
-        if (!hasImageSignature(bytes, contentType)) throw new Error('Invalid fal image bytes');
-        return { bytes, contentType };
+        const bytes = await readBytes(response, limit);
+        if (!signature(bytes, contentType)) throw new Error(`Invalid fal ${kind} bytes`);
+        const duration = mediaDuration(bytes, contentType);
+        return { bytes, contentType, ...(duration === undefined ? {} : { duration }) };
       },
     );
     if ('redirect' in result) url = result.redirect;
     else return result;
   }
-  throw new Error('Too many fal image redirects');
+  throw new Error(`Too many fal ${kind} redirects`);
+}
+
+export function downloadImage(image: FalImage, signal?: AbortSignal) {
+  return downloadMedia(image, 'image', MAX_IMAGE_BYTES, hasImageSignature, signal);
+}
+
+export function downloadAudio(audio: FalMediaFile, signal?: AbortSignal) {
+  return downloadMedia(audio, 'audio', MAX_AUDIO_BYTES, hasAudioSignature, signal);
+}
+
+export function downloadVideo(video: FalMediaFile, signal?: AbortSignal) {
+  return downloadMedia(video, 'video', MAX_VIDEO_BYTES, hasVideoSignature, signal);
 }

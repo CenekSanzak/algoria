@@ -2,9 +2,25 @@ import { Hono } from 'npm:hono@4.13.8';
 import type { Config } from './config.ts';
 import { PaymentGateway, type PaymentRequirements, receiptHeader } from './payments.ts';
 import type { Job, Store } from './store.ts';
-import { downloadImage, FalProvider, FalSubmissionError, parseWebhook } from './fal.ts';
+import {
+  downloadAudio,
+  downloadImage,
+  downloadVideo,
+  FalProvider,
+  FalSubmissionError,
+  parseWebhook,
+} from './fal.ts';
 import type { Artifacts } from './artifacts.ts';
-import { BAZAAR, IMAGE_SERVICE, MODES, openApi, serviceDocument } from './services.ts';
+import { bazaarFor, MODES, openApi, serviceDocument } from './services.ts';
+import {
+  compositionDuration,
+  enabledServices,
+  getService,
+  providerInput,
+  type Service,
+  servicePayment,
+} from './catalog.ts';
+import { resolveSources } from './sources.ts';
 import { hash, HttpError, inputBody, readBytes, tokenMatches, validId, validToken } from './security.ts';
 
 type JobStore = Pick<
@@ -34,6 +50,8 @@ export interface Dependencies {
   fal: Pick<FalProvider, 'submit' | 'poll' | 'verifyWebhook'>;
   artifacts: Artifacts;
   download?: typeof downloadImage;
+  downloadAudio?: typeof downloadAudio;
+  downloadVideo?: typeof downloadVideo;
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -55,23 +73,50 @@ export function createApp(d: Dependencies) {
     },
   });
 
-  async function document() {
-    return serviceDocument(config, await payments.requirements(config.imagePayTo, config.priceAtomic));
+  const services = enabledServices(config);
+  function findService(id: string) {
+    const service = services.find((item) => item.id === id);
+    if (!service) throw new HttpError(404, 'service-not-found');
+    return service;
+  }
+  const target = (service: Service) => ({
+    model: service.model,
+    queuePath: service.queuePath,
+    output: service.providerOutput,
+  });
+  async function document(service: Service) {
+    const payment = servicePayment(config, service.id)!;
+    return serviceDocument(config, await payments.requirements(payment.payTo, payment.priceAtomic), service);
   }
 
   async function response(job: Job, isStatus = false, signal?: AbortSignal) {
     let output = null;
     let deliveryPending = false;
     if (job.status === 'succeeded' && job.output) {
-      const file = job.output as { path: string; content_type: string; width?: number; height?: number };
+      const file = job.output as {
+        path: string;
+        content_type: string;
+        width?: number;
+        height?: number;
+        file_size?: number;
+        duration?: number;
+      };
       try {
+        const media = {
+          url: await artifacts.signedUrl(file.path, signal),
+          content_type: file.content_type,
+          width: file.width,
+          height: file.height,
+          ...(file.file_size !== undefined ? { file_size: file.file_size } : {}),
+          ...(file.duration !== undefined ? { duration: file.duration } : {}),
+        };
+        const kind = getService(job.service_id, job.service_version)?.outputKind;
         output = {
-          images: [{
-            url: await artifacts.signedUrl(file.path, signal),
-            content_type: file.content_type,
-            width: file.width,
-            height: file.height,
-          }],
+          ...(kind === 'audio'
+            ? { audio: media }
+            : kind === 'video'
+            ? { video: media }
+            : { images: [media] }),
           url_expires_in: 3600,
         };
       } catch (e) {
@@ -90,6 +135,7 @@ export function createApp(d: Dependencies) {
       {
         job_id: job.id,
         service_id: job.service_id,
+        service_version: job.service_version,
         status: deliveryPending ? 'result-ready' : status,
         status_url: `${config.baseUrl}/v1/jobs/${job.id}`,
         poll_after_ms: inProgress(job) ? 3000 : undefined,
@@ -98,6 +144,11 @@ export function createApp(d: Dependencies) {
         error: job.error,
         ...(status.endsWith('-uncertain')
           ? { message: 'Do not pay or submit again. This job requires payment/provider reconciliation.' }
+          : status === 'paid'
+          ? {
+            message:
+              'Payment is complete. Retry the original POST with the same input, Idempotency-Key and X-Recovery-Token to resume submission; do not pay again.',
+          }
           : {}),
       },
       isStatus
@@ -117,36 +168,87 @@ export function createApp(d: Dependencies) {
   async function refresh(job: Job, signal?: AbortSignal): Promise<Job> {
     if (!job.provider_request_id || !['queued', 'running', 'saving'].includes(job.status)) return job;
     let result;
+    const service = getService(job.service_id, job.service_version);
+    if (!service) throw new Error('Unknown persisted service');
     try {
-      result = await fal.poll(job.provider_request_id, signal);
+      result = await fal.poll(job.provider_request_id, signal, target(service));
     } catch {
       return (await store.get(job.id)) ?? job;
     }
     if (result.status === 'failed') {
-      return store.failJob(job.id, 'generation-failed', 'The image service could not complete this request.');
+      return store.failJob(job.id, 'generation-failed', 'The service could not complete this request.');
     }
     if (result.status === 'running') return store.markRunning(job.id);
     if (result.status !== 'succeeded') return job;
     const claim = await store.claimCompletion(job.id);
     if (!claim.claimed || !claim.leaseToken) return claim.job;
     try {
-      if (!result.images?.length) {
-        return await store.failJob(job.id, 'empty-result', 'The provider returned no image.');
+      const media = service.outputKind === 'audio'
+        ? result.audio
+        : service.outputKind === 'video'
+        ? result.video
+        : result.images?.[0];
+      if (!media) {
+        return await store.failJob(job.id, 'empty-result', 'The provider returned no output.');
       }
-      const image = result.images[0];
-      const downloaded = await (d.download ?? downloadImage)(image, signal);
+      const downloaded = await (service.outputKind === 'audio'
+        ? (d.downloadAudio ?? downloadAudio)(media, signal)
+        : service.outputKind === 'video'
+        ? (d.downloadVideo ?? downloadVideo)(media, signal)
+        : (d.download ?? downloadImage)(media, signal));
+      if (
+        service.outputKind !== 'images' &&
+        (typeof downloaded.duration !== 'number' || !Number.isFinite(downloaded.duration) ||
+          downloaded.duration <= 0)
+      ) {
+        return await store.failJob(
+          job.id,
+          'invalid-media-duration',
+          'The generated media duration could not be verified.',
+        );
+      }
+      if (
+        service.id === 'video.slideshow' &&
+        Math.abs(downloaded.duration! - compositionDuration(job.input)) > 2 / 24 + 0.002
+      ) {
+        return await store.failJob(
+          job.id,
+          'unexpected-video-duration',
+          'The generated slideshow duration does not match the requested scene durations.',
+        );
+      }
+      if (service.outputKind === 'video' && downloaded.duration! > 30.05) {
+        return await store.failJob(
+          job.id,
+          'output-duration-limit',
+          'The provider returned a video over the duration limit.',
+        );
+      }
       const extension = downloaded.contentType === 'image/png'
         ? 'png'
         : downloaded.contentType === 'image/webp'
         ? 'webp'
+        : downloaded.contentType === 'audio/wav'
+        ? 'wav'
+        : downloaded.contentType === 'audio/mpeg'
+        ? 'mp3'
+        : downloaded.contentType === 'video/mp4'
+        ? 'mp4'
         : 'jpg';
-      const path = `${job.id}/image.${extension}`;
+      const name = service.outputKind === 'audio'
+        ? 'audio'
+        : service.outputKind === 'video'
+        ? 'video'
+        : 'image';
+      const path = `${job.id}/${name}.${extension}`;
       await artifacts.put(path, downloaded.bytes, downloaded.contentType, signal);
       return await store.complete(job.id, claim.leaseToken, {
         path,
         content_type: downloaded.contentType,
-        width: image.width,
-        height: image.height,
+        width: media.width,
+        height: media.height,
+        file_size: downloaded.bytes.length,
+        ...(downloaded.duration === undefined ? {} : { duration: downloaded.duration }),
       });
     } catch {
       // Persisted fal request is reusable: retry only retrieval/storage, never generation.
@@ -155,14 +257,26 @@ export function createApp(d: Dependencies) {
   }
 
   async function submit(job: Job): Promise<Job> {
+    const service = getService(job.service_id, job.service_version);
+    if (!service) throw new Error('Unknown persisted service');
+    // Source signing is retryable preparation, not a provider submission attempt.
+    const input = await resolveSources(service, job.input, {
+      supabaseUrl: config.supabaseUrl,
+      store,
+      artifacts,
+    }, false);
     const claim = await store.claimSubmission(job.id);
     if (!claim.claimed) return claim.job;
     try {
-      const result = await fal.submit(job.input, `${config.baseUrl}/webhooks/fal`);
+      const result = await fal.submit(
+        providerInput(service, input),
+        `${config.baseUrl}/webhooks/fal`,
+        target(service),
+      );
       return await store.setSubmitted(job.id, result.requestId);
     } catch (e) {
       if (e instanceof FalSubmissionError && e.outcome === 'rejected') {
-        return store.failJob(job.id, 'provider-rejected', 'The provider rejected the image request.');
+        return store.failJob(job.id, 'provider-rejected', 'The provider rejected the service request.');
       }
       // The provider may have accepted it. Never auto-resubmit a missing request ID.
       return (await store.get(job.id)) ?? claim.job;
@@ -190,39 +304,46 @@ export function createApp(d: Dependencies) {
   );
   app.get('/openapi.json', () => json(openApi(config)));
   app.get('/v1/services/:service_id', async (c) => {
-    if (c.req.param('service_id') !== IMAGE_SERVICE.id) throw new HttpError(404, 'service-not-found');
-    return json(await document());
+    return json(await document(findService(c.req.param('service_id'))));
   });
   async function discovery(url: URL) {
-    const doc = await document();
     const params = url.searchParams;
     const query = params.get('query')?.toLocaleLowerCase().trim();
-    let included = true;
-    for (
-      const [key, value] of Object.entries({
-        type: 'http',
-        network: 'stellar:testnet',
-        scheme: 'exact',
-        payTo: config.imagePayTo,
-        extensions: 'bazaar',
-      })
-    ) {
-      if (params.has(key) && params.get(key) !== value) included = false;
-    }
-    if (
-      query &&
-      !query.split(/\s+/).some((term) => JSON.stringify(IMAGE_SERVICE).toLocaleLowerCase().includes(term))
-    ) included = false;
+    const included = services.filter((service) => {
+      for (
+        const [key, value] of Object.entries({
+          type: 'http',
+          network: 'stellar:testnet',
+          scheme: 'exact',
+          payTo: servicePayment(config, service.id)!.payTo,
+          extensions: 'bazaar',
+        })
+      ) {
+        if (params.has(key) && params.get(key) !== value) return false;
+      }
+      if (
+        query &&
+        !query.split(/\s+/).some((term) =>
+          JSON.stringify({
+            id: service.id,
+            name: service.name,
+            description: service.description,
+            tags: service.tags,
+          }).toLocaleLowerCase().includes(term)
+        )
+      ) return false;
+      return true;
+    });
     const limit = params.has('limit') ? Number(params.get('limit')) : 20;
     const offset = params.has('offset') ? Number(params.get('offset')) : 0;
     if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isInteger(offset) || offset < 0) {
       throw new HttpError(400, 'invalid-pagination');
     }
-    const resources = included && offset === 0 ? [doc] : [];
+    const resources = await Promise.all(included.slice(offset, offset + limit).map(document));
     return json({
       x402Version: 2,
       resources,
-      pagination: { limit, offset, total: included ? 1 : 0, cursor: null },
+      pagination: { limit, offset, total: included.length, cursor: null },
     });
   }
   app.get('/discovery/resources', (c) => discovery(new URL(c.req.url)));
@@ -234,7 +355,7 @@ export function createApp(d: Dependencies) {
 
   app.post('/v1/services/:service_id', async (c) => {
     const started = Date.now();
-    if (c.req.param('service_id') !== IMAGE_SERVICE.id) throw new HttpError(404, 'service-not-found');
+    const serviceId = c.req.param('service_id');
     const mode = c.req.query('mode') ?? 'sync';
     const wait = c.req.query('wait_ms') === undefined
       ? MODES.default_wait_ms
@@ -251,29 +372,42 @@ export function createApp(d: Dependencies) {
         'Send a UUID v4 Idempotency-Key and random base64url X-Recovery-Token.',
       );
     }
-    const input = await inputBody(c.req.raw);
-    const inputHash = await hash(JSON.stringify({ service: IMAGE_SERVICE.id, input }));
     let job = await store.get(id);
+    let service: Service | undefined;
     if (job) {
       if (!(await tokenMatches(token, job.recovery_token_hash))) throw new HttpError(404, 'job-not-found');
-      if (job.input_hash !== inputHash || job.service_id !== IMAGE_SERVICE.id) {
-        throw new HttpError(409, 'request-conflict');
-      }
+      if (job.service_id !== serviceId) throw new HttpError(409, 'request-conflict');
+      service = getService(job.service_id, job.service_version);
+      if (!service) throw new Error('Unknown persisted service');
+    } else {
+      service = getService(serviceId);
+      if (!service) throw new HttpError(404, 'service-not-found');
+      if (!services.some((item) => item.id === serviceId)) throw new HttpError(404, 'service-not-found');
+    }
+    // Recovery must use the immutable version's input schema, even after a public upgrade.
+    const input = await inputBody(c.req.raw, service);
+    const inputHash = await hash(JSON.stringify({ service: service.id, input }));
+    if (job) {
+      if (job.input_hash !== inputHash) throw new HttpError(409, 'request-conflict');
     } else {
       if (!(await store.capacity()).available) throw new HttpError(429, 'demo-capacity-exhausted');
-      const requirements = await payments.requirements(config.imagePayTo, config.priceAtomic);
+      await resolveSources(service, input, { supabaseUrl: config.supabaseUrl, store, artifacts }, true);
+      const payment = servicePayment(config, service.id)!;
+      const requirements = await payments.requirements(payment.payTo, payment.priceAtomic);
       try {
         job = (await store.create({
           id,
-          service_id: IMAGE_SERVICE.id,
-          service_version: IMAGE_SERVICE.version,
+          service_id: service.id,
+          service_version: service.version,
           input,
           input_hash: inputHash,
           recovery_token_hash: await hash(token),
           requirements,
-          resource_url: `${config.baseUrl}/v1/services/${IMAGE_SERVICE.id}`,
+          resource_url: `${config.baseUrl}/v1/services/${service.id}`,
           expires_at: new Date(started + 10 * 60 * 1000).toISOString(),
         })).job;
+        service = getService(job.service_id, job.service_version);
+        if (!service) throw new Error('Unknown persisted service');
       } catch (e) {
         if (e instanceof Error && e.message.includes('job-snapshot-conflict')) {
           throw new HttpError(409, 'request-conflict');
@@ -294,8 +428,8 @@ export function createApp(d: Dependencies) {
         const challenge = payments.challenge(
           job.requirements as PaymentRequirements,
           job.resource_url,
-          IMAGE_SERVICE.description,
-          { bazaar: BAZAAR },
+          service.description,
+          { bazaar: bazaarFor(service) },
         );
         return json({ ...challenge.body, job_id: id, expires_at: job.expires_at }, 402, {
           'PAYMENT-REQUIRED': challenge.header,

@@ -1,32 +1,41 @@
 {
-  "id": "image.generate",
-  "version": "1",
-  "name": "Algoria Image Generation",
-  "description": "Generate one square 1K PNG image from a text prompt.",
+  "id": "video.compose",
+  "version": "2",
+  "name": "Algoria Video Composition",
+  "description": "Add an Algoria narration to a completed Algoria video.slideshow result of at most 30 seconds. The video must cover the audio.",
   "tags": [
-    "image",
-    "generation",
-    "design",
-    "art",
-    "visual"
+    "video",
+    "compose",
+    "audio",
+    "advertisement",
+    "reel",
+    "voiceover"
   ],
   "type": "http",
   "x402Version": 2,
-  "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate",
+  "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/video.compose",
   "method": "POST",
   "input_schema": {
     "type": "object",
-    "properties": {
-      "prompt": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 4000
-      }
-    },
+    "additionalProperties": false,
     "required": [
-      "prompt"
+      "video_url",
+      "audio_url"
     ],
-    "additionalProperties": false
+    "properties": {
+      "video_url": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 4096,
+        "description": "Signed URL of a completed Algoria video.slideshow result, at most 30 seconds."
+      },
+      "audio_url": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 4096,
+        "description": "Signed URL of a completed Algoria speech.generate result, no longer than the slideshow."
+      }
+    }
   },
   "output_schema": {
     "type": "object",
@@ -46,10 +55,10 @@
         "format": "uuid"
       },
       "service_id": {
-        "const": "image.generate"
+        "const": "video.compose"
       },
       "service_version": {
-        "const": "1"
+        "const": "2"
       },
       "status": {
         "enum": [
@@ -125,51 +134,44 @@
           {
             "type": "object",
             "required": [
-              "images",
+              "video",
               "url_expires_in"
             ],
             "additionalProperties": false,
             "properties": {
-              "images": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 1,
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "url",
-                    "content_type"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "url": {
-                      "type": "string",
-                      "format": "uri"
-                    },
-                    "file_size": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "duration": {
-                      "type": "number",
-                      "exclusiveMinimum": 0,
-                      "description": "Media duration in seconds."
-                    },
-                    "content_type": {
-                      "enum": [
-                        "image/png",
-                        "image/jpeg",
-                        "image/webp"
-                      ]
-                    },
-                    "width": {
-                      "type": "integer",
-                      "minimum": 1
-                    },
-                    "height": {
-                      "type": "integer",
-                      "minimum": 1
-                    }
+              "video": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "content_type"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "file_size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "duration": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Media duration in seconds."
+                  },
+                  "content_type": {
+                    "enum": [
+                      "video/mp4"
+                    ]
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 }
               },
@@ -270,7 +272,7 @@
       "network": "stellar:testnet",
       "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
       "amount": "100000",
-      "payTo": "GCTVT52AAFK7KYO74JAO3QOLNT6BUYTCZYHTRD7C2VZG6C5CJNRVEV6Y",
+      "payTo": "GDN7RX2RRIVUVDVX2FPSL6QIJFVVRS5YOOOQIOQYAIOROAJGI4P5AZJJ",
       "maxTimeoutSeconds": 120,
       "extra": {
         "areFeesSponsored": true
@@ -285,7 +287,8 @@
           "method": "POST",
           "bodyType": "json",
           "body": {
-            "prompt": "A small red sailboat on a calm turquoise sea, watercolor illustration."
+            "video_url": "https://storage.example.com/slideshow.mp4?token=example",
+            "audio_url": "https://storage.example.com/audio.wav?token=example"
           },
           "queryParams": {
             "mode": "sync"
@@ -299,8 +302,8 @@
           "type": "json",
           "example": {
             "job_id": "00000000-0000-4000-8000-000000000001",
-            "service_id": "image.generate",
-            "service_version": "1",
+            "service_id": "video.compose",
+            "service_version": "2",
             "status": "succeeded",
             "status_url": "https://api.example.com/v1/jobs/00000000-0000-4000-8000-000000000001",
             "payment": {
@@ -309,14 +312,14 @@
               "transaction": "0000000000000000000000000000000000000000000000000000000000000000"
             },
             "output": {
-              "images": [
-                {
-                  "url": "https://storage.example.com/image.png?token=example",
-                  "content_type": "image/png",
-                  "width": 1024,
-                  "height": 1024
-                }
-              ],
+              "video": {
+                "url": "https://storage.example.com/video.mp4?token=example",
+                "content_type": "video/mp4",
+                "width": 1024,
+                "height": 1024,
+                "file_size": 1500000,
+                "duration": 20
+              },
               "url_expires_in": 3600
             },
             "error": null
@@ -351,17 +354,25 @@
               },
               "body": {
                 "type": "object",
-                "properties": {
-                  "prompt": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
+                "additionalProperties": false,
                 "required": [
-                  "prompt"
+                  "video_url",
+                  "audio_url"
                 ],
-                "additionalProperties": false
+                "properties": {
+                  "video_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 4096,
+                    "description": "Signed URL of a completed Algoria video.slideshow result, at most 30 seconds."
+                  },
+                  "audio_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 4096,
+                    "description": "Signed URL of a completed Algoria speech.generate result, no longer than the slideshow."
+                  }
+                }
               },
               "queryParams": {
                 "type": "object",
@@ -409,10 +420,10 @@
                     "format": "uuid"
                   },
                   "service_id": {
-                    "const": "image.generate"
+                    "const": "video.compose"
                   },
                   "service_version": {
-                    "const": "1"
+                    "const": "2"
                   },
                   "status": {
                     "enum": [
@@ -488,51 +499,44 @@
                       {
                         "type": "object",
                         "required": [
-                          "images",
+                          "video",
                           "url_expires_in"
                         ],
                         "additionalProperties": false,
                         "properties": {
-                          "images": {
-                            "type": "array",
-                            "minItems": 1,
-                            "maxItems": 1,
-                            "items": {
-                              "type": "object",
-                              "required": [
-                                "url",
-                                "content_type"
-                              ],
-                              "additionalProperties": false,
-                              "properties": {
-                                "url": {
-                                  "type": "string",
-                                  "format": "uri"
-                                },
-                                "file_size": {
-                                  "type": "integer",
-                                  "minimum": 0
-                                },
-                                "duration": {
-                                  "type": "number",
-                                  "exclusiveMinimum": 0,
-                                  "description": "Media duration in seconds."
-                                },
-                                "content_type": {
-                                  "enum": [
-                                    "image/png",
-                                    "image/jpeg",
-                                    "image/webp"
-                                  ]
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                }
+                          "video": {
+                            "type": "object",
+                            "required": [
+                              "url",
+                              "content_type"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                              "url": {
+                                "type": "string",
+                                "format": "uri"
+                              },
+                              "file_size": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "duration": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "description": "Media duration in seconds."
+                              },
+                              "content_type": {
+                                "enum": [
+                                  "video/mp4"
+                                ]
+                              },
+                              "width": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "height": {
+                                "type": "integer",
+                                "minimum": 1
                               }
                             }
                           },

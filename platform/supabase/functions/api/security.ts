@@ -1,3 +1,5 @@
+import { IMAGE_SERVICE, normalizeInput, type Service, type ServiceInput } from './catalog.ts';
+
 export class HttpError extends Error {
   constructor(public status: number, public code: string, message = code) {
     super(message);
@@ -34,7 +36,7 @@ export async function readBytes(request: Request, limit: number): Promise<Uint8A
   return result;
 }
 
-export async function inputBody(request: Request): Promise<{ prompt: string }> {
+export async function inputBody(request: Request, service: Service = IMAGE_SERVICE): Promise<ServiceInput> {
   if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
     throw new HttpError(415, 'json-required');
   }
@@ -45,18 +47,11 @@ export async function inputBody(request: Request): Promise<{ prompt: string }> {
     if (e instanceof HttpError) throw e;
     throw new HttpError(400, 'invalid-json');
   }
-  if (
-    !body || Array.isArray(body) || typeof body !== 'object' ||
-    Object.keys(body).some((k) => k !== 'prompt') ||
-    typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 4000
-  ) {
-    throw new HttpError(
-      400,
-      'invalid-input',
-      'Provide only prompt, a nonempty string of at most 4000 characters.',
-    );
+  try {
+    return normalizeInput(service, body);
+  } catch (error) {
+    throw new HttpError(400, 'invalid-input', error instanceof Error ? error.message : 'Invalid input.');
   }
-  return { prompt: body.prompt.trim() };
 }
 
 export const validId = (id: string) =>

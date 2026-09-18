@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.112.3';
+import type { ServiceInput } from './catalog.ts';
 
 export type JobStatus =
   | 'awaiting_payment'
@@ -16,7 +17,7 @@ export type Job = {
   id: string;
   service_id: string;
   service_version: string;
-  input: { prompt: string };
+  input: ServiceInput;
   input_hash: string;
   recovery_token_hash: string;
   requirements: Record<string, unknown>;

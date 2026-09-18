@@ -68,5 +68,28 @@ if (process.argv[1]?.endsWith('/management.mjs')) {
       commit;`;
     await management('database/query', { query });
     console.log('Platform migration applied atomically with CLI migration history.');
-  } else throw new Error('Usage: node scripts/management.mjs status|migrate');
+  } else if (action === 'migrate-media') {
+    const version = '202609180002';
+    const history = await management('database/query', {
+      query: `select version from supabase_migrations.schema_migrations where version = '${version}'`,
+    });
+    if (history.length) {
+      console.log('Media service migration is already recorded.');
+    } else {
+      const migration = readFileSync(
+        new URL('../supabase/migrations/202609180002_speech_service.sql', import.meta.url),
+        'utf8',
+      );
+      const quoted = "'" + migration.replaceAll("'", "''") + "'";
+      await management('database/query', {
+        query: `begin;
+        ${migration}
+        insert into supabase_migrations.schema_migrations(version, statements, name)
+        values ('${version}', array[${quoted}], 'speech_service');
+        notify pgrst, 'reload schema';
+        commit;`,
+      });
+      console.log('Media service migration applied with CLI migration history.');
+    }
+  } else throw new Error('Usage: node scripts/management.mjs status|migrate|migrate-media');
 }

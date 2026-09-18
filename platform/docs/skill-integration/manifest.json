@@ -1,22 +1,41 @@
 {
   "verified_date": "2026-09-18",
-  "purpose": "Public API reference copies for Algoria skill integration, based on the recorded live responses. Runtime clients must read current discovery and their actual 402 challenge.",
+  "purpose": "Public reference snapshots of the deployed five-service API. Read current discovery and the actual 402 challenge for every new job.",
   "files": [
     {
       "file": "openapi.json",
       "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/openapi.json",
-      "sha256": "928a4f7a7c665621e1cc89ebbc95396959b7969f10d42a4ae1c9b78afe5e14c1"
+      "sha256": "d0be570622888059d6f7a81bdcf5c881aec9addfdc01dc4062796f852923113a"
     },
     {
       "file": "discovery.json",
       "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/discovery/resources",
-      "sha256": "4b422750ae1f4bb063d938691d7fcd43165522ac4668b18a59f5088c1d2d0196"
+      "sha256": "3b84c4c2e11c693d6496d5018f3b79253dc01d37a42ef33195f081aa07a510d1"
     },
     {
       "file": "image.generate.json",
       "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate",
-      "sha256": "2ad0314a991ad22ab856206233092988b151bed3e9d6c2794149a3cac33a1e49"
+      "sha256": "83ad57095fe3cc3e9fe1b7f0921ce073d1bfed847b6b02945d68789b71a18aa3"
+    },
+    {
+      "file": "speech.generate.json",
+      "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/speech.generate",
+      "sha256": "0478568f2d01acc3956e022aa1a187b9f25c78d32bb4c0c8dbed67a2cf90ba51"
+    },
+    {
+      "file": "video.slideshow.json",
+      "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/video.slideshow",
+      "sha256": "e2d56625596299905c38d808e849a9480d206bb95713e3e532f1faa1c8aa930d"
+    },
+    {
+      "file": "video.compose.json",
+      "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/video.compose",
+      "sha256": "45541169274062b51c55a0dc75fca62766a215a411a2205b2fbaae9ebaee5543"
+    },
+    {
+      "file": "video.caption.json",
+      "source": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/video.caption",
+      "sha256": "42ccc9c62bb48a860fb2da096a9804caf43ce68200e66a93b18bf22e2003b733"
     }
-  ],
-  "local_changes": "Discovery tags in discovery.json and image.generate.json were translated to English to match repository metadata. These two reference copies are not unmodified live responses; the deployed API may retain the previous tag until the next deployment. Endpoint and payment contracts are unchanged."
+  ]
 }

@@ -1,30 +1,42 @@
 {
-  "id": "image.generate",
+  "id": "speech.generate",
   "version": "1",
-  "name": "Algoria Image Generation",
-  "description": "Generate one square 1K PNG image from a text prompt.",
+  "name": "Algoria Text to Speech",
+  "description": "Turn up to 1000 characters of English text into WAV narration using a preset voice.",
   "tags": [
-    "image",
-    "generation",
-    "design",
-    "art",
-    "visual"
+    "audio",
+    "speech",
+    "tts",
+    "narration",
+    "voiceover",
+    "text-to-speech"
   ],
   "type": "http",
   "x402Version": 2,
-  "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate",
+  "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/speech.generate",
   "method": "POST",
   "input_schema": {
     "type": "object",
     "properties": {
-      "prompt": {
+      "text": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 4000
+        "maxLength": 1000,
+        "description": "English text to narrate."
+      },
+      "voice": {
+        "type": "string",
+        "enum": [
+          "Craig (en)",
+          "Olivia (en)",
+          "Dennis (en)",
+          "Sarah (en)"
+        ],
+        "default": "Craig (en)"
       }
     },
     "required": [
-      "prompt"
+      "text"
     ],
     "additionalProperties": false
   },
@@ -46,7 +58,7 @@
         "format": "uuid"
       },
       "service_id": {
-        "const": "image.generate"
+        "const": "speech.generate"
       },
       "service_version": {
         "const": "1"
@@ -125,51 +137,37 @@
           {
             "type": "object",
             "required": [
-              "images",
+              "audio",
               "url_expires_in"
             ],
             "additionalProperties": false,
             "properties": {
-              "images": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 1,
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "url",
-                    "content_type"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "url": {
-                      "type": "string",
-                      "format": "uri"
-                    },
-                    "file_size": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "duration": {
-                      "type": "number",
-                      "exclusiveMinimum": 0,
-                      "description": "Media duration in seconds."
-                    },
-                    "content_type": {
-                      "enum": [
-                        "image/png",
-                        "image/jpeg",
-                        "image/webp"
-                      ]
-                    },
-                    "width": {
-                      "type": "integer",
-                      "minimum": 1
-                    },
-                    "height": {
-                      "type": "integer",
-                      "minimum": 1
-                    }
+              "audio": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "content_type"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "file_size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "duration": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Media duration in seconds."
+                  },
+                  "content_type": {
+                    "enum": [
+                      "audio/wav",
+                      "audio/mpeg"
+                    ]
                   }
                 }
               },
@@ -269,8 +267,8 @@
       "scheme": "exact",
       "network": "stellar:testnet",
       "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
-      "amount": "100000",
-      "payTo": "GCTVT52AAFK7KYO74JAO3QOLNT6BUYTCZYHTRD7C2VZG6C5CJNRVEV6Y",
+      "amount": "200000",
+      "payTo": "GBPY42SCO76DMDML4K5MWO34DFIZEPIEURRM7JPHF5VEBBVFGSJHP372",
       "maxTimeoutSeconds": 120,
       "extra": {
         "areFeesSponsored": true
@@ -285,7 +283,8 @@
           "method": "POST",
           "bodyType": "json",
           "body": {
-            "prompt": "A small red sailboat on a calm turquoise sea, watercolor illustration."
+            "text": "Meet Algoria. Your agent can discover useful services and pay as it goes.",
+            "voice": "Craig (en)"
           },
           "queryParams": {
             "mode": "sync"
@@ -299,7 +298,7 @@
           "type": "json",
           "example": {
             "job_id": "00000000-0000-4000-8000-000000000001",
-            "service_id": "image.generate",
+            "service_id": "speech.generate",
             "service_version": "1",
             "status": "succeeded",
             "status_url": "https://api.example.com/v1/jobs/00000000-0000-4000-8000-000000000001",
@@ -309,14 +308,12 @@
               "transaction": "0000000000000000000000000000000000000000000000000000000000000000"
             },
             "output": {
-              "images": [
-                {
-                  "url": "https://storage.example.com/image.png?token=example",
-                  "content_type": "image/png",
-                  "width": 1024,
-                  "height": 1024
-                }
-              ],
+              "audio": {
+                "url": "https://storage.example.com/audio.wav?token=example",
+                "content_type": "audio/wav",
+                "file_size": 960044,
+                "duration": 20
+              },
               "url_expires_in": 3600
             },
             "error": null
@@ -352,14 +349,25 @@
               "body": {
                 "type": "object",
                 "properties": {
-                  "prompt": {
+                  "text": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 4000
+                    "maxLength": 1000,
+                    "description": "English text to narrate."
+                  },
+                  "voice": {
+                    "type": "string",
+                    "enum": [
+                      "Craig (en)",
+                      "Olivia (en)",
+                      "Dennis (en)",
+                      "Sarah (en)"
+                    ],
+                    "default": "Craig (en)"
                   }
                 },
                 "required": [
-                  "prompt"
+                  "text"
                 ],
                 "additionalProperties": false
               },
@@ -409,7 +417,7 @@
                     "format": "uuid"
                   },
                   "service_id": {
-                    "const": "image.generate"
+                    "const": "speech.generate"
                   },
                   "service_version": {
                     "const": "1"
@@ -488,51 +496,37 @@
                       {
                         "type": "object",
                         "required": [
-                          "images",
+                          "audio",
                           "url_expires_in"
                         ],
                         "additionalProperties": false,
                         "properties": {
-                          "images": {
-                            "type": "array",
-                            "minItems": 1,
-                            "maxItems": 1,
-                            "items": {
-                              "type": "object",
-                              "required": [
-                                "url",
-                                "content_type"
-                              ],
-                              "additionalProperties": false,
-                              "properties": {
-                                "url": {
-                                  "type": "string",
-                                  "format": "uri"
-                                },
-                                "file_size": {
-                                  "type": "integer",
-                                  "minimum": 0
-                                },
-                                "duration": {
-                                  "type": "number",
-                                  "exclusiveMinimum": 0,
-                                  "description": "Media duration in seconds."
-                                },
-                                "content_type": {
-                                  "enum": [
-                                    "image/png",
-                                    "image/jpeg",
-                                    "image/webp"
-                                  ]
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                }
+                          "audio": {
+                            "type": "object",
+                            "required": [
+                              "url",
+                              "content_type"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                              "url": {
+                                "type": "string",
+                                "format": "uri"
+                              },
+                              "file_size": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "duration": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "description": "Media duration in seconds."
+                              },
+                              "content_type": {
+                                "enum": [
+                                  "audio/wav",
+                                  "audio/mpeg"
+                                ]
                               }
                             }
                           },
