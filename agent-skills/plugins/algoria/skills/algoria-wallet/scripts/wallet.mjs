@@ -19,7 +19,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { writeFile } from 'node:fs/promises';
-import { emit, parseArgs, resolvePassphrase, run } from '../../../lib/cli.mjs';
+import { commandName, emit, parseArgs, resolvePassphrase, run } from '../../../lib/cli.mjs';
 import { loadAccount, fundWithFriendbot } from '../../../lib/stellar/horizon.mjs';
 import { deleteWallet, ensureWallet, importWallet, listWallets, unlockWallet, walletPath } from '../../../lib/stellar/keystore.mjs';
 import { resolveNetwork } from '../../../lib/stellar/network.mjs';
@@ -76,6 +76,8 @@ async function describeAccount(network, publicKey) {
  * @param {string | null} value
  */
 const formatUsdc = (value) => (value === null ? 'none (no trustline yet)' : `${value} USDC`);
+
+const SELF = commandName('wallet', 'wallet.mjs');
 
 /** @type {Record<string, (flags: Flags) => Promise<void>>} */
 const COMMANDS = {
@@ -153,7 +155,7 @@ const COMMANDS = {
   async balance(flags) {
     const network = resolveNetwork(flags.network ?? 'testnet');
     const entry = (await listWallets()).find((wallet) => wallet.network === network.id);
-    if (!entry) throw new Error(`no ${network.id} wallet yet. Run: wallet.mjs onboard --network ${network.id}`);
+    if (!entry) throw new Error(`no ${network.id} wallet yet. Run: ${SELF} onboard --network ${network.id}`);
 
     const account = await describeAccount(network, entry.publicKey);
     emit(
@@ -169,7 +171,7 @@ const COMMANDS = {
       [
         `${formatUsdc(account.usdc)}   ${account.xlm ?? '0'} XLM   (${network.id})`,
         `${entry.publicKey}`,
-        account.exists ? `` : `This account does not exist on-chain yet. Run: wallet.mjs fund --network ${network.id}`
+        account.exists ? `` : `This account does not exist on-chain yet. Run: ${SELF} fund --network ${network.id}`
       ].filter(Boolean)
     );
   },
@@ -180,7 +182,7 @@ const COMMANDS = {
     if (wallets.length === 0) {
       emit(flags, { walletFile: walletPath(), accounts: [] }, [
         `No wallets yet.`,
-        `Create one: wallet.mjs onboard --network testnet`
+        `Create one: ${SELF} onboard --network testnet`
       ]);
       return;
     }
@@ -338,7 +340,7 @@ const COMMANDS = {
     if (flags.yes !== true) {
       throw new Error(
         `this deletes the ${network.id} seed for ${entry.publicKey} from this machine and cannot be undone. ` +
-          `Export it first (wallet.mjs export --network ${network.id} --out seed.txt), then pass --yes.`
+          `Export it first (${SELF} export --network ${network.id} --out seed.txt), then pass --yes.`
       );
     }
 
@@ -349,17 +351,29 @@ const COMMANDS = {
   }
 };
 
-run(async () => {
-  const { flags, positional } = parseArgs(process.argv.slice(2));
-  const command = positional[0];
+/**
+ * @param {string[]} argv arguments after the script name
+ * @returns {Promise<void>}
+ */
+export function main(argv) {
+  return run(async () => {
+    const { flags, positional } = parseArgs(argv);
+    const command = positional[0];
 
-  if (!command || command === 'help' || flags.help) {
-    process.stdout.write(`${USAGE}\n`);
-    return;
-  }
-  const handler = COMMANDS[command];
-  if (!handler) {
-    throw new Error(`unknown command "${command}". Run without arguments to see the list.`);
-  }
-  await handler(flags);
-});
+    if (!command || command === 'help' || flags.help) {
+      process.stdout.write(`${USAGE}\n`);
+      return;
+    }
+    const handler = COMMANDS[command];
+    if (!handler) {
+      throw new Error(`unknown command "${command}". Run without arguments to see the list.`);
+    }
+    await handler(flags);
+  });
+}
+
+// Runnable on its own, which is how the skills invoke it, and importable by
+// `bin/algoria.mjs`, which is how `npx algoria` invokes it. The guard keeps the
+// import side-effect-free so the dispatcher can pass its own argv.
+if (import.meta.url === `file://${process.argv[1]}`) main(process.argv.slice(2));
+

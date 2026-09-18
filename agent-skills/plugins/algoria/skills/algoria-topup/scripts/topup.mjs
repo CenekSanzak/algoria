@@ -13,7 +13,7 @@
  * would be.
  */
 
-import { emit, parseArgs, run } from '../../../lib/cli.mjs';
+import { commandName, emit, parseArgs, run } from '../../../lib/cli.mjs';
 import { ANCHOR, assertAnchorNetwork, estimateUsdc, normaliseTryAmount, verifyAnchor } from '../../../lib/anchor/anchor.mjs';
 import { authenticate } from '../../../lib/anchor/sep10.mjs';
 import { createDeposit, getDeposit, isSuccess, isTerminal, listDeposits } from '../../../lib/anchor/sep6.mjs';
@@ -53,15 +53,15 @@ async function requireReadyWallet(flags) {
 
   const entry = await getWallet(network.id);
   if (!entry) {
-    throw new Error('no testnet wallet on this machine. Run `wallet.mjs onboard --network testnet` first.');
+    throw new Error(`no testnet wallet on this machine. Run \`${WALLET} onboard --network testnet\` first.`);
   }
   const account = await loadAccount(network, entry.publicKey);
   if (!account.exists) {
-    throw new Error(`${entry.publicKey} is not funded yet. Run \`wallet.mjs onboard --network testnet\`.`);
+    throw new Error(`${entry.publicKey} is not funded yet. Run \`${WALLET} onboard --network testnet\`.`);
   }
   if (!hasUsdcTrustline(account, network)) {
     throw new Error(
-      `${entry.publicKey} has no USDC trustline, so the anchor cannot pay it. Run \`wallet.mjs trustline --network testnet\`.`
+      `${entry.publicKey} has no USDC trustline, so the anchor cannot pay it. Run \`${WALLET} trustline --network testnet\`.`
     );
   }
   return { network, publicKey: entry.publicKey, usdc: usdcBalance(account, network) };
@@ -105,6 +105,9 @@ function explain(status) {
       return status;
   }
 }
+
+const SELF = commandName('topup', 'topup.mjs');
+const WALLET = commandName('wallet', 'wallet.mjs');
 
 /** @type {Record<string, (flags: Flags) => Promise<void>>} */
 const COMMANDS = {
@@ -164,7 +167,7 @@ const COMMANDS = {
         'press "Simulate incoming TRY transfer" to stand in for the transfer:',
         `  ${order.payUrl}`,
         '',
-        'Then follow it with:  topup.mjs status --wait'
+        `Then follow it with:  ${SELF} status --wait`
       ]
     );
   },
@@ -269,19 +272,31 @@ async function resolveDepositId(flags, { jwt, publicKey }) {
 
   const remote = await listDeposits({ jwt });
   if (remote.length === 0) {
-    throw new Error('no deposit to check. Run `topup.mjs start --try <amount>` first.');
+    throw new Error(`no deposit to check. Run \`${SELF} start --try <amount>\` first.`);
   }
   return (remote.find((entry) => !isTerminal(entry.status)) ?? remote[0]).id;
 }
 
-run(async () => {
-  const { flags, positional } = parseArgs(process.argv.slice(2));
-  const command = positional[0];
-  if (!command || flags.help === true) {
-    process.stdout.write(`${USAGE}\n`);
-    return;
-  }
-  const handler = COMMANDS[command];
-  if (!handler) throw new Error(`unknown command ${JSON.stringify(command)}\n\n${USAGE}`);
-  await handler(flags);
-});
+/**
+ * @param {string[]} argv arguments after the script name
+ * @returns {Promise<void>}
+ */
+export function main(argv) {
+  return run(async () => {
+    const { flags, positional } = parseArgs(argv);
+    const command = positional[0];
+    if (!command || flags.help === true) {
+      process.stdout.write(`${USAGE}\n`);
+      return;
+    }
+    const handler = COMMANDS[command];
+    if (!handler) throw new Error(`unknown command ${JSON.stringify(command)}\n\n${USAGE}`);
+    await handler(flags);
+  });
+}
+
+// Runnable on its own, which is how the skills invoke it, and importable by
+// `bin/algoria.mjs`, which is how `npx algoria` invokes it. The guard keeps the
+// import side-effect-free so the dispatcher can pass its own argv.
+if (import.meta.url === `file://${process.argv[1]}`) main(process.argv.slice(2));
+

@@ -8,7 +8,7 @@
       "name": "algoria",
       "source": {
         "source": "local",
-        "path": "./plugins/algoria"
+        "path": "./agent-skills/plugins/algoria"
       },
       "policy": {
         "installation": "AVAILABLE",

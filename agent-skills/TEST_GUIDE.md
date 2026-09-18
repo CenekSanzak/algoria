@@ -53,10 +53,11 @@ that has it, or `pip3 install pyyaml`.
 
 ## 3. Install it in Codex (2 minutes)
 
-From the repo root (`algoria-x/`):
+From the repo root (`algoria-x/`). The `.` matters — the marketplace lives at
+the repo root, not in `agent-skills/`:
 
 ```bash
-codex plugin marketplace add ./agent-skills
+codex plugin marketplace add .
 codex plugin add algoria@algoria-skills
 codex plugin list | grep algoria     # expect: installed, enabled
 ```
@@ -167,7 +168,7 @@ node skills/algoria-topup/scripts/topup.mjs history --json
 Inside Claude Code:
 
 ```
-/plugin marketplace add ./agent-skills
+/plugin marketplace add .
 /plugin install algoria@algoria-skills
 ```
 
@@ -183,11 +184,54 @@ skill's `SKILL.md` — that text is all the model sees when deciding.
 
 ---
 
-## 7. Clean up
+## 7. Test the `npx` command (3 minutes)
+
+The same code also ships as an npm package. Test it the way a user gets it — from
+a packed tarball, not from the source tree, because only that proves the right
+files are included.
+
+```bash
+cd agent-skills/plugins/algoria
+npm pack --pack-destination /tmp
+
+mkdir -p /tmp/npxcheck && cd /tmp/npxcheck && npm init -y
+npm install /tmp/algoria-*.tgz
+```
+
+**Expect `added 1 package`.** If it says more, a dependency crept into
+`package.json` and `npx` just got slower for everyone. There should be nothing
+behind this package.
+
+```bash
+export ALGORIA_HOME=$(mktemp -d)
+npx algoria --version
+npx algoria wallet onboard --network testnet --json
+```
+
+Same `"ready": true` as step 4. Then check the messages name the right command:
+
+```bash
+npx algoria topup status
+```
+
+Should say **`algoria topup start`**, not `topup.mjs start`. If it names the
+`.mjs` file, the channel signal is broken — `bin/algoria.mjs` sets
+`ALGORIA_INVOKED_AS` and `commandName()` in `lib/cli.mjs` reads it.
+
+Run the same command the agent's way and it should say `topup.mjs` instead. Both
+are correct; each names the command that user can actually retype.
+
+---
+
+## 8. Clean up
 
 ```bash
 codex plugin remove algoria@algoria-skills
 codex plugin marketplace remove algoria-skills
+```
+
+```bash
+rm -rf /tmp/npxcheck /tmp/algoria-*.tgz
 ```
 
 Test wallets live in the temp folder from the top of this page, so there is
@@ -206,6 +250,9 @@ nothing else to delete. Close the terminal and it is gone.
 | `pnpm check` names a file or line | A real type error |
 | `Cannot find module` running a script | Run from the plugin root, or set `CLAUDE_PLUGIN_ROOT` |
 | `No module named 'yaml'` | Wrong `python3`; needs PyYAML |
+| `npm install` adds more than 1 package | A dependency crept into `package.json` |
+| `npx` messages name `topup.mjs` | `ALGORIA_INVOKED_AS` is not reaching `commandName()` |
+| Versions disagree across manifests | `pnpm test` catches this; fix all three |
 
 After changing a skill, reinstall before testing — the installed copy is a
 snapshot, not a live link to the checkout:

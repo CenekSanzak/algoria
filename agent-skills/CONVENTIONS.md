@@ -73,6 +73,17 @@ WALLET="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-wallet/scripts/wallet.mjs"
 - **One entry point per skill**, with subcommands named for what they do — the
   whole surface then fits in one table in SKILL.md. Exactly one subcommand may
   reveal a secret, and it is named for that.
+- **That entry point exports `main(argv)`** and keeps its
+  `import.meta.url === file://${process.argv[1]}` guard, so the file runs both
+  directly (the agent's path) and through `bin/algoria.mjs` (the `npx` path).
+  Never read `process.argv` anywhere but that guard: a script that reaches for it
+  directly works in one channel and silently ignores the other's arguments.
+- **A new skill needs a `GROUPS` entry in `bin/algoria.mjs`**, or it exists for
+  agents and not for `npx` users. The dispatcher maps a name onto a `main()` and
+  does nothing else — logic there is logic one channel has and the other lacks.
+- **A message telling the user to retype a command goes through `commandName()`.**
+  Hard-coding `wallet.mjs` makes the instruction wrong for `npx` users, and
+  hard-coding `algoria wallet` makes it wrong for the agent.
 - **A setup command that reaches a working state in one call.** `onboard` is the
   pattern: create, fund, and satisfy every precondition, then say plainly
   whether the result is ready to use.
@@ -138,8 +149,23 @@ which has no `node_modules` and no harness — that is what catches a file that
 never shipped or a dependency that was never bundled. `README.md` has the
 commands.
 
+## Two channels
+
+The same directory is the plugin and the published npm package. Hosts read the
+manifests; npm reads `package.json`; neither sees the other's files. There is no
+build step and no second copy of `lib/`, and it stays that way.
+
+**`package.json` must declare no `dependencies`.** The Stellar SDK is bundled
+into `lib/vendor/` so that an installed plugin needs no `npm install` and `npx
+algoria` is a ~111KB download. One dependency undoes both. A test enforces it.
+
+Before publishing, check what npm would ship — `npm pack --dry-run` — and install
+the tarball somewhere clean. `added 1 package` is the pass; more than that means
+something crept in.
+
 ## Versioning
 
-The version lives in **both** manifests and the two must agree. Bump them
-together when a skill's behaviour changes in a way a user would notice. Codex
-requires strict semver, so that is the format for both.
+The version lives in **three** files and all three must agree: both manifests and
+`package.json`. Bump them together when a skill's behaviour changes in a way a
+user would notice. Codex requires strict semver, so that is the format for all
+three. `tests/manifests.test.mjs` fails when they drift.

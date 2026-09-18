@@ -15,9 +15,10 @@ root.
 same `skills/` and `lib/`; only the manifest that describes them differs.
 
 ```
-agent-skills/                       marketplace root, and the dev harness
-  .claude-plugin/marketplace.json   Claude's catalogue
-  .agents/plugins/marketplace.json  Codex's catalogue
+algoria-x/                          the repository, and the marketplace root
+  .claude-plugin/marketplace.json   Claude's catalogue  ->  agent-skills/plugins/algoria
+  .agents/plugins/marketplace.json  Codex's catalogue   ->  agent-skills/plugins/algoria
+agent-skills/                       this directory: the dev harness
   package.json  tsconfig.json       harness: test, typecheck, bundle
   vitest.config.mjs
   tests/                            vitest, run against the plugin's lib/
@@ -32,8 +33,15 @@ agent-skills/                       marketplace root, and the dev harness
     lib/stellar/                    keys, keystore, Horizon, trustlines
     lib/anchor/                     the TR mock anchor: SEP-10, SEP-6, records
     lib/vendor/                     the committed Stellar SDK bundle
+    bin/algoria.mjs                 the `npx algoria` entry point
+    package.json                    the published npm package
     assets/                         plugin icon
 ```
+
+The marketplace manifests sit at the repository root because both hosts require
+the manifest at the root of whatever source they are given. Nested one level
+down, `codex plugin marketplace add <repo>` fails with *marketplace root does
+not contain a supported manifest*, which rules out installing from git.
 
 **Everything inside `plugins/algoria/` ships; everything outside it does not.**
 Both hosts install a plugin by copying its directory wholesale, and neither
@@ -48,29 +56,35 @@ directory, so install the plugin as a unit rather than copying one
 
 ## Install
 
-Both hosts point at the marketplace root, not at `plugins/algoria`.
+Two channels. The plugin is for agents; npm is for people.
 
-**Claude**
+**As an agent skill.** Both hosts read a marketplace manifest from the
+**repository root**, so the source is the repo, not this directory:
 
 ```bash
-/plugin marketplace add ./agent-skills
+# Claude
+/plugin marketplace add berkingurcan/algoria-x
 /plugin install algoria@algoria-skills
-```
 
-**Codex**
-
-```bash
-codex plugin marketplace add ./agent-skills
+# Codex
+codex plugin marketplace add berkingurcan/algoria-x
 codex plugin add algoria@algoria-skills
 ```
 
-Codex discovers `.agents/plugins/marketplace.json` implicitly only at
-`~/.agents/plugins/`; from a repo checkout the marketplace has to be added
-explicitly, as above. `codex plugin list` shows what is installed, and
-`codex plugin remove algoria@algoria-skills` undoes it.
-
-If the `codex` CLI is not on your PATH, the ChatGPT desktop app ships one at
+Use `.` instead of `berkingurcan/algoria-x` to install from a local checkout.
+`codex plugin list` shows what is installed, and
+`codex plugin remove algoria@algoria-skills` undoes it. If the `codex` CLI is not
+on your PATH, the ChatGPT desktop app ships one at
 `/Applications/ChatGPT.app/Contents/Resources/codex`.
+
+**As a CLI**, for a human or a script, with nothing installed:
+
+```bash
+npx algoria wallet onboard --network testnet
+npx algoria topup start --try 200
+```
+
+Same code either way — see [Two channels](#two-channels-one-source) below.
 
 ## Skills
 
@@ -83,6 +97,31 @@ The command surface is modelled on AgentCash's wallet flow — auto-created wall
 one entry point with subcommands, `--json` everywhere — adapted to Stellar. See
 [agentcash-parity.md](plugins/algoria/skills/algoria-wallet/references/agentcash-parity.md)
 for what maps onto what and which of their choices were deliberately not copied.
+
+## Two channels, one source
+
+`plugins/algoria/` is simultaneously the plugin and the published npm package.
+Hosts read the manifests and ignore `package.json`; npm reads `package.json` and
+ignores the manifests. Nothing is generated, and there is no second copy of
+`lib/` that could drift from the first.
+
+This works only because the SDK is bundled: the package declares **no
+dependencies**, so `npx algoria` is a 111KB download with nothing behind it. A
+test asserts that `dependencies` stays absent, because adding one would quietly
+undo it.
+
+Each skill's script exports `main(argv)` and keeps a
+`import.meta.url === file://${process.argv[1]}` guard, so the same file runs both
+as `node skills/…/wallet.mjs onboard` (how the agent calls it) and through
+`bin/algoria.mjs` (how `npx` calls it). `bin/algoria.mjs` is a dispatcher only —
+if a flag ever works in one channel and not the other, that file has grown
+behaviour it should not have.
+
+One wrinkle worth knowing: messages that tell a user to retype a command go
+through `commandName()`, which reads `ALGORIA_INVOKED_AS`. The dispatcher sets
+it. Inferring the channel from `process.argv[1]` instead looks equivalent and is
+not — npm installs a bin as `node_modules/.bin/algoria`, with no extension, so a
+filename check misses every npx user.
 
 ## Two hosts, one plugin
 
@@ -164,7 +203,7 @@ To check the whole install path the way a user will get it, install it and run a
 command from the installed copy rather than from the checkout:
 
 ```bash
-codex plugin marketplace add ./agent-skills
+codex plugin marketplace add .            # from the repository root
 codex plugin add algoria@algoria-skills
 cd ~/.codex/plugins/cache/algoria-skills/algoria/<version>
 ALGORIA_HOME=$(mktemp -d) node skills/algoria-wallet/scripts/wallet.mjs onboard \

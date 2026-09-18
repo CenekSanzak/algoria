@@ -116,6 +116,29 @@ function promptHidden(prompt) {
 }
 
 /**
+ * Name this script the way the user actually reached it.
+ *
+ * The same code has two front doors: an agent runs the skill script directly
+ * (`node skills/algoria-wallet/scripts/wallet.mjs`), and a human runs
+ * `algoria wallet` through `bin/algoria.mjs`. A message that tells someone to
+ * retype a command has to match the door they came in by, or the instruction is
+ * wrong for half the users.
+ *
+ * `bin/algoria.mjs` sets ALGORIA_INVOKED_AS before handing over. Reading that is
+ * deliberate: inferring the door from `process.argv[1]` looks equivalent and is
+ * not, because npm installs a bin as `node_modules/.bin/algoria` with no
+ * extension, so the obvious filename check silently misses every npx user.
+ *
+ * @param {string} group the `algoria <group>` name, e.g. 'wallet'
+ * @param {string} script the standalone file name, e.g. 'wallet.mjs'
+ * @returns {string}
+ */
+export function commandName(group, script) {
+  const cli = process.env.ALGORIA_INVOKED_AS;
+  return cli ? `${cli} ${group}` : script;
+}
+
+/**
  * Print a result as human text or JSON, depending on `--json`.
  * @param {Record<string, string | boolean>} flags
  * @param {object} payload
