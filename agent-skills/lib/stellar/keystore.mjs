@@ -1,28 +1,31 @@
 /**
  * The local keystore.
  *
- * One wallet is one JSON file under `~/.algoria/wallets`, owner-readable only.
- * The secret seed is encrypted with AES-256-GCM under a scrypt-stretched
- * passphrase; the file therefore carries no usable key material on its own.
+ * One file, `~/.algoria/wallet.json`, owner-readable only, holding at most one
+ * wallet per network. It is created on first use rather than by a separate
+ * command: an agent that needs an address should get one, not a prompt.
  *
- * A pubnet wallet must be encrypted. A testnet wallet may be stored in the
- * clear, because a testnet seed protects nothing, but it is marked as such in
- * the file and in every listing so it can never be mistaken for a real one.
+ * Custody differs by network on purpose.
+ *
+ * A testnet seed is stored in the clear. It protects nothing — testnet assets
+ * have no value — and a passphrase there would buy no security while blocking
+ * the agent mid-flow on a question only a human can answer.
+ *
+ * A pubnet seed is encrypted with AES-256-GCM under a scrypt-stretched
+ * passphrase, always. Real money is worth the interruption.
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { chmod, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { fromSecretSeed } from './keypair.mjs';
-import { resolveNetwork } from './network.mjs';
+import { fromSecretSeed, generateKeypair } from './keypair.mjs';
+import { NETWORKS, resolveNetwork } from './network.mjs';
 
-export const KEYSTORE_VERSION = 1;
+export const KEYSTORE_VERSION = 2;
 
 /** Deliberately slow. ~0.5s on a laptop, which is the point. */
 const SCRYPT = { N: 65536, r: 8, p: 1, dklen: 32, maxmem: 192 * 1024 * 1024 };
-
-const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 /** @returns {string} */
 export function algoriaHome() {
@@ -30,31 +33,25 @@ export function algoriaHome() {
 }
 
 /** @returns {string} */
-export function walletsDir() {
-  return join(algoriaHome(), 'wallets');
+export function walletPath() {
+  return join(algoriaHome(), 'wallet.json');
 }
 
 /**
- * @param {string} name
- * @returns {string}
+ * @typedef {object} WalletEntry
+ * @property {string} network
+ * @property {string} publicKey
+ * @property {string} createdAt
+ * @property {boolean} encrypted
+ * @property {object | null} crypto
+ * @property {string | null} secretSeed present only on an unencrypted testnet wallet
  */
-export function walletPath(name) {
-  return join(walletsDir(), `${assertValidName(name)}.json`);
-}
 
 /**
- * @param {string} name
- * @returns {string}
+ * @typedef {object} WalletFile
+ * @property {number} version
+ * @property {Record<string, WalletEntry>} wallets
  */
-export function assertValidName(name) {
-  const normalized = String(name ?? '').trim();
-  if (!NAME_PATTERN.test(normalized)) {
-    throw new Error(
-      'wallet name must be lowercase letters, digits, "-" or "_", 1-64 characters, starting with a letter or digit'
-    );
-  }
-  return normalized;
-}
 
 /**
  * @param {string} passphrase
@@ -101,51 +98,95 @@ function decryptSeed(crypto, passphrase) {
   try {
     return Buffer.concat([decipher.update(Buffer.from(crypto.ciphertext, 'hex')), decipher.final()]).toString('utf8');
   } catch {
-    throw new Error('wrong passphrase, or the keystore file has been modified');
+    throw new Error('wrong passphrase, or the wallet file has been modified');
   }
 }
 
 /**
- * @typedef {object} WalletRecord
- * @property {number} version
- * @property {string} name
- * @property {string} network
- * @property {string} publicKey
- * @property {string} createdAt
- * @property {boolean} encrypted
- * @property {object | null} crypto
- * @property {string | null} secretSeed present only on an unencrypted testnet wallet
+ * Read the whole keystore. A missing file is an empty keystore, not an error.
+ * @returns {Promise<WalletFile>}
  */
+export async function readKeystore() {
+  let raw;
+  try {
+    raw = await readFile(walletPath(), 'utf8');
+  } catch {
+    return { version: KEYSTORE_VERSION, wallets: {} };
+  }
+  const parsed = JSON.parse(raw);
+  if (parsed.version !== KEYSTORE_VERSION) {
+    throw new Error(`unsupported wallet file version ${parsed.version} at ${walletPath()}`);
+  }
+  return parsed;
+}
 
 /**
- * Write a new wallet. Refuses to overwrite an existing file: losing a seed to a
- * name collision is not a recoverable mistake.
+ * Write the keystore atomically, so an interrupted write cannot leave a
+ * truncated file where a seed used to be.
+ * @param {WalletFile} keystore
+ */
+async function writeKeystore(keystore) {
+  const home = algoriaHome();
+  await mkdir(home, { recursive: true, mode: 0o700 });
+  await chmod(home, 0o700).catch(() => {});
+
+  const target = walletPath();
+  const temporary = `${target}.${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(keystore, null, 2)}\n`, { mode: 0o600 });
+  await chmod(temporary, 0o600);
+  await rename(temporary, target);
+}
+
+/**
+ * @param {string} network
+ * @returns {Promise<WalletEntry | null>}
+ */
+export async function getWallet(network) {
+  const profile = resolveNetwork(network);
+  return (await readKeystore()).wallets[profile.id] ?? null;
+}
+
+/**
+ * Every wallet that exists, in a stable network order.
+ * @returns {Promise<WalletEntry[]>}
+ */
+export async function listWallets() {
+  const keystore = await readKeystore();
+  return Object.keys(NETWORKS)
+    .map((network) => keystore.wallets[network])
+    .filter((entry) => Boolean(entry));
+}
+
+/**
+ * Get the wallet for a network, creating one if it does not exist yet.
+ *
+ * This is the function every command goes through. It returns `created` so the
+ * caller can tell the user a new key was just generated, which is the one thing
+ * about auto-creation that must never be silent.
  *
  * @param {object} options
- * @param {string} options.name
  * @param {string} options.network
- * @param {{publicKey: string, secretSeed: string}} options.keypair
- * @param {string | null} options.passphrase null stores the seed in the clear (testnet only)
- * @returns {Promise<{path: string, record: WalletRecord}>}
+ * @param {string | null} [options.passphrase] required when creating on pubnet
+ * @returns {Promise<{entry: WalletEntry, created: boolean}>}
  */
-export async function saveWallet({ name, network, keypair, passphrase }) {
-  const walletName = assertValidName(name);
+export async function ensureWallet({ network, passphrase = null }) {
   const profile = resolveNetwork(network);
+  const keystore = await readKeystore();
+  const existing = keystore.wallets[profile.id];
+  if (existing) return { entry: existing, created: false };
 
   if (profile.realValue && !passphrase) {
-    throw new Error('a pubnet wallet must be encrypted: supply a passphrase');
+    throw new Error(
+      'a pubnet wallet must be encrypted. Set ALGORIA_WALLET_PASSPHRASE, pass --passphrase-file <path>, or run in a terminal.'
+    );
   }
   if (passphrase !== null && String(passphrase).length < 8) {
     throw new Error('passphrase must be at least 8 characters');
   }
-  if (await walletExists(walletName)) {
-    throw new Error(`a wallet named "${walletName}" already exists at ${walletPath(walletName)}`);
-  }
 
-  /** @type {WalletRecord} */
-  const record = {
-    version: KEYSTORE_VERSION,
-    name: walletName,
+  const keypair = generateKeypair();
+  /** @type {WalletEntry} */
+  const entry = {
     network: profile.id,
     publicKey: keypair.publicKey,
     createdAt: new Date().toISOString(),
@@ -154,117 +195,108 @@ export async function saveWallet({ name, network, keypair, passphrase }) {
     secretSeed: passphrase ? null : keypair.secretSeed
   };
 
-  await mkdir(walletsDir(), { recursive: true, mode: 0o700 });
-  await chmod(algoriaHome(), 0o700).catch(() => {});
-  await chmod(walletsDir(), 0o700).catch(() => {});
-
-  const path = walletPath(walletName);
-  await writeFile(path, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
-  await chmod(path, 0o600);
-
-  return { path, record };
+  keystore.wallets[profile.id] = entry;
+  await writeKeystore(keystore);
+  return { entry, created: true };
 }
 
 /**
- * @param {string} name
- * @returns {Promise<boolean>}
+ * Adopt an existing seed as the wallet for a network.
+ * @param {object} options
+ * @param {string} options.network
+ * @param {string} options.secretSeed
+ * @param {string | null} [options.passphrase]
+ * @param {boolean} [options.replace] overwrite an existing wallet for that network
+ * @returns {Promise<WalletEntry>}
  */
-export async function walletExists(name) {
-  try {
-    await readFile(walletPath(name));
-    return true;
-  } catch {
-    return false;
+export async function importWallet({ network, secretSeed, passphrase = null, replace = false }) {
+  const profile = resolveNetwork(network);
+  const keystore = await readKeystore();
+
+  if (keystore.wallets[profile.id] && !replace) {
+    throw new Error(
+      `a ${profile.id} wallet already exists (${keystore.wallets[profile.id].publicKey}). Pass --replace to overwrite it, after exporting the current seed.`
+    );
   }
+  if (profile.realValue && !passphrase) {
+    throw new Error('a pubnet wallet must be encrypted: a passphrase is required');
+  }
+  if (passphrase !== null && String(passphrase).length < 8) {
+    throw new Error('passphrase must be at least 8 characters');
+  }
+
+  const keypair = fromSecretSeed(secretSeed);
+  /** @type {WalletEntry} */
+  const entry = {
+    network: profile.id,
+    publicKey: keypair.publicKey,
+    createdAt: new Date().toISOString(),
+    encrypted: Boolean(passphrase),
+    crypto: passphrase ? encryptSeed(keypair.secretSeed, passphrase) : null,
+    secretSeed: passphrase ? null : keypair.secretSeed
+  };
+
+  keystore.wallets[profile.id] = entry;
+  await writeKeystore(keystore);
+  return entry;
 }
 
 /**
- * Read a wallet's public metadata. Never touches the secret.
- * @param {string} name
- * @returns {Promise<WalletRecord>}
- */
-export async function readWallet(name) {
-  const path = walletPath(name);
-  let raw;
-  try {
-    raw = await readFile(path, 'utf8');
-  } catch {
-    throw new Error(`no wallet named "${name}" at ${path}`);
-  }
-  const record = JSON.parse(raw);
-  if (record.version !== KEYSTORE_VERSION) {
-    throw new Error(`unsupported keystore version ${record.version}`);
-  }
-  return record;
-}
-
-/**
- * @returns {Promise<WalletRecord[]>}
- */
-export async function listWallets() {
-  let entries;
-  try {
-    entries = await readdir(walletsDir());
-  } catch {
-    return [];
-  }
-  const records = [];
-  for (const entry of entries) {
-    if (!entry.endsWith('.json')) continue;
-    try {
-      records.push(await readWallet(entry.slice(0, -'.json'.length)));
-    } catch {
-      // A corrupt or foreign file is skipped, not fatal to the listing.
-    }
-  }
-  return records.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Unlock a wallet and return the full keypair.
+ * Unlock a wallet and return the full keypair. The only function here that
+ * yields a secret; nothing in this package prints its result.
  *
- * The caller owns what happens next: this is the only function that yields a
- * secret, and nothing in this package prints its result.
- *
- * @param {string} name
+ * @param {string} network
  * @param {string | null} passphrase
- * @returns {Promise<{record: WalletRecord, keypair: import('./keypair.mjs').StellarKeypair}>}
+ * @returns {Promise<{entry: WalletEntry, keypair: import('./keypair.mjs').StellarKeypair}>}
  */
-export async function unlockWallet(name, passphrase) {
-  const record = await readWallet(name);
-  if (record.encrypted) {
-    if (!passphrase) throw new Error(`wallet "${name}" is encrypted: a passphrase is required`);
-    const keypair = fromSecretSeed(decryptSeed(record.crypto, passphrase));
-    assertMatchesRecord(record, keypair.publicKey);
-    return { record, keypair };
-  }
-  const keypair = fromSecretSeed(String(record.secretSeed));
-  assertMatchesRecord(record, keypair.publicKey);
-  return { record, keypair };
+export async function unlockWallet(network, passphrase) {
+  const profile = resolveNetwork(network);
+  const entry = await getWallet(profile.id);
+  if (!entry) throw new Error(`no ${profile.id} wallet yet. Run: wallet onboard --network ${profile.id}`);
+
+  const seed = entry.encrypted
+    ? decryptSeed(entry.crypto, requirePassphrase(passphrase, profile.id))
+    : String(entry.secretSeed);
+
+  const keypair = fromSecretSeed(seed);
+  assertMatchesEntry(entry, keypair.publicKey);
+  return { entry, keypair };
+}
+
+/**
+ * @param {string | null} passphrase
+ * @param {string} network
+ * @returns {string}
+ */
+function requirePassphrase(passphrase, network) {
+  if (!passphrase) throw new Error(`the ${network} wallet is encrypted: a passphrase is required`);
+  return passphrase;
 }
 
 /**
  * The stored address must be the one the seed actually derives, or the file has
  * been tampered with in a way GCM alone would not catch (the public field is
  * outside the ciphertext).
- * @param {WalletRecord} record
+ * @param {WalletEntry} entry
  * @param {string} derived
  */
-function assertMatchesRecord(record, derived) {
-  const a = Buffer.from(record.publicKey, 'utf8');
+function assertMatchesEntry(entry, derived) {
+  const a = Buffer.from(entry.publicKey, 'utf8');
   const b = Buffer.from(derived, 'utf8');
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    throw new Error(`keystore for "${record.name}" is inconsistent: stored address does not match its seed`);
+    throw new Error(`the ${entry.network} wallet is inconsistent: stored address does not match its seed`);
   }
 }
 
 /**
- * @param {string} name
- * @returns {Promise<string>} the removed path
+ * @param {string} network
+ * @returns {Promise<boolean>} whether a wallet was removed
  */
-export async function deleteWallet(name) {
-  const path = walletPath(name);
-  await readWallet(name);
-  await rm(path);
-  return path;
+export async function deleteWallet(network) {
+  const profile = resolveNetwork(network);
+  const keystore = await readKeystore();
+  if (!keystore.wallets[profile.id]) return false;
+  delete keystore.wallets[profile.id];
+  await writeKeystore(keystore);
+  return true;
 }

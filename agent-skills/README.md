@@ -16,14 +16,20 @@ root.
 /plugin install algoria@algoria-skills
 ```
 
-Or copy a single skill directory into `~/.claude/skills/` — each one stands on
-its own.
+Skill scripts import shared code from `lib/`, which sits outside the skill
+directory, so install the package as a unit rather than copying one
+`skills/<name>/` folder on its own.
 
 ## Skills
 
 | Skill | What it does |
 | --- | --- |
-| [`stellar-wallet-local`](skills/stellar-wallet-local/SKILL.md) | Create and manage a Stellar wallet on the user's own machine: generate a keypair, encrypt it at rest, fund it on testnet, read balances, import and export seeds. |
+| [`algoria-wallet`](skills/algoria-wallet/SKILL.md) | A Stellar wallet on the user's own machine. `onboard` creates it, funds it on testnet, and adds the USDC trustline in one command; `balance`, `accounts`, `fund`, `trustline`, `import`, `export`, `forget` cover the rest. |
+
+The command surface is modelled on AgentCash's wallet flow — auto-created wallet,
+one entry point with subcommands, `--json` everywhere — adapted to Stellar. See
+[agentcash-parity.md](skills/algoria-wallet/references/agentcash-parity.md) for
+what maps onto what and which of their choices were deliberately not copied.
 
 ## Layout
 
@@ -38,17 +44,25 @@ agent-skills/
   tests/                 vitest, run against lib/
 ```
 
-## Runtime has no dependencies
+Quick start:
 
-Skill scripts run on Node 22+ with nothing installed. A user who copies a skill
-folder onto a fresh machine can run it immediately — no `npm install`, no
-network fetch, no lockfile resolution standing between them and their wallet.
+```bash
+pnpm install --ignore-workspace
+node skills/algoria-wallet/scripts/wallet.mjs onboard --network testnet
+```
 
-This means Stellar's StrKey encoding and ed25519 derivation are implemented in
-`lib/stellar/` on top of `node:crypto` rather than imported. The correctness
-argument for that is the test suite: `@stellar/stellar-sdk` is a devDependency,
-and `tests/strkey.test.mjs` checks every encode, decode and derivation path
-against it.
+## Dependencies, and why there is almost none
+
+Wallet creation, balance reads, funding and seed export run on Node 22+ with
+nothing installed. Stellar's StrKey encoding and ed25519 derivation are
+implemented in `lib/stellar/` on top of `node:crypto` rather than imported, and
+`tests/strkey.test.mjs` cross-checks every encode, decode and derivation path
+against `@stellar/stellar-sdk` so the hand-rolled version cannot drift.
+
+The SDK is a runtime dependency for exactly one thing: `lib/stellar/trustline.mjs`
+signs and submits a `changeTrust` transaction, which needs real XDR. It is
+imported lazily, so every other command still works on a machine where
+`pnpm install` was never run, and the one that needs it says so.
 
 ## Development
 
@@ -71,12 +85,13 @@ it, and the warning disappears once the root app has been built.
 
 ## Security posture
 
-- A secret seed never leaves the user's machine, and no script prints one unless
-  the user asks for it by name.
+- A secret seed never leaves the user's machine, and no command prints one
+  unless the user asks for it in that turn.
 - A passphrase is never accepted as a command-line argument.
-- A pubnet wallet must be encrypted.
-- The network is always explicit. Nothing here defaults to real money.
+- A pubnet wallet is always encrypted; a testnet wallet is deliberately not,
+  because a passphrase there protects nothing and blocks the agent.
+- `testnet` is the default. Real money requires typing `--network pubnet`.
 
-See [`skills/stellar-wallet-local/references/keystore.md`](skills/stellar-wallet-local/references/keystore.md)
-for the on-disk format and threat model, and [`CONVENTIONS.md`](CONVENTIONS.md)
-for the rules every skill in this package follows.
+See [keystore.md](skills/algoria-wallet/references/keystore.md) for the on-disk
+format and threat model, and [CONVENTIONS.md](CONVENTIONS.md) for the rules every
+skill in this package follows.

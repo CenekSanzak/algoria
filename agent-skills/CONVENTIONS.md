@@ -34,12 +34,19 @@ nothing until it is wanted.
 
 ## Scripts
 
-- **Node 22+, zero runtime dependencies.** A user must be able to copy the skill
-  folder anywhere and run it. Anything that needs a package belongs in a test.
+- **Node 22+. Reach for a dependency only when the alternative is hand-rolling
+  cryptography or wire formats.** Creating a key and reading a balance need
+  nothing; signing a transaction needs the SDK. When a command does need one,
+  import it lazily and fail with a message naming the fix, so the commands that
+  do not need it keep working uninstalled.
 - **Shared code lives in `lib/`**, imported by relative path. Two skills needing
   the same logic is the signal to move it there, not to copy it.
-- **One job per script**, named for that job. `export-secret.mjs` reveals a
-  secret; nothing else does.
+- **One entry point per skill**, with subcommands named for what they do — the
+  whole surface then fits in one table in SKILL.md. Exactly one subcommand may
+  reveal a secret, and it is named for that.
+- **A setup command that reaches a working state in one call.** `onboard` is the
+  pattern: create, fund, and satisfy every precondition, then say plainly
+  whether the result is ready to use.
 - **`--json` on every script that produces a result**, so an agent can parse it
   instead of reading prose.
 - **Exit non-zero with one clear line on stderr.** Use `run()` from `lib/cli.mjs`.

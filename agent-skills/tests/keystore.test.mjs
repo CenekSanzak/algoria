@@ -11,146 +11,171 @@ import { join } from 'node:path';
 const home = await mkdtemp(join(tmpdir(), 'algoria-keystore-'));
 process.env.ALGORIA_HOME = home;
 
-const { assertValidName, deleteWallet, listWallets, readWallet, saveWallet, unlockWallet, walletPath, walletsDir } =
+const { algoriaHome, deleteWallet, ensureWallet, getWallet, importWallet, listWallets, readKeystore, unlockWallet, walletPath } =
   await import('../lib/stellar/keystore.mjs');
 const { generateKeypair } = await import('../lib/stellar/keypair.mjs');
 
 const PASSPHRASE = 'correct horse battery staple';
 
 afterAll(() => rm(home, { recursive: true, force: true }));
+beforeEach(() => rm(walletPath(), { force: true }));
 
-beforeEach(() => rm(walletsDir(), { recursive: true, force: true }));
-
-describe('wallet names', () => {
-  it('accepts sane names', () => {
-    for (const name of ['main', 'a', 'my-wallet_2', '0x']) expect(assertValidName(name)).toBe(name);
+describe('auto-creation', () => {
+  it('treats a missing file as an empty keystore rather than an error', async () => {
+    expect(await readKeystore()).toEqual({ version: 2, wallets: {} });
+    expect(await listWallets()).toEqual([]);
+    expect(await getWallet('testnet')).toBeNull();
   });
 
-  it('rejects names that would escape the directory or confuse a listing', () => {
-    for (const name of ['', '.', '..', '../evil', 'a/b', 'Main', 'with space', '-leading', 'x'.repeat(65)]) {
-      expect(() => assertValidName(name)).toThrow(/wallet name/);
-    }
+  it('creates a testnet wallet on first use, unencrypted', async () => {
+    const { entry, created } = await ensureWallet({ network: 'testnet' });
+    expect(created).toBe(true);
+    expect(entry.encrypted).toBe(false);
+    expect(entry.secretSeed).toMatch(/^S/);
+    expect(entry.publicKey).toMatch(/^G/);
+  });
+
+  it('is idempotent: the second call returns the same key and says created:false', async () => {
+    const first = await ensureWallet({ network: 'testnet' });
+    const second = await ensureWallet({ network: 'testnet' });
+    expect(second.created).toBe(false);
+    expect(second.entry.publicKey).toBe(first.entry.publicKey);
+  });
+
+  it('keeps one wallet per network in a single file', async () => {
+    await ensureWallet({ network: 'testnet' });
+    await ensureWallet({ network: 'pubnet', passphrase: PASSPHRASE });
+
+    const wallets = await listWallets();
+    expect(wallets.map((wallet) => wallet.network)).toEqual(['testnet', 'pubnet']);
+    expect(wallets[0].publicKey).not.toBe(wallets[1].publicKey);
+  });
+
+  it('writes an owner-only file and directory', async () => {
+    await ensureWallet({ network: 'testnet' });
+    expect((await stat(walletPath())).mode & 0o777).toBe(0o600);
+    expect((await stat(algoriaHome())).mode & 0o777).toBe(0o700);
+  });
+
+  it('leaves no temp file behind after an atomic write', async () => {
+    await ensureWallet({ network: 'testnet' });
+    const { readdir } = await import('node:fs/promises');
+    expect((await readdir(algoriaHome())).filter((name) => name.includes('.tmp'))).toEqual([]);
   });
 });
 
-describe('saveWallet', () => {
-  it('stores an encrypted wallet and unlocks it again', async () => {
-    const keypair = generateKeypair();
-    const { path, record } = await saveWallet({
-      name: 'main',
-      network: 'pubnet',
-      keypair,
-      passphrase: PASSPHRASE
-    });
+describe('custody differs by network', () => {
+  it('stores a testnet seed in the clear, so the agent is never blocked', async () => {
+    const { entry } = await ensureWallet({ network: 'testnet' });
+    const onDisk = await readFile(walletPath(), 'utf8');
+    expect(onDisk).toContain(entry.secretSeed);
 
-    expect(record.encrypted).toBe(true);
-    expect(record.secretSeed).toBeNull();
-    expect(record.publicKey).toBe(keypair.publicKey);
-
-    const onDisk = await readFile(path, 'utf8');
-    expect(onDisk).not.toContain(keypair.secretSeed);
-
-    const unlocked = await unlockWallet('main', PASSPHRASE);
-    expect(unlocked.keypair.secretSeed).toBe(keypair.secretSeed);
+    const unlocked = await unlockWallet('testnet', null);
+    expect(unlocked.keypair.publicKey).toBe(entry.publicKey);
   });
 
-  it('writes owner-only files', async () => {
-    await saveWallet({ name: 'main', network: 'pubnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    expect((await stat(walletPath('main'))).mode & 0o777).toBe(0o600);
-    expect((await stat(walletsDir())).mode & 0o777).toBe(0o700);
+  it('refuses to create a pubnet wallet without a passphrase', async () => {
+    await expect(ensureWallet({ network: 'pubnet' })).rejects.toThrow(/must be encrypted/);
+    expect(await listWallets()).toEqual([]);
   });
 
-  it('refuses an unencrypted pubnet wallet', async () => {
-    await expect(
-      saveWallet({ name: 'main', network: 'pubnet', keypair: generateKeypair(), passphrase: null })
-    ).rejects.toThrow(/must be encrypted/);
+  it('encrypts a pubnet seed and keeps it off disk in plaintext', async () => {
+    const { entry } = await ensureWallet({ network: 'pubnet', passphrase: PASSPHRASE });
+    expect(entry.encrypted).toBe(true);
+    expect(entry.secretSeed).toBeNull();
+
+    const unlocked = await unlockWallet('pubnet', PASSPHRASE);
+    const onDisk = await readFile(walletPath(), 'utf8');
+    expect(onDisk).not.toContain(unlocked.keypair.secretSeed);
   });
 
-  it('allows an unencrypted testnet wallet but marks it', async () => {
-    const { record } = await saveWallet({
-      name: 'play',
-      network: 'testnet',
-      keypair: generateKeypair(),
-      passphrase: null
-    });
-    expect(record.encrypted).toBe(false);
-    expect(record.secretSeed).toMatch(/^S/);
-
-    const unlocked = await unlockWallet('play', null);
-    expect(unlocked.keypair.publicKey).toBe(record.publicKey);
+  it('rejects a wrong or missing passphrase on pubnet', async () => {
+    await ensureWallet({ network: 'pubnet', passphrase: PASSPHRASE });
+    await expect(unlockWallet('pubnet', 'not the passphrase')).rejects.toThrow(/wrong passphrase/);
+    await expect(unlockWallet('pubnet', null)).rejects.toThrow(/passphrase is required/);
   });
 
   it('refuses a short passphrase', async () => {
-    await expect(
-      saveWallet({ name: 'main', network: 'testnet', keypair: generateKeypair(), passphrase: 'short' })
-    ).rejects.toThrow(/at least 8/);
-  });
-
-  it('never overwrites an existing wallet', async () => {
-    const first = generateKeypair();
-    await saveWallet({ name: 'main', network: 'testnet', keypair: first, passphrase: PASSPHRASE });
-    await expect(
-      saveWallet({ name: 'main', network: 'testnet', keypair: generateKeypair(), passphrase: PASSPHRASE })
-    ).rejects.toThrow(/already exists/);
-
-    const unlocked = await unlockWallet('main', PASSPHRASE);
-    expect(unlocked.keypair.secretSeed).toBe(first.secretSeed);
+    await expect(ensureWallet({ network: 'pubnet', passphrase: 'short' })).rejects.toThrow(/at least 8/);
   });
 });
 
-describe('unlockWallet', () => {
-  it('rejects a wrong passphrase', async () => {
-    await saveWallet({ name: 'main', network: 'pubnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    await expect(unlockWallet('main', 'not the passphrase')).rejects.toThrow(/wrong passphrase/);
-  });
-
-  it('requires a passphrase for an encrypted wallet', async () => {
-    await saveWallet({ name: 'main', network: 'pubnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    await expect(unlockWallet('main', null)).rejects.toThrow(/passphrase is required/);
-  });
-
+describe('tamper detection', () => {
   it('detects a swapped public key, which GCM alone would not catch', async () => {
-    await saveWallet({ name: 'main', network: 'pubnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    const record = JSON.parse(await readFile(walletPath('main'), 'utf8'));
-    record.publicKey = generateKeypair().publicKey;
-    await writeFile(walletPath('main'), JSON.stringify(record));
+    await ensureWallet({ network: 'pubnet', passphrase: PASSPHRASE });
+    const keystore = JSON.parse(await readFile(walletPath(), 'utf8'));
+    keystore.wallets.pubnet.publicKey = generateKeypair().publicKey;
+    await writeFile(walletPath(), JSON.stringify(keystore));
 
-    await expect(unlockWallet('main', PASSPHRASE)).rejects.toThrow(/does not match its seed/);
+    await expect(unlockWallet('pubnet', PASSPHRASE)).rejects.toThrow(/does not match its seed/);
   });
 
   it('detects a tampered ciphertext', async () => {
-    await saveWallet({ name: 'main', network: 'pubnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    const record = JSON.parse(await readFile(walletPath('main'), 'utf8'));
-    const flipped = record.crypto.ciphertext[0] === 'a' ? 'b' : 'a';
-    record.crypto.ciphertext = `${flipped}${record.crypto.ciphertext.slice(1)}`;
-    await writeFile(walletPath('main'), JSON.stringify(record));
+    await ensureWallet({ network: 'pubnet', passphrase: PASSPHRASE });
+    const keystore = JSON.parse(await readFile(walletPath(), 'utf8'));
+    const ciphertext = keystore.wallets.pubnet.crypto.ciphertext;
+    keystore.wallets.pubnet.crypto.ciphertext = `${ciphertext[0] === 'a' ? 'b' : 'a'}${ciphertext.slice(1)}`;
+    await writeFile(walletPath(), JSON.stringify(keystore));
 
-    await expect(unlockWallet('main', PASSPHRASE)).rejects.toThrow(/wrong passphrase|modified/);
+    await expect(unlockWallet('pubnet', PASSPHRASE)).rejects.toThrow(/wrong passphrase|modified/);
+  });
+
+  it('refuses a keystore written by a future version', async () => {
+    await writeFile(walletPath(), JSON.stringify({ version: 99, wallets: {} }));
+    await expect(readKeystore()).rejects.toThrow(/unsupported wallet file version 99/);
   });
 });
 
-describe('listing and deletion', () => {
-  it('returns an empty list before any wallet exists', async () => {
+describe('import', () => {
+  it('adopts an existing seed', async () => {
+    const keypair = generateKeypair();
+    const entry = await importWallet({ network: 'testnet', secretSeed: keypair.secretSeed });
+    expect(entry.publicKey).toBe(keypair.publicKey);
+  });
+
+  it('never silently replaces an existing wallet', async () => {
+    const first = await ensureWallet({ network: 'testnet' });
+    await expect(
+      importWallet({ network: 'testnet', secretSeed: generateKeypair().secretSeed })
+    ).rejects.toThrow(/already exists/);
+
+    const unchanged = await getWallet('testnet');
+    expect(unchanged?.publicKey).toBe(first.entry.publicKey);
+  });
+
+  it('replaces only when asked', async () => {
+    await ensureWallet({ network: 'testnet' });
+    const replacement = generateKeypair();
+    const entry = await importWallet({
+      network: 'testnet',
+      secretSeed: replacement.secretSeed,
+      replace: true
+    });
+    expect(entry.publicKey).toBe(replacement.publicKey);
+  });
+
+  it('refuses an unencrypted pubnet import', async () => {
+    await expect(
+      importWallet({ network: 'pubnet', secretSeed: generateKeypair().secretSeed })
+    ).rejects.toThrow(/must be encrypted/);
+  });
+
+  it('rejects a malformed seed before writing anything', async () => {
+    await expect(importWallet({ network: 'testnet', secretSeed: 'not-a-seed' })).rejects.toThrow();
     expect(await listWallets()).toEqual([]);
   });
+});
 
-  it('lists wallets sorted by name and skips junk files', async () => {
-    await saveWallet({ name: 'beta', network: 'testnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    await saveWallet({ name: 'alpha', network: 'pubnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    await writeFile(join(walletsDir(), 'notes.txt'), 'ignore me');
-    await writeFile(join(walletsDir(), 'broken.json'), '{ not json');
+describe('deletion', () => {
+  it('removes one network and leaves the other alone', async () => {
+    await ensureWallet({ network: 'testnet' });
+    await ensureWallet({ network: 'pubnet', passphrase: PASSPHRASE });
 
-    expect((await listWallets()).map((wallet) => wallet.name)).toEqual(['alpha', 'beta']);
+    expect(await deleteWallet('testnet')).toBe(true);
+    expect((await listWallets()).map((wallet) => wallet.network)).toEqual(['pubnet']);
   });
 
-  it('reports a missing wallet clearly', async () => {
-    await expect(readWallet('ghost')).rejects.toThrow(/no wallet named "ghost"/);
-    await expect(deleteWallet('ghost')).rejects.toThrow(/no wallet named "ghost"/);
-  });
-
-  it('deletes a wallet', async () => {
-    await saveWallet({ name: 'main', network: 'testnet', keypair: generateKeypair(), passphrase: PASSPHRASE });
-    await deleteWallet('main');
-    expect(await listWallets()).toEqual([]);
+  it('reports when there was nothing to delete', async () => {
+    expect(await deleteWallet('testnet')).toBe(false);
   });
 });

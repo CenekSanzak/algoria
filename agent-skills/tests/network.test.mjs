@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Networks } from '@stellar/stellar-sdk';
+import { Asset, Networks } from '@stellar/stellar-sdk';
 import { NETWORKS, resolveNetwork } from '../lib/stellar/network.mjs';
 import { isValidPublicKey } from '../lib/stellar/strkey.mjs';
 
@@ -23,6 +23,29 @@ describe('network profiles', () => {
     for (const profile of Object.values(NETWORKS)) {
       expect(profile.usdcSac).toMatch(/^C[A-Z2-7]{55}$/);
       expect(isValidPublicKey(profile.usdcSac)).toBe(false); // a contract id is not an account
+    }
+  });
+});
+
+describe('USDC asset', () => {
+  /**
+   * A trustline needs code:issuer, but the app's constants carry only the
+   * contract id. Deriving one from the other is the check that the pair here
+   * describes the same asset the rest of Algoria pays in — if either value is
+   * ever edited alone, this fails.
+   */
+  it('derives each network SAC from its own issuer', () => {
+    for (const profile of Object.values(NETWORKS)) {
+      const derived = new Asset(profile.usdc.code, profile.usdc.issuer).contractId(profile.passphrase);
+      expect(derived).toBe(profile.usdcSac);
+    }
+  });
+
+  it('uses a different issuer per network', () => {
+    expect(NETWORKS.testnet.usdc.issuer).not.toBe(NETWORKS.pubnet.usdc.issuer);
+    for (const profile of Object.values(NETWORKS)) {
+      expect(isValidPublicKey(profile.usdc.issuer)).toBe(true);
+      expect(profile.usdc.code).toBe('USDC');
     }
   });
 });
