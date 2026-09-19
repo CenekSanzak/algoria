@@ -1,0 +1,40 @@
+{
+  "name": "algoria",
+  "version": "0.3.0",
+  "description": "Algoria skills for the agent economy on Stellar: local wallets, x402 payments, and agent discovery.",
+  "author": {
+    "name": "Algoria",
+    "url": "https://algoria-agent-economy.berkingurcan.chatgpt.site"
+  },
+  "homepage": "https://algoria-agent-economy.berkingurcan.chatgpt.site/",
+  "license": "MIT",
+  "keywords": [
+    "stellar",
+    "x402",
+    "wallet",
+    "agent-economy",
+    "usdc"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Algoria",
+    "shortDescription": "A Stellar wallet your agent can spend from",
+    "longDescription": "Gives the agent a Stellar wallet held on this machine, funds it on testnet, and adds the USDC trustline so it can pay for services over x402. Top up with mock Turkish lira through a sandbox anchor over SEP-6. The secret seed never leaves the machine.",
+    "developerName": "Algoria",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://algoria-agent-economy.berkingurcan.chatgpt.site/",
+    "defaultPrompt": [
+      "Create a Stellar wallet and fund it on testnet",
+      "Check my USDC and XLM balance",
+      "Top up my wallet with 200 test lira"
+    ],
+    "brandColor": "#0B1C3D",
+    "logo": "./assets/algoria.svg",
+    "composerIcon": "./assets/algoria.svg",
+    "screenshots": []
+  }
+}

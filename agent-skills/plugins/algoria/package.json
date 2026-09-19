@@ -1,0 +1,37 @@
+{
+  "name": "algoria",
+  "version": "0.3.0",
+  "description": "A Stellar wallet your agent can spend from: local wallets, USDC trustlines, and x402 payments.",
+  "type": "module",
+  "bin": {
+    "algoria": "./bin/algoria.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "skills/",
+    "assets/",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "homepage": "https://algoria-agent-economy.berkingurcan.chatgpt.site/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CenekSanzak/algoria.git",
+    "directory": "agent-skills/plugins/algoria"
+  },
+  "bugs": {
+    "url": "https://github.com/CenekSanzak/algoria/issues"
+  },
+  "keywords": [
+    "stellar",
+    "x402",
+    "wallet",
+    "usdc",
+    "agent",
+    "agent-economy"
+  ]
+}
