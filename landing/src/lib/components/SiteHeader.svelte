@@ -4,11 +4,12 @@
 
 <header>
   <div class="wrap inner">
-    <a class="brand" href="#top" aria-label="Algoria home"><img src="/favicon.svg" alt="" width="22" height="22" />Algoria</a>
+    <a class="brand" href="/" aria-label="Algoria home"><img src="/favicon.svg" alt="" width="22" height="22" />Algoria</a>
     <nav aria-label="Main navigation">
-      <a class="how" href="#how">How it works</a>
+      <a class="how" href="/#how">How it works</a>
+      <a class="how" href="/how-to-use">How to use</a>
       <a href={links.github} target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a class="cta" href="#install">Install</a>
+      <a class="cta" href="/how-to-use#install">Install</a>
     </nav>
   </div>
 </header>

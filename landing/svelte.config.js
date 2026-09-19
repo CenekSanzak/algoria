@@ -1,3 +1,4 @@
+import process from 'node:process';
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
@@ -5,8 +6,9 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    // Hosting serves dist/ (see .openai/hosting.json), so the prerendered site goes there.
-    adapter: adapter({ pages: 'dist', assets: 'dist', strict: true })
+    // On Vercel, adapter-static runs in zero-config mode (writes .vercel/output), which
+    // it only does when given no options. Elsewhere, hosting serves dist/ (see .openai/hosting.json).
+    adapter: adapter(process.env.VERCEL ? undefined : { pages: 'dist', assets: 'dist', strict: true })
   }
 };
 

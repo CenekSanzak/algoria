@@ -1,6 +1,6 @@
 # Algoria landing page
 
-The public one-page site for the Algoria plugin: buy AI services without leaving Claude or Codex. It is a
+The public site for the Algoria plugin: buy AI services without leaving Claude or Codex. It is a
 standalone SvelteKit app, separate from the chat app at the repository root, and is prerendered to static
 HTML with `@sveltejs/adapter-static`. There are no accounts, wallet connections, payment actions,
 tracking scripts, or frontend secrets.
@@ -21,7 +21,7 @@ pnpm build     # prerenders to dist/
 pnpm preview   # serves the built dist/
 ```
 
-Only `dist/` is deployed.
+Only `dist/` is deployed (or `.vercel/output/` on Vercel, see below).
 
 ## Layout
 
@@ -29,9 +29,11 @@ Only `dist/` is deployed.
 src/app.html                     shell; applies the saved theme before first paint
 src/app.css                      design tokens, base styles, shared .wrap/.card/.eyebrow
 src/routes/+layout.svelte        header, main, footer
-src/routes/+page.svelte          hero and how-it-works; page <head> and Open Graph tags
+src/routes/+page.svelte          hero (mocked demo) and how-it-works; page <head> and Open Graph tags
+src/routes/how-to-use/          install card and example prompts
 src/lib/links.ts                 external links and site metadata
 src/lib/components/
+  HeroDemo.svelte                scripted, mocked Claude Code / Codex session for the hero
   InstallCard.svelte             Claude Code / Codex / npx tabs, defined as data
   CodeBlock.svelte               a command or prompt with its copy button
   ThemeToggle.svelte  SiteHeader.svelte  SiteFooter.svelte  StellarMark.svelte
@@ -43,6 +45,19 @@ the marketplace name (`algoria-skills`) or CLI commands change. The npx tab show
 lines, which run as shell commands when pasted into Claude Code or Codex.
 
 ## Hosting
+
+### Vercel
+
+Import the repository in Vercel and set **Root Directory** to `landing`. The framework preset
+(SvelteKit), install command (pnpm, from `pnpm-lock.yaml`) and build command (`pnpm build`) are
+detected; leave the output directory empty. Node.js 22 comes from `engines` in `package.json`.
+
+On Vercel `svelte.config.js` passes no options to `adapter-static`, which switches it to zero-config
+mode: it writes `.vercel/output/` with clean URLs (`/how-to-use`) and immutable caching for `_app/`.
+No environment variables are needed. Once the domain is known, update `site.url` in
+`src/lib/links.ts` so canonical and Open Graph URLs point at it.
+
+### Sites
 
 The Sites project identity is recorded in `.openai/hosting.json`, which serves `dist/`. Source
 credentials are temporary and must never be written to this directory, Git configuration, or the
