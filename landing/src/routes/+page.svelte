@@ -1,6 +1,6 @@
 <script lang="ts">
   import { site } from '$lib/links';
-  import InstallCard from '$lib/components/InstallCard.svelte';
+  import HeroDemo from '$lib/components/HeroDemo.svelte';
   import StellarMark from '$lib/components/StellarMark.svelte';
 
   const facts = ['Images, voice & video', 'Pay in TRY via Stellar', 'Key stays on your machine'];
@@ -45,9 +45,14 @@
         </li>
       {/each}
     </ul>
+
+    <div class="actions">
+      <a class="btn primary" href="/how-to-use">Get started</a>
+      <a class="btn" href="/how-to-use#use">See all commands</a>
+    </div>
   </div>
 
-  <InstallCard />
+  <HeroDemo />
 </section>
 
 <section class="wrap how" id="how" aria-labelledby="how-title">
@@ -144,6 +149,38 @@
     width: 12px;
     height: 12px;
     opacity: 0.7;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 32px;
+  }
+
+  .btn {
+    padding: 10px 18px;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--active-bg);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--txt);
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+  }
+
+  .btn.primary {
+    border-color: transparent;
+    background: var(--txt);
+    color: var(--bg);
+  }
+
+  .btn.primary:hover {
+    opacity: 0.88;
   }
 
   .how {
