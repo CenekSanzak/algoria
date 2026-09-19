@@ -172,6 +172,7 @@ This is a target scenario, not booked revenue. The full assumptions, trial rules
 - [Founder Institute post-program support](https://fi.co/scale)
 - [Meridian 2026 event details](https://meridian.stellar.org/event-details)
 - [Stellar 8004 public API](https://stellar8004.com/api/v1/agents?limit=100)
+- Docs
 - [Stellar 8004 npm download endpoint](https://api.npmjs.org/downloads/point/2026-04-01:2026-09-02/%40trionlabs%2Fstellar8004) and [Nebula dependency](https://github.com/Caerlower/Nebula/blob/main/apps/nebula-hub/package.json)
 - [SDF developer meeting notes, 2026-04-23](https://developers.stellar.org/meetings/2026/04/23)
 - [Official MCP Registry record for Stellar Agent Search](https://registry.modelcontextprotocol.io/v0.1/servers?search=stellar-agent-search)
