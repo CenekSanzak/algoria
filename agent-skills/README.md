@@ -261,10 +261,12 @@ creation unless the user explicitly requests `--new`.
 ## Development
 
 Everything below runs in `agent-skills/`, the marketplace root — not in the
-plugin directory.
+plugin directory. Use pnpm 10.30.3, pinned in this directory's `package.json`;
+the standalone lockfile uses pnpm's version 9 format. Both PR CI and npm release
+verification read this package manager pin.
 
 ```bash
-pnpm install --ignore-workspace   # this package is not in the root workspace
+pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
 pnpm test
 pnpm check                        # tsc --noEmit over JSDoc-typed .mjs
 pnpm bundle:sdk                   # wallet/SEP-10 SDK bundle
