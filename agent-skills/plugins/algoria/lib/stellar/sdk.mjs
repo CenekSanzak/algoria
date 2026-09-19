@@ -25,9 +25,30 @@ function isMissingModule(error) {
 }
 
 /**
+ * The SDK calls `new Buffer()`, which makes Node print a two-line DEP0005
+ * warning at the very top of the output. Agent hosts often show only the first
+ * few lines of a command, so that warning displaced what the user needed — a
+ * top-up's payment link. It is not ours to fix and says nothing actionable, so
+ * that one code is dropped; every other warning still goes through.
+ */
+function silenceBufferDeprecation() {
+  const original = process.emitWarning;
+  /** @type {(...args: any[]) => void} */
+  const filtered = (warning, ...rest) => {
+    const [typeOrOptions, code] = rest;
+    const warningCode =
+      typeof typeOrOptions === 'object' && typeOrOptions !== null ? typeOrOptions.code : code;
+    if (warningCode === 'DEP0005') return;
+    original.call(process, warning, ...rest);
+  };
+  process.emitWarning = /** @type {typeof process.emitWarning} */ (filtered);
+}
+
+/**
  * @returns {Promise<typeof import('@stellar/stellar-sdk')>}
  */
 export async function loadSdk() {
+  silenceBufferDeprecation();
   // Resolved through a URL rather than a bare specifier so that the 300KB
   // minified bundle stays out of `tsc`'s graph; it is generated, not authored.
   const bundle = new URL('../vendor/stellar-sdk.mjs', import.meta.url).href;

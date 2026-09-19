@@ -187,9 +187,6 @@ the only thing that needs it.
 `"trustline": false`. That means the bundle is missing or stale — run
 `pnpm bundle:sdk` in `agent-skills/`, commit the result, and reinstall.
 
-You will see a `Buffer() is deprecated` warning. That is normal noise from
-inside the Stellar SDK, not a problem.
-
 Then check reading works too:
 
 ```bash

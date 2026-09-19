@@ -125,12 +125,12 @@ const COMMANDS = {
         flags,
         { reused: true, ...open, estimateUsdc: null },
         [
-          `Deposit ${open.id} is still open — ${open.amountTry} TRY, ${explain(open.status)}.`,
+          `Pay at     ${open.payUrl}`,
+          `IBAN       ${open.iban}`,
+          `Amount     ${open.amountTry} TRY`,
+          `Reference  ${open.reference}`,
           '',
-          `  IBAN       ${open.iban}`,
-          `  Reference  ${open.reference}`,
-          `  Pay at     ${open.payUrl}`,
-          '',
+          `Deposit ${open.id} is still open — ${explain(open.status)}.`,
           'Finish or abandon that one first. `--new` opens another anyway.'
         ]
       );
@@ -154,18 +154,19 @@ const COMMANDS = {
     emit(
       flags,
       { reused: false, ...record, estimateUsdc: estimate, environment: status.environment },
+      // The payment details lead, one per line. Agent hosts often show only the
+      // first few lines of a command's output, and these are the lines the user
+      // cannot proceed without.
       [
-        `Deposit ${record.id} opened — ${amountTry} TRY, about ${estimate} USDC at today's rate.`,
+        `Pay at     ${order.payUrl}`,
+        `IBAN       ${order.iban}`,
+        `Amount     ${amountTry} TRY  (about ${estimate} USDC at today's rate)`,
+        `Reference  ${order.reference}  (must appear in the transfer description)`,
+        `Bank       ${order.bankName}`,
         '',
-        'Send the transfer from your bank:',
-        `  Bank       ${order.bankName}`,
-        `  IBAN       ${order.iban}`,
-        `  Amount     ${amountTry} TRY`,
-        `  Reference  ${order.reference}   (must appear in the description)`,
-        '',
-        `This is a sandbox — no real bank, no real lira. Open the deposit page and`,
-        'press "Simulate incoming TRY transfer" to stand in for the transfer:',
-        `  ${order.payUrl}`,
+        `Deposit ${record.id} opened. Nothing has been paid yet.`,
+        'This is a sandbox: no real bank, no real lira. On the page above, press',
+        '"Simulate incoming TRY transfer" to stand in for the bank transfer.',
         '',
         `Then follow it with:  ${SELF} status --wait`
       ]

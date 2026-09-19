@@ -1,6 +1,6 @@
 ---
 name: algoria-wallet
-description: Stellar wallet for paying Algoria agents. Creates a local wallet on first use, funds it on testnet, and adds the USDC trustline so it can hold and spend USDC over x402. Use when the user needs a Stellar wallet or address, wants to check their USDC or XLM balance, needs testnet funds, or is about to pay for an Algoria service and needs a funded account.
+description: Stellar wallet for paying Algoria agents. Creates a local wallet on first use, funds it with testnet XLM, and adds the USDC trustline so it can hold and spend USDC over x402. Use when the user needs a Stellar wallet or address, wants to check their USDC or XLM balance, needs testnet XLM, or is about to pay for an Algoria service. Does not provide USDC - when the user wants to add, get, buy or top up USDC, use algoria-topup instead.
 ---
 
 # Algoria wallet
@@ -31,6 +31,14 @@ One command: creates the wallet if there is none, funds it from Friendbot, adds
 the USDC trustline, and reports whether the account is ready to spend. Safe to
 run again — it reports `created: false` and skips what is already done.
 
+**After onboarding, offer a top-up.** A new wallet has XLM but no USDC, and
+USDC is what Algoria services cost. When `onboard` reports `ready: true` on
+testnet, end your reply by asking — for example: *"Your wallet is ready. Would
+you like to add some test USDC? I can open a top-up with mock Turkish lira —
+200 TRY is about 4 USDC."* If they say yes, use `algoria-topup`. Ask; do not
+start the top-up on your own. The `next` field in `--json` output carries the
+exact command.
+
 On Stellar a funded account **still cannot hold USDC** until it has a trustline.
 `onboard` handles that. If you ever see `usdc: null` or `none (no trustline
 yet)`, that is the missing step, and it is not the same thing as a zero balance.
@@ -44,7 +52,7 @@ All take `--network testnet|pubnet` (default `testnet`) and `--json`.
 | `onboard` | create + fund + trustline, in one call |
 | `balance` | USDC and XLM for one network |
 | `accounts` | every wallet held locally, with funding instructions |
-| `fund` | Friendbot on testnet; on pubnet, the address to send to |
+| `fund` | testnet XLM from Friendbot; on pubnet, the address to send to |
 | `trustline` | opt the account in to holding USDC |
 | `import` | adopt an existing seed (`--seed-file`, `--seed-stdin`) |
 | `export` | reveal the seed (`--out <path>` or `--stdout`) |
@@ -56,6 +64,16 @@ Use `--json` whenever the result feeds another step:
 { "network": "testnet", "publicKey": "G...", "usdc": "0.0000000",
   "xlm": "9999.99", "trustline": true, "exists": true }
 ```
+
+## XLM is not USDC
+
+`fund` asks Friendbot for **XLM only** — the network fee token. It never
+produces USDC, and running it again will not either.
+
+When the user says anything like *"add USDC"*, *"get me some USDC"*, *"top up"*
+or *"fund my wallet with USDC"*, that is `algoria-topup`, not `fund`. Use
+`fund` only when they ask for XLM, or when an account is missing and needs
+creating.
 
 ## Before paying for anything
 
