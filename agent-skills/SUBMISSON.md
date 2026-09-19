@@ -42,8 +42,9 @@ This can make AI services easier to use.
 
 ### What is your value proposition?
 
-Algoria lets users buy AI services directly inside Claude or Codex using Turkish Lira.
+Algoria extends users what can do with AI ie. reaching paid MCP's, services to generate media and extend paid API's.
+They can buy AI services directly inside Claude or Codex using Turkish Lira.
 
-Users pay in TRY through a Stellar Anchor, without managing crypto, wallets, API keys, or separate accounts. It is better UX then even paying USD with Turkish credit card(banks take too much comission).
+Users pay in TRY through a Stellar Anchor, without managing crypto, wallets, API keys, or separate accounts. It is better UX then even paying USD with Turkish credit card.
 
 
