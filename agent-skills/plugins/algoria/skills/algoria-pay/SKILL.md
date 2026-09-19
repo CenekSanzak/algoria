@@ -29,6 +29,15 @@ PAY="${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/skills/algoria-pay/scripts/pay.mjs"
 
 ## Budget, quote, execute
 
+For a new paid task, check `algoria-wallet balance --network testnet --json`
+before discovery or input preparation, using that skill's absolute helper path.
+Reuse a fresh check already made by `algoria-discover` in this task. Zero USDC
+goes straight to [algoria-topup](../algoria-topup/SKILL.md); a positive balance
+must cover the whole plan, not just its first call. After a funding wait, verify
+the deposit and fresh balance before proceeding. Do not use a failed payment
+attempt as a balance check. Recovery of an already-paid job below is exempt
+from funding: retrieve its output even if the wallet is now empty.
+
 Use the user's authorized total and per-call limits. Do not choose a spending
 budget on their behalf; earlier explicit authorization for this work persists.
 A wallet top-up alone does not authorize service spending. Testnet USDC has no

@@ -4,6 +4,10 @@ Resolve `DISCOVER` and `PAY` from the installed plugin root as in the parent
 skills. Algoria remains the default catalog. Stellar8004 uses the pinned testnet
 identity contract directly (`total_agents` and `agent_uri` simulations); it does
 not use the mainnet explorer API. No wallet is needed to discover services.
+For a paid task, however, follow the entrypoint's balance-first flow before
+scanning the registry. Zero USDC goes to funding immediately. A positive balance
+can be compared with the unsigned quote's price before signing; top up a
+shortfall and retain the exact task and existing spending authorization.
 
 ```bash
 node "$DISCOVER" search render --source stellar8004 --limit 20 --offset 0 --json

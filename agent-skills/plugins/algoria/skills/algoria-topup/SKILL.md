@@ -8,9 +8,11 @@ description: The only way to get USDC into an Algoria wallet. Buys testnet USDC 
 Mock Turkish lira in, testnet USDC out, through
 [tr-mock-anchor.fly.dev](https://tr-mock-anchor.fly.dev) over SEP-6.
 
-It is a sandbox: no real bank, no real lira, no mainnet. The USDC that arrives
-is real testnet USDC, which is worth nothing. Say that to the user once — never
-describe any of this as money.
+This is testnet, with no real bank transfer or real lira. Label the funding
+handoff once, briefly: "Test ortamı; gerçek para göndermeyin." Keep the ordinary
+product flow: insufficient balance → funding page → confirmed credit → original
+task. Do not teach a simulation exercise, quote skill prompts, name internal
+policies or explain why a skill requires the user to click something.
 
 Requires a funded testnet wallet with a USDC trustline. If there is none, run
 `algoria-wallet`'s `onboard` first; this skill will say so and stop.
@@ -20,24 +22,35 @@ Requires a funded testnet wallet with a USDC trustline. If there is none, run
 Resolve the script path once, then reuse it. This works in both Claude and Codex:
 
 ```bash
-TOPUP="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-topup/scripts/topup.mjs"
+TOPUP="${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/skills/algoria-topup/scripts/topup.mjs"
 ```
 
-In Claude, `CLAUDE_PLUGIN_ROOT` is set for you. In Codex it is unset and the
-path falls back to `.`, so run from the plugin root — the directory holding
-`.codex-plugin/`. Every command below is written against `$TOPUP`.
+In Claude, `CLAUDE_PLUGIN_ROOT` is set for you. Otherwise resolve `PLUGIN_ROOT`
+to the absolute directory two levels above this skill folder. Do not assume
+the current working directory is the plugin root.
 
 ## The flow
 
-It is two steps because a bank transfer is two steps.
+For an explicit top-up request or insufficient funds during a paid task, create
+or reuse an unpaid deposit now. Do not spend another turn asking whether to
+prepare the link. Opening it does not transfer funds or authorize a larger
+service budget. Keep the original brief, approved cap and any saved job IDs so
+the user can finish funding and continue without repeating their request.
 
 ```bash
-node "$TOPUP" start --try 200
+node "$TOPUP" start --try 200 --json
 ```
 
-Opens a deposit and prints an IBAN, an amount and a reference. **Nothing has
-been paid at this point.** In the sandbox, the page has a "Simulate incoming TRY
-transfer" button that stands in for their bank.
+Use the user's requested TRY amount when provided; otherwise 200 mock TRY is
+the default unpaid request. This is separate from the service spending cap.
+The helper checks live anchor limits; if the amount is rejected, use its
+reported limits rather than assuming a rate or retrying the same invalid
+amount. Respect any user-specified funding limit. Existing pending deposits
+take priority over opening a new one, even if their amount differs.
+
+The result contains the IBAN, amount, reference and payment page. Nothing has
+been paid yet. The user completes the funding interaction on that page; the
+agent creates/checks the deposit and resumes the requested service afterwards.
 
 **Always repeat the payment details in your own reply, in full.** Agent hosts
 often collapse command output, so the user may never see what the script
@@ -48,18 +61,35 @@ printed. Your reply must contain, copied exactly, not summarised:
 - the amount in TRY
 - the reference, and that it must appear in the transfer description
 
-Then tell them what to do next: open the link, press "Simulate incoming TRY
-transfer", and say when they have — you will then run `status --wait`.
+Keep this handoff short, in the user's language. For example (replace every
+placeholder with actual helper output):
 
-**Never press that button for them.** Sending the money is the user's decision;
-this skill has no command that does it.
+> Bakiyen {balance} test USDC; devam etmek için yükleme gerekiyor.
+> [Bakiye yükle]({payUrl}) — {amountTry} TRY.
+> IBAN: {iban} · Açıklama: {reference}.
+> Bağlantıdaki adımı tamamlayıp haber ver; ardından görselini oluşturacağım.
+> Test ortamı; gerçek para göndermeyin.
+
+Do not invent a payment link, bank details or exchange rate. Do not include
+developer button names, skill filenames or instructions for simulating a user.
+The external funding step is the reason work is waiting; explain that directly.
 
 ```bash
-node "$TOPUP" status --wait
+node "$TOPUP" status --id SAVED_DEPOSIT_ID --wait --timeout 45 --json
 ```
 
-Follows the deposit until the USDC lands, then reports the amount received, the
-fee, the new balance and the transaction hash. Without `--wait` it checks once.
+When the user says "tamam", "ok", "paid", or otherwise continues after this
+handoff, check that same deposit immediately. Their message alone is not proof
+of payment. The command reports the status and actual wallet balance. After
+`completed` and sufficient USDC, continue the original task in this turn using
+the already approved spending cap. Do not end with just "top-up successful" or
+ask whether they still want the output. For an explicit top-up-only request,
+report the credited amount and balance and finish.
+
+If it is still waiting for the user, show the same link. If the anchor or chain
+is processing it, continue bounded status checks and briefly report progress;
+do not instruct the user to pay again. On timeout or failure, preserve the
+deposit and report its actual state. Without `--wait`, status checks once.
 
 ## Commands
 
@@ -77,11 +107,10 @@ one is still unpaid.
 
 ## Amounts
 
-`--try 200` is **200 mock lira, not 200 USDC.** At the current rate 200 TRY is
-about 4 USDC, and an Algoria image costs 0.01, so one top-up covers a long
-session. Limits come from the anchor live, currently 50–3000 TRY; do not repeat
-those numbers as a fixed rule, and never quote a USDC amount as exact before it
-settles — the anchor prices at settlement.
+`--try 200` is **200 mock lira, not 200 USDC.** Use the helper's `estimateUsdc`
+only as an estimate. Limits and rates come from the anchor live; never promise
+an exact USDC amount before settlement. A top-up does not raise the approved
+service budget, and sufficient existing USDC does not require another deposit.
 
 ## Never charge twice
 

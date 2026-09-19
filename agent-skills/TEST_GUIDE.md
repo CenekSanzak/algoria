@@ -37,11 +37,45 @@ must show the selected source, ref and host argv without invoking the host. Open
 a new task/session after a real install. This bootstrap never onboards a wallet.
 
 Before publication, pack the plugin and run the same command through the tarball:
-`npx --package=/absolute/path/algoria-0.5.1.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
+`npx --package=/absolute/path/algoria-0.5.2.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
 The installer tests use a fake executable in a temporary path containing spaces;
 they check Codex/Claude argument handling, missing/old CLIs, ref validation,
 streamed host errors, clean JSON output and stopping before plugin installation
 if marketplace registration fails. They do not mutate real host settings.
+
+## Balance-first agent acceptance checks (0.5.2+)
+
+Use an isolated test wallet and a fresh agent session with the updated plugin.
+`ALGORIA_HOME` must be set in the agent host's environment, not only a separate
+terminal. Do not delete the user's wallet to create a zero-balance scenario.
+These are manual behavior checks; CLI unit tests do not prove skill adherence.
+
+1. With a new/empty wallet, ask: "Create an image for me using up to 0.02 test
+   USDC." The first service-related command must check wallet balance. A missing
+   wallet is onboarded, then an unpaid top-up is opened/reused. Before any
+   discovery, creative planning, input file or quote, the agent must show the
+   payment link, amount, IBAN and reference. No extra "shall I top up?" question,
+   skill quotations, simulation tutorial or generated image yet.
+2. Say "ok" without funding. It must check the same deposit and keep the same
+   link; no second deposit, payment attempt or success claim.
+3. Complete the funding page yourself, then say "tamam". It must verify that
+   deposit and actual USDC balance, resume the original image request under the
+   0.02 cap, and deliver the image with its charge in that turn. No repeated
+   brief or spending approval. A still-processing deposit gets bounded checks.
+4. With sufficient USDC, repeat the image request. Balance still comes first,
+   but no top-up opens. Compare cost with balance, not with the maximum cap.
+5. With positive but insufficient USDC for a selected multi-step task, show a
+   funding link before preparing inputs or paying for the first stage. The
+   approved cap covers the full plan and does not grow after top-up.
+6. Ask only "What image services exist?" No wallet setup/deposit is needed.
+   Ask to recover a saved paid image with an empty wallet: retrieve that job's
+   output without requiring funding or generating another image.
+7. Make the balance endpoint unavailable. The agent must report/retry a
+   balance-check failure, not claim zero balance or open a deposit as a remedy.
+
+The only sandbox notice in the normal funding handoff should be a brief
+test-environment label telling the user not to send real money. Actual funding
+controls stay on the provider page.
 
 ## As a CLI, with `npx`
 

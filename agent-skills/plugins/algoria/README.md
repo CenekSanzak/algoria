@@ -40,8 +40,8 @@ npx algoria@latest install --agent codex --ref codex/stellar8004-testnet-service
 ```
 
 Before this version is published, `@latest` still downloads the previous npm
-release. An unpacked checkout or a supplied `algoria-0.5.1.tgz` can exercise the
-same installer: `npx --package=/absolute/path/algoria-0.5.1.tgz algoria install --agent codex --ref <branch>`.
+release. An unpacked checkout or a supplied `algoria-0.5.2.tgz` can exercise the
+same installer: `npx --package=/absolute/path/algoria-0.5.2.tgz algoria install --agent codex --ref <branch>`.
 If a host rejects an existing marketplace with a different source, the installer
 reports its error and stops; it does not remove existing marketplaces or plugins.
 

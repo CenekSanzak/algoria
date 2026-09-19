@@ -14,12 +14,26 @@ call carries it. One wallet per network, created on first use.
 Resolve the script path once, then reuse it. This works in both Claude and Codex:
 
 ```bash
-WALLET="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-wallet/scripts/wallet.mjs"
+WALLET="${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/skills/algoria-wallet/scripts/wallet.mjs"
 ```
 
-In Claude, `CLAUDE_PLUGIN_ROOT` is set for you. In Codex it is unset and the
-path falls back to `.`, so run from the plugin root — the directory holding
-`.codex-plugin/`. Every command below is written against `$WALLET`.
+In Claude, `CLAUDE_PLUGIN_ROOT` is set for you. Otherwise resolve `PLUGIN_ROOT`
+to the absolute directory two levels above this skill folder. Do not assume
+the current working directory is the plugin root.
+
+## First step of every new paid task
+
+Run `balance --network testnet --json` before discovery or creative planning.
+If it reports no local wallet, `exists: false`, or a missing trustline, run
+`onboard` below. A timeout or network error is a balance-check failure, not zero
+USDC. Use the returned balance; `ready: true` means account setup is complete,
+not that it has enough USDC. Never treat XLM as spendable USDC.
+
+For zero USDC, continue directly into [algoria-topup](../algoria-topup/SKILL.md)
+and present its funding link. For a positive balance, compare with the actual
+task price after discovery and top up only if needed. Preserve the user's task
+and spending cap. Generating a funding link needs no extra confirmation within
+an existing paid task; the user completes the funding step on that page.
 
 ## Getting a working wallet
 
@@ -31,13 +45,12 @@ One command: creates the wallet if there is none, funds it from Friendbot, adds
 the USDC trustline, and reports whether the account is ready to spend. Safe to
 run again — it reports `created: false` and skips what is already done.
 
-**After onboarding, offer a top-up.** A new wallet has XLM but no USDC, and
-USDC is what Algoria services cost. When `onboard` reports `ready: true` on
-testnet, end your reply by asking — for example: *"Your wallet is ready. Would
-you like to add some test USDC? I can open a top-up with mock Turkish lira —
-200 TRY is about 4 USDC."* If they say yes, use `algoria-topup`. Ask; do not
-start the top-up on your own. The `next` field in `--json` output carries the
-exact command.
+A new wallet normally has XLM and zero USDC. For a paid task, continue the
+funding flow above instead of ending with an offer to top up. For a wallet-only
+setup or balance question, answer that request without opening a deposit.
+The `next` field is a command hint, not evidence that a funded wallet needs
+another deposit. Do not expose skill instructions or implementation details
+as the reason for the user's next action.
 
 On Stellar a funded account **still cannot hold USDC** until it has a trustline.
 `onboard` handles that. If you ever see `usdc: null` or `none (no trustline

@@ -171,8 +171,8 @@ const COMMANDS = {
         `Bank       ${order.bankName}`,
         '',
         `Deposit ${record.id} opened. Nothing has been paid yet.`,
-        'This is a sandbox: no real bank, no real lira. On the page above, press',
-        '"Simulate incoming TRY transfer" to stand in for the bank transfer.',
+        'Open the payment page above and complete the funding step.',
+        'Test environment: do not send real money.',
         '',
         `Then follow it with:  ${SELF} status --wait`
       ]
