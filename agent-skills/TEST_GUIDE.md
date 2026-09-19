@@ -20,6 +20,24 @@ Then pick a section:
 
 # Test it as a user (5 minutes)
 
+## Memory and media delivery (0.6.0+)
+
+In a fresh session, ask to remember a visual preference for a named project and
+save a service. In another session, ask for the same style: balance comes first
+for paid work, then local recall, then current discovery/price checks. Verify
+`memory recall --scope project:<name> --json` includes that context and job
+history without raw input, signed output URLs or recovery/payment credentials.
+Forgetting a preference or bookmark must not alter budgets or payment records.
+A Bazaar bookmark must not be presented as a working Bazaar payment adapter.
+
+For an image request, verify generation is followed by a loaded host preview.
+The final response should contain the visible artifact and charge, not a raw
+signed URL. Reopening an older result must use the same job ID and refresh its
+URL without another payment. If the host cannot display it, the agent must say
+so and offer a descriptive link instead of claiming a broken embed is visible.
+An active run process must finish before status starts; do not run both in
+parallel or remove an active lock.
+
 Two ways in, and neither needs this repo checked out. Do either or both.
 
 ## One-command plugin install (0.5.1+)
@@ -37,7 +55,7 @@ must show the selected source, ref and host argv without invoking the host. Open
 a new task/session after a real install. This bootstrap never onboards a wallet.
 
 Before publication, pack the plugin and run the same command through the tarball:
-`npx --package=/absolute/path/algoria-0.5.3.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
+`npx --package=/absolute/path/algoria-0.6.0.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
 The installer tests use a fake executable in a temporary path containing spaces;
 they check Codex/Claude argument handling, missing/old CLIs, ref validation,
 streamed host errors, clean JSON output and stopping before plugin installation

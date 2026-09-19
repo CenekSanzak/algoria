@@ -29,7 +29,10 @@ export async function apiFetch(url, options = {}, timeoutMs = 60_000) {
     response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
     body = await response.json();
   } catch {
-    throw new Error('Algoria response unavailable; recover the saved job instead of starting a new payment');
+    const isCatalogRead = (!options.method || options.method === 'GET') && !new URL(url).pathname.includes('/v1/jobs/');
+    throw new Error(isCatalogRead
+      ? 'Algoria catalog unavailable; retry this read-only lookup. No payment was attempted.'
+      : 'Algoria response unavailable; recover the saved job instead of starting a new payment');
   }
   return { response, body };
 }

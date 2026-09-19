@@ -5,7 +5,16 @@ discovery, planning, quotes or payment attempts. If empty, provide the funding
 link immediately, verify the deposit, then resume the original task within its
 approved budget. The installed skills state this order in their entrypoints.
 
-A Stellar wallet your agent can spend from — on your machine, not a server.
+A personal context and execution layer above service discovery catalogs.
+Algoria keeps the user's preferred services, project context, job history and
+spending limits together, then uses discovery and x402 to get work done.
+Stellar8004 and Bazaar are infrastructure to build on, not competing products
+that Algoria needs to replace.
+
+Today, executable integrations are Algoria's own catalog and Stellar8004 on
+Stellar testnet. Bazaar/other service bookmarks are supported in local memory;
+live Bazaar discovery/payment adapters are not implemented yet. A saved endpoint
+does not bypass supported-network, payment or provider checks.
 
 Creates a wallet, funds it on testnet, adds the USDC trustline so it can hold
 USDC, and tops it up with mock Turkish lira through a sandbox anchor. The secret
@@ -48,14 +57,18 @@ npx algoria@latest install --agent codex --ref codex/stellar8004-testnet-service
 ```
 
 Before this version is published, `@latest` still downloads the previous npm
-release. An unpacked checkout or a supplied `algoria-0.5.3.tgz` can exercise the
-same installer: `npx --package=/absolute/path/algoria-0.5.3.tgz algoria install --agent codex --ref <branch>`.
+release. An unpacked checkout or a supplied `algoria-0.6.0.tgz` can exercise the
+same installer: `npx --package=/absolute/path/algoria-0.6.0.tgz algoria install --agent codex --ref <branch>`.
 If a host rejects an existing marketplace with a different source, the installer
 reports its error and stops; it does not remove existing marketplaces or plugins.
 
 ## Commands
 
 ```bash
+npx algoria memory recall --json
+npx algoria memory remember --scope project:campaign --key style --value "Warm cinematic colours"
+npx algoria memory save-service --source algoria --service image.generate
+npx algoria memory forget --scope project:campaign --key style
 npx algoria wallet onboard --network testnet   # create + fund + trustline
 npx algoria wallet balance --json              # USDC and XLM
 npx algoria wallet accounts                    # every wallet on this machine
@@ -68,6 +81,17 @@ npx algoria pay quote image.generate --input input.json --budget demo --json
 npx algoria pay run SAVED_JOB_ID --approve --json
 npx algoria pay status SAVED_JOB_ID --wait --json
 ```
+
+Memory is a private local JSON file at `~/.algoria/memory.json`, with atomic
+writes and no new runtime dependencies. Existing `services.json` supplies safe
+job history without copying payment secrets, raw prompts or signed media URLs.
+Remembered preferences do not authorize payments. Scheduling is a separate host
+capability, not something a memory note activates.
+
+Successful media jobs expose `delivery` hints. The agent uses a verified host
+preview, keeps the saved job ID for recovery, and refreshes expired Algoria media
+URLs with `pay status`. A generated image and a working chat embed are different
+outcomes; display failure must never trigger another paid generation.
 
 `npx algoria` lists everything. `npx algoria wallet` lists just that group.
 

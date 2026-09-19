@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.5.3",
-  "description": "Paid tasks start with a USDC balance check, before discovery. Empty wallet: provide the top-up link, confirm funding, then discover and execute Algoria or Stellar8004 testnet services within the approved budget.",
+  "version": "0.6.0",
+  "description": "Check wallet balance first, fund if needed, then recall local context and execute paid services. Personal memory, saved services and budgeted x402 execution above Algoria and Stellar8004 testnet discovery.",
   "type": "module",
   "bin": {
     "algoria": "./bin/algoria.mjs"

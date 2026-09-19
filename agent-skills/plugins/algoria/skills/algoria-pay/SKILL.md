@@ -98,6 +98,13 @@ result and no generic external polling protocol is assumed.
   with `status` for this job, not a new generation. Downloads must not carry
   recovery tokens or payment headers.
 
+Before presenting successful media, follow [delivery.md](references/delivery.md).
+Use the returned `delivery` hints and a verified native/browser preview; a raw
+URL or unverified Markdown embed is not a visible artifact. Await the current
+run process before starting status to avoid colliding with its job lock.
+Record useful context with [algoria-memory](../algoria-memory/SKILL.md), keeping
+job IDs rather than signed media URLs. History is already derived from the ledger.
+
 Interrupted locks have `owner.json` with a PID under `~/.algoria/locks`. Never
 delete a lock while its process may still be running. Recovery tokens cannot be
 retrieved from the server if the local state is lost; retain `services.json`.

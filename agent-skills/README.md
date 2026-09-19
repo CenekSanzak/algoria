@@ -3,7 +3,11 @@
 The skill half of Algoria. These are shipped to users, not developer tooling:
 an Algoria user installs this plugin into Claude or Codex, and their agent gains
 the ability to hold a Stellar wallet, pay for services over x402, and work
-inside the agent economy without leaving the conversation.
+inside the agent economy without leaving the conversation. The plugin is a
+personal memory and execution layer over discovery sources: current integrations
+are Algoria and Stellar8004; Bazaar is a future discovery adapter, not a rival
+marketplace. Local JSON memory holds preferences, project context and saved
+services, while existing job records supply safe cross-session history.
 
 This directory is self-contained. It has its own dependencies, its own tests and
 its own version, and it does not import from the application at the repository
@@ -100,7 +104,7 @@ install the application, create a wallet or authorize payments. Open a new task
 or Claude Code session after installation.
 
 `@latest` is usable only after npm publishes this version. To test before release,
-pack `plugins/algoria` and run `npx --package=/absolute/path/algoria-0.5.3.tgz algoria install --agent codex --ref <branch>`.
+pack `plugins/algoria` and run `npx --package=/absolute/path/algoria-0.6.0.tgz algoria install --agent codex --ref <branch>`.
 
 Same code either way — see [Two channels](#two-channels-one-source) below.
 

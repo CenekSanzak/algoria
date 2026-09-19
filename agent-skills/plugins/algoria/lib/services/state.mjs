@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { algoriaHome } from '../stellar/keystore.mjs';
 import { withLock } from '../lock.mjs';
 import { atomicAmount, displayAmount } from './policy.mjs';
+import { deliveryFor } from './delivery.mjs';
 
 /** @typedef {{total: string, perCall: string, reservations: Record<string, string>}} Budget */
 /** @typedef {{version: number, budgets: Record<string, Budget>, jobs: Record<string, any>}} Ledger */
@@ -117,6 +118,7 @@ export function publicJob(job) {
     amount: offer?.amount ? displayAmount(offer.amount) : null, unit: 'test USDC',
     payTo: offer?.payTo ?? null, expiresAt: job.expiresAt ?? null,
     payment: job.payment ?? null, output: job.output ?? null, error: job.error ?? null,
+    delivery: deliveryFor(job),
     requiresAttention: job.phase === 'uncertain' || String(job.status).endsWith('-uncertain'),
     ...(job.source === 'stellar8004' ? { endpoint: job.registeredEndpoint, method: job.method, registry: job.registry, statusSource: 'local', httpStatus: job.httpStatus ?? null } : {}),
     note: job.phase === 'uncertain' ? 'Do not pay again. Reconcile this existing job; its budget remains reserved.' : job.source === 'stellar8004' ? 'External service: status reads only the saved response. No automatic retry, remote polling or Algoria recovery token.' : undefined

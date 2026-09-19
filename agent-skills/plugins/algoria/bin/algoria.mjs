@@ -14,6 +14,10 @@
 import { readFile } from 'node:fs/promises';
 
 const GROUPS = {
+  memory: {
+    script: '../skills/algoria-memory/scripts/memory.mjs',
+    blurb: 'recall local context/history and manage saved services across catalogs'
+  },
   install: {
     script: '../lib/install.mjs',
     blurb: 'install the plugin for Codex or Claude Code in one command'
