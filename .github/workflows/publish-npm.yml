@@ -97,10 +97,22 @@ jobs:
         working-directory: agent-skills/plugins/algoria
         run: npm pack --dry-run
 
+      # Prints the identity claims npm matches against the trusted publisher
+      # (never the token itself), so a 403 can be compared field by field.
+      - name: Show OIDC claims for npm
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" | node -p 'JSON.parse(require("fs").readFileSync(0)).value')
+          echo "$token" | cut -d. -f2 | node -e '
+            const c = JSON.parse(Buffer.from(require("fs").readFileSync(0, "utf8").trim(), "base64url"));
+            for (const k of ["repository", "repository_owner", "workflow_ref", "job_workflow_ref", "ref", "environment", "event_name", "runner_environment"])
+              console.log(`${k}: ${c[k] ?? "(none)"}`);'
+
       - name: Publish to npm
         if: steps.version.outputs.publish == 'true'
         working-directory: agent-skills/plugins/algoria
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --loglevel verbose
 
       # Registry reads can lag a publish by a few seconds.
       - name: Smoke test the published package
