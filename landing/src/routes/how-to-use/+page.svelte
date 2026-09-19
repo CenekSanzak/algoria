@@ -29,7 +29,7 @@
     <ul class="needs" aria-label="Requirements">
       <li>Claude Code or Codex</li>
       <li>Node.js 22+</li>
-      <li>Stellar testnet · not real money</li>
+      <li>Stellar testnet</li>
     </ul>
   </div>
   <InstallCard />

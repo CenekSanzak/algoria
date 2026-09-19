@@ -133,6 +133,7 @@
   }
 
   [role='tab'] {
+    white-space: nowrap;
     padding: 5px 11px;
     border: 0;
     border-radius: 7px;

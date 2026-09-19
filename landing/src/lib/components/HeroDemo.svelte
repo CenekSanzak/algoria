@@ -476,6 +476,8 @@
   }
 
   .approve {
+    flex-shrink: 0;
+    white-space: nowrap;
     padding: 5px 14px;
     border-radius: 8px;
     background: var(--txt);
@@ -622,6 +624,13 @@
     color: var(--txt-muted);
   }
 
+  .foot span:not(.live-dot) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .replay {
     display: inline-flex;
     align-items: center;
@@ -713,6 +722,14 @@
       display: none;
     }
 
+    .video {
+      width: 104px;
+    }
+
+    .result {
+      gap: 14px;
+    }
+
     dl div {
       flex-direction: column;
       gap: 1px;
@@ -722,10 +739,5 @@
       text-align: left;
     }
 
-    .foot span:not(.live-dot) {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   }
 </style>
