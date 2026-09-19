@@ -1,13 +1,18 @@
 ---
 name: algoria-pay
-description: Execute and recover paid Algoria jobs using the local Stellar testnet wallet over x402. Use after discovering a service for a requested image, narration, video or other supported result, or when resuming a saved job. Run the payment commands yourself as part of fulfilling the user's request; the user does not need to name this skill or type algoria pay. If no service has been selected yet, first use algoria-discover.
+description: Execute paid Algoria services and discovered Stellar8004 HTTP services using the local Stellar testnet wallet over x402. Use after discovering a service for an image, narration, video, web render or other supported result, or when inspecting a saved job. Algoria jobs support remote recovery; external calls keep local receipts and must not be automatically repaid. Run the commands yourself; the user does not need to name this skill or type algoria pay. If no service is selected, first use algoria-discover.
 ---
 
 # Pay and execute an Algoria service
 
-Use current metadata from `algoria-discover`. The helper only permits Algoria's
-pinned API, sponsored x402 v2 exact payments, and testnet USDC. Secrets stay in
-the local wallet; no Supabase/fal credentials or browser login are needed.
+Use current metadata from `algoria-discover`. The helper supports Algoria's
+pinned API and optional Stellar8004 testnet HTTP services. Both use sponsored
+x402 v2 exact payments in testnet USDC, with the same local wallet and named
+budgets. Secrets stay local; no Supabase/fal credentials or browser login are needed.
+
+For an ID beginning `stellar8004:`, read [external-services.md](references/external-services.md)
+before quoting. Its exact request, response and retry rules differ from Algoria
+jobs. The remote recovery instructions below apply only to Algoria jobs.
 
 For a natural request such as "bana video üret", load
 [algoria-discover](../algoria-discover/SKILL.md) first if a service/plan has not
@@ -37,13 +42,13 @@ node "$PAY" run SAVED_JOB_ID --approve --json
 node "$PAY" status SAVED_JOB_ID --wait --timeout 180 --json
 ```
 
-Write a JSON input file matching the service's current schema. `quote` validates
+For Algoria jobs, write a JSON input file matching the service's current schema. `quote` validates
 it, saves the UUID/recovery token before posting, and returns the actual price,
 recipient and expiry without paying. Present these before obtaining any missing
 authorization. `--approve` represents that authorization, including an already
 approved workflow budget; it is not a reason to ask twice.
 
-Each job keeps its exact original body, recipient, price and token. The full
+Each Algoria job keeps its exact original body, recipient, price and token. The full
 selected offer is preserved when signing. Budget reservations happen atomically
 before signing, including across parallel jobs. `budget --name project` shows
 spent, reserved and remaining totals; changing the cap never resets usage.
@@ -54,6 +59,11 @@ seed, or print recovery/payment headers. The npm equivalents are `algoria pay`
 and `algoria discover`; both execute these same helpers.
 
 ## Resume rather than repay
+
+For Stellar8004 jobs, `status` is local-only, including `--wait`. Never reissue a
+paid request to recover output. Retain uncertain jobs and their reservations;
+the service operator must reconcile them. A `202` response is not a completed
+result and no generic external polling protocol is assumed.
 
 - On timeout or interruption, use `list` to find the saved job, then `status`
   with that ID. Never repeat `quote` with a new identity as an automatic retry.

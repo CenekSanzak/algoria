@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.4.0",
-  "description": "Algoria services on Stellar: local wallets, mock top-ups, service discovery, and budgeted x402 payments with job recovery.",
+  "version": "0.5.0",
+  "description": "Algoria and optional Stellar8004 testnet services: local wallets, mock top-ups, discovery and budgeted x402 payments.",
   "author": {
     "name": "Algoria",
     "url": "https://algoria-agent-economy.berkingurcan.chatgpt.site"
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Algoria",
     "shortDescription": "Create media using paid Algoria services",
-    "longDescription": "Ask for an image, voiceover or video in natural language. The agent discovers suitable Algoria services, plans the needed steps, uses a local Stellar testnet wallet within your approved USDC budget, and returns the finished media. Saved jobs support recovery without another payment.",
+    "longDescription": "Ask for media or find a service for a task. The agent discovers Algoria services or optional Stellar8004 testnet HTTP agents, uses your local wallet within an approved USDC budget, and returns the result. Algoria jobs support remote recovery; external calls retain local results without automatic repayment.",
     "developerName": "Algoria",
     "category": "Developer Tools",
     "capabilities": [

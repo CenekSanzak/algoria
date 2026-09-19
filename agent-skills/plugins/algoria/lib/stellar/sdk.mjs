@@ -31,7 +31,10 @@ function isMissingModule(error) {
  * top-up's payment link. It is not ours to fix and says nothing actionable, so
  * that one code is dropped; every other warning still goes through.
  */
-function silenceBufferDeprecation() {
+let warningFilterInstalled = false;
+export function silenceBufferDeprecation() {
+  if (warningFilterInstalled) return;
+  warningFilterInstalled = true;
   const original = process.emitWarning;
   /** @type {(...args: any[]) => void} */
   const filtered = (warning, ...rest) => {

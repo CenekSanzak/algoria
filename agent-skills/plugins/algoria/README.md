@@ -72,6 +72,21 @@ Its skills support automatic selection, but selection is made by the host's
 agent. The current catalog supports images, speech and slideshow-based video
 workflows; it cannot perform every arbitrary task.
 
+You can also ask for an external service from **Stellar8004 testnet**. The agent
+reads on-chain registrations, checks an unsigned x402 quote, then uses the same
+wallet and approved budget. Algoria stays the default catalog. CLI equivalents:
+
+```bash
+algoria discover search render --source stellar8004 --json
+algoria discover show stellar8004:0:0 --json
+algoria pay quote stellar8004:0:0 --method GET --input render.json --budget project --json
+```
+
+The example RenderGate input is `{"url":"https://stellar.org"}`; inspect current
+metadata before using it. Only public HTTPS x402 services accepting sponsored
+testnet USDC are supported, not MCP/A2A services. Discovery pagination scans
+agent IDs; follow `nextOffset` even if a search page is empty.
+
 To update later:
 
 ```bash
@@ -102,7 +117,10 @@ codex plugin marketplace upgrade algoria-skills
   authorizes a service payment locally; the backend settles it through x402.
 - Payment services currently support testnet only. Signed authorizations and
   recovery tokens stay in `~/.algoria/services.json` with mode 0600. Keep that
-  file for recovery; use `pay status` to refresh an expired media URL.
+  file for recovery; for Algoria jobs, use `pay status` to refresh an expired media URL.
+- Stellar8004 service results and receipts are saved locally. Their `pay status`
+  does not poll a server or refresh links. An uncertain payment/result must be
+  reconciled with the provider; it is never automatically paid again.
 
 ## Requirements
 

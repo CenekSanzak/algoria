@@ -354,3 +354,26 @@ needs an explicitly authorized budget and consumes backend generation capacity.
 Use the saved job ID for every retry. For package verification, `npm pack` the
 plugin and extract it into a temporary directory with no `node_modules`, then
 run every command group's help and load both bundled SDKs.
+
+## Stellar8004 regression checks (0.5.0)
+
+The suite additionally covers on-chain testnet discovery, pagination across
+unreadable agent metadata, stable service indexes, public DNS address pinning,
+private IP/URL and redirect rejection, bounded response bodies, explicit GET/POST
+inputs, compatible offer selection, price/registration changes, receipt checks,
+shared spending limits, and no automatic external payment retry after dispatch.
+
+Read-only live checks (no wallet or payment needed):
+
+```bash
+algoria discover list --json
+algoria discover search render --source stellar8004 --limit 20 --offset 0 --json
+algoria discover show stellar8004:0:0 --json
+```
+
+To check an external offer, use `pay quote` with a temporary ALGORIA_HOME,
+temporary budget and the documented input/method. This sends the service input
+without a payment signature. Never run `pay run --approve` as a smoke test without
+authorization. Recheck both sources from an unpacked npm package without
+node_modules. External `status --wait` is deliberately local-only, including for
+HTTP 202 or an interrupted paid call; it must not request or sign another payment.

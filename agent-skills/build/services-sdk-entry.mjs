@@ -4,8 +4,22 @@ import { createEd25519Signer } from '@x402/stellar';
 import { ExactStellarScheme } from '@x402/stellar/exact/client';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { Account, Contract, Networks, TransactionBuilder, nativeToScVal, rpc, scValToNative } from '@stellar/stellar-sdk';
 
 export { decodePaymentRequiredHeader, decodePaymentResponseHeader } from '@x402/core/http';
+
+/** Read-only simulation: no wallet, signature or transaction submission.
+ * @param {string} contractId @param {'total_agents' | 'agent_uri'} method @param {number} [agentId]
+ */
+export async function readRegistry(contractId, method, agentId) {
+  const server = new rpc.Server('https://soroban-testnet.stellar.org', { timeout: 15_000 });
+  const args = agentId === undefined ? [] : [nativeToScVal(agentId, { type: 'u32' })];
+  const tx = new TransactionBuilder(new Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'), { fee: '100', networkPassphrase: Networks.TESTNET })
+    .addOperation(new Contract(contractId).call(method, ...args)).setTimeout(30).build();
+  const result = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(result) || !result.result) throw new Error('testnet registry read failed');
+  return scValToNative(result.result.retval);
+}
 
 /** @param {any} challenge @param {string} seed */
 export async function signChallenge(challenge, seed) {

@@ -109,13 +109,16 @@ export async function reserveBudget(id, amount) {
  * @param {any} job
  */
 export function publicJob(job) {
+  const offer = job.offer ?? job.expectedOffer;
   return {
     id: job.id, service: job.service, serviceVersion: job.serviceVersion, budget: job.budget,
+    source: job.source ?? 'algoria',
     status: job.status, phase: job.phase,
-    amount: displayAmount(job.offer?.amount ?? job.expectedOffer.amount), unit: 'test USDC',
-    payTo: job.offer?.payTo ?? job.expectedOffer.payTo, expiresAt: job.expiresAt ?? null,
+    amount: offer?.amount ? displayAmount(offer.amount) : null, unit: 'test USDC',
+    payTo: offer?.payTo ?? null, expiresAt: job.expiresAt ?? null,
     payment: job.payment ?? null, output: job.output ?? null, error: job.error ?? null,
     requiresAttention: job.phase === 'uncertain' || String(job.status).endsWith('-uncertain'),
-    note: job.phase === 'uncertain' ? 'Do not pay again. Reconcile this existing job; its budget remains reserved.' : undefined
+    ...(job.source === 'stellar8004' ? { endpoint: job.registeredEndpoint, method: job.method, registry: job.registry, statusSource: 'local', httpStatus: job.httpStatus ?? null } : {}),
+    note: job.phase === 'uncertain' ? 'Do not pay again. Reconcile this existing job; its budget remains reserved.' : job.source === 'stellar8004' ? 'External service: status reads only the saved response. No automatic retry, remote polling or Algoria recovery token.' : undefined
   };
 }
