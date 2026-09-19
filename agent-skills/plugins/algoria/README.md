@@ -47,6 +47,17 @@ codex plugin add algoria@algoria-skills
 
 Then just ask: *"create a Stellar wallet and fund it on testnet"*.
 
+To update later:
+
+```bash
+# Claude (restart Claude Code afterwards)
+claude plugin marketplace update algoria-skills
+claude plugin update algoria@algoria-skills
+
+# Codex
+codex plugin marketplace upgrade algoria-skills
+```
+
 ## Things worth knowing
 
 - **`testnet` is the default, and testnet balances are not money.** Real funds
