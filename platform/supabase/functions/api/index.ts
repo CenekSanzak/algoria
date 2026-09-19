@@ -6,6 +6,7 @@ import { Store } from './store.ts';
 import { PaymentGateway } from './payments.ts';
 import { FalProvider } from './fal.ts';
 import { SupabaseArtifacts } from './artifacts.ts';
+import { openAiSummarizer, PhoneCalls, SupabaseCallRepository, Twilio } from './phone.ts';
 
 const config = readConfig();
 const store = new Store(config.supabaseUrl, config.serviceRoleKey);
@@ -20,7 +21,18 @@ const social = new SocialWorkflow({
   baseUrl: config.baseUrl,
   supabaseUrl: config.supabaseUrl,
 });
+const phone = config.phone
+  ? new PhoneCalls({
+    config: config.phone,
+    store,
+    calls: new SupabaseCallRepository(config.supabaseUrl, config.serviceRoleKey),
+    twilio: new Twilio(config.phone),
+    baseUrl: config.baseUrl,
+    summarize: openAiSummarizer(config.phone.openaiKey),
+  })
+  : undefined;
 const app = createApp({
+  phone,
   config,
   store,
   fal,

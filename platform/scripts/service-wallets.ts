@@ -9,6 +9,8 @@ import {
 
 // Local setup only. No receiving-wallet secret is deployed to the API.
 if (!Deno.args.includes('--testnet')) throw new Error('Use --testnet to prepare service recipients.');
+// --only=phone.call prepares one recipient without touching the others.
+const only = Deno.args.find((arg) => arg.startsWith('--only='))?.slice('--only='.length);
 const server = new Horizon.Server('https://horizon-testnet.stellar.org');
 const usdc = new Asset('USDC', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
 const envPath = new URL('../.env.local', import.meta.url);
@@ -22,8 +24,10 @@ for (
     ['video.slideshow', 'VIDEO_SLIDESHOW', '100000'],
     ['video.compose', 'VIDEO_COMPOSE', '100000'],
     ['video.caption', 'VIDEO_CAPTION', '200000'],
+    ['phone.call', 'PHONE_CALL', '1000000'],
   ]
 ) {
+  if (only && id !== only) continue;
   const path = new URL(`${id}.testnet.json`, directory);
   let wallet: { network: string; publicKey: string; secretKey: string };
   try {

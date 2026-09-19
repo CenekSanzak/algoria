@@ -1,6 +1,7 @@
 import type { SocialWorkflow } from './social.ts';
 import type { SocialInput } from './social-input.ts';
 import type { SocialStore } from './social-store.ts';
+import type { PhoneCalls, PhoneInput } from './phone.ts';
 import { uploadReference } from './references.ts';
 import { Hono } from 'npm:hono@4.13.8';
 import type { Config } from './config.ts';
@@ -48,6 +49,7 @@ export interface Dependencies {
   config: Config;
   social?: Pick<SocialWorkflow, 'start' | 'advance' | 'progress' | 'parent' | 'sweep' | 'validateReferences'>;
   references?: Pick<SocialStore, 'reserveReference'>;
+  phone?: Pick<PhoneCalls, 'validate' | 'start' | 'advance' | 'statusCallback' | 'stream'>;
   workflowSecret?: string;
   store: JobStore;
   payments: Pick<
@@ -99,7 +101,10 @@ export function createApp(d: Dependencies) {
   async function response(job: Job, isStatus = false, signal?: AbortSignal) {
     let output = null;
     let deliveryPending = false;
-    if (job.status === 'succeeded' && job.output) {
+    const outputKind = getService(job.service_id, job.service_version)?.outputKind;
+    if (job.status === 'succeeded' && job.output && outputKind === 'call') {
+      output = job.output;
+    } else if (job.status === 'succeeded' && job.output) {
       const file = job.output as {
         path: string;
         content_type: string;
@@ -117,11 +122,10 @@ export function createApp(d: Dependencies) {
           ...(file.file_size !== undefined ? { file_size: file.file_size } : {}),
           ...(file.duration !== undefined ? { duration: file.duration } : {}),
         };
-        const kind = getService(job.service_id, job.service_version)?.outputKind;
         output = {
-          ...(kind === 'audio'
+          ...(outputKind === 'audio'
             ? { audio: media }
-            : kind === 'video'
+            : outputKind === 'video'
             ? { video: media }
             : { images: [media] }),
           url_expires_in: 3600,
@@ -180,6 +184,10 @@ export function createApp(d: Dependencies) {
     if (job.service_id === 'video.social') {
       if (!d.social) throw new Error('Social workflow unavailable');
       return d.social.advance(job, signal);
+    }
+    if (job.service_id === 'phone.call') {
+      if (!d.phone) throw new Error('Phone service unavailable');
+      return d.phone.advance(job);
     }
     if (!job.provider_request_id || !['queued', 'running', 'saving'].includes(job.status)) return job;
     let result;
@@ -275,6 +283,10 @@ export function createApp(d: Dependencies) {
     if (job.service_id === 'video.social') {
       if (!d.social) throw new Error('Social workflow unavailable');
       return d.social.start(job);
+    }
+    if (job.service_id === 'phone.call') {
+      if (!d.phone) throw new Error('Phone service unavailable');
+      return d.phone.start(job);
     }
     const service = getService(job.service_id, job.service_version);
     if (!service) throw new Error('Unknown persisted service');
@@ -414,6 +426,10 @@ export function createApp(d: Dependencies) {
         if (!d.social) throw new HttpError(503, 'social-unavailable');
         await d.social.validateReferences(input as SocialInput, true);
       }
+      if (service.id === 'phone.call') {
+        if (!d.phone) throw new HttpError(503, 'phone-unavailable');
+        d.phone.validate(input as PhoneInput);
+      }
       await resolveSources(service, input, { supabaseUrl: config.supabaseUrl, store, artifacts }, true);
       const payment = servicePayment(config, service.id)!;
       const requirements = await payments.requirements(payment.payTo, payment.priceAtomic);
@@ -529,6 +545,23 @@ export function createApp(d: Dependencies) {
     if (!d.social) throw new HttpError(503, 'social-unavailable');
     await d.social.sweep();
     return json({ ok: true });
+  });
+
+  // Twilio Media Stream for a phone.call job; authenticated inside by the job's signed token.
+  app.get('/phone/stream', (c) => {
+    if (!d.phone) throw new HttpError(503, 'phone-unavailable');
+    if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
+      throw new HttpError(426, 'websocket-required');
+    }
+    return d.phone.stream(c.req.raw);
+  });
+  app.post('/webhooks/twilio/:id', async (c) => {
+    if (!d.phone) throw new HttpError(503, 'phone-unavailable');
+    const id = c.req.param('id');
+    if (!validId(id)) throw new HttpError(404, 'job-not-found');
+    const params = new URLSearchParams(new TextDecoder().decode(await readBytes(c.req.raw, 64 * 1024)));
+    await d.phone.statusCallback(id, c.req.query('token') ?? '', params);
+    return new Response('<Response/>', { headers: { 'content-type': 'text/xml' } });
   });
 
   app.post('/webhooks/fal', async (c) => {

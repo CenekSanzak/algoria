@@ -7,7 +7,8 @@ export type ServiceId =
   | 'speech.generate'
   | 'video.slideshow'
   | 'video.compose'
-  | 'video.caption';
+  | 'video.caption'
+  | 'phone.call';
 export type ServiceInput = Record<string, unknown>;
 export interface Service {
   id: ServiceId;
@@ -17,8 +18,8 @@ export interface Service {
   tags: string[];
   inputSchema: Record<string, unknown>;
   exampleInput: ServiceInput;
-  outputKind: 'images' | 'audio' | 'video';
-  providerOutput: 'images' | 'audio' | 'video' | 'video_url';
+  outputKind: 'images' | 'audio' | 'video' | 'call';
+  providerOutput: 'images' | 'audio' | 'video' | 'video_url' | 'call';
   model: string;
   queuePath: string;
 }
@@ -239,6 +240,50 @@ export const SOCIAL_SERVICE: Service = {
   queuePath: 'internal/social-video',
 };
 SERVICES.push(SOCIAL_SERVICE);
+export const PHONE_INPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['contact', 'goal'],
+  properties: {
+    contact: {
+      type: 'string',
+      pattern: '^[a-z][a-z0-9_-]{0,31}$',
+      description:
+        'Name of an operator-approved contact; see preparation.contacts. Raw phone numbers are not accepted.',
+    },
+    goal: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 1000,
+      description: 'What the AI caller should accomplish, in plain English.',
+    },
+    on_behalf_of: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 80,
+      description: 'Name the AI caller introduces itself as representing.',
+    },
+  },
+};
+export const PHONE_SERVICE: Service = {
+  id: 'phone.call',
+  version: '1',
+  name: 'Algoria AI Phone Call',
+  description:
+    'Place one real phone call to an approved contact. A realtime English AI voice introduces itself, pursues the given goal in a short conversation (about 90 seconds at most) and hangs up. Returns the transcript, a summary and whether the goal was achieved.',
+  tags: ['phone', 'call', 'voice', 'twilio', 'assistant', 'reminder', 'booking', 'conversation'],
+  inputSchema: PHONE_INPUT_SCHEMA,
+  exampleInput: {
+    contact: 'berkin',
+    goal: 'Remind him about the hackathon demo at 3pm today and ask if he is ready.',
+    on_behalf_of: 'Dogukan',
+  },
+  outputKind: 'call',
+  providerOutput: 'call',
+  model: 'openai/gpt-realtime-mini',
+  queuePath: 'twilio/voice',
+};
+SERVICES.push(PHONE_SERVICE);
 export const IMAGE_SERVICE = SERVICES[0];
 export const SPEECH_SERVICE = SERVICES[1];
 export const SLIDESHOW_SERVICE = SERVICES[2];
@@ -264,6 +309,21 @@ export function normalizeInput(service: Service, body: unknown): ServiceInput {
   if (!body || Array.isArray(body) || typeof body !== 'object') throw new Error('Provide a JSON object.');
   const value = body as Record<string, unknown>;
   if (service.id === 'video.social') return normalizeSocial(value);
+  if (service.id === 'phone.call') {
+    if (Object.keys(value).some((key) => !['contact', 'goal', 'on_behalf_of'].includes(key))) {
+      throw new Error('Provide only contact, goal and an optional on_behalf_of.');
+    }
+    const contact = typeof value.contact === 'string' ? value.contact.trim().toLowerCase() : '';
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(contact)) throw new Error('Provide an approved contact name.');
+    if (typeof value.goal !== 'string' || !value.goal.trim() || value.goal.length > 1000) {
+      throw new Error('Provide goal, a nonempty string of at most 1000 characters.');
+    }
+    const onBehalfOf = value.on_behalf_of ?? 'an Algoria user';
+    if (typeof onBehalfOf !== 'string' || !onBehalfOf.trim() || onBehalfOf.length > 80) {
+      throw new Error('on_behalf_of must be a nonempty string of at most 80 characters.');
+    }
+    return { contact, goal: value.goal.trim(), on_behalf_of: onBehalfOf.trim() };
+  }
   if (service.id === 'image.generate') {
     if (
       Object.keys(value).some((key) => key !== 'prompt') || typeof value.prompt !== 'string' ||
