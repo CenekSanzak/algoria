@@ -13,10 +13,19 @@
     "bin/",
     "lib/",
     "skills/",
-    "assets/"
+    "assets/",
+    "LICENSE"
   ],
   "license": "MIT",
   "homepage": "https://algoria-agent-economy.berkingurcan.chatgpt.site/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CenekSanzak/algoria.git",
+    "directory": "agent-skills/plugins/algoria"
+  },
+  "bugs": {
+    "url": "https://github.com/CenekSanzak/algoria/issues"
+  },
   "keywords": [
     "stellar",
     "x402",

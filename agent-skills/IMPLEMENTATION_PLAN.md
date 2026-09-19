@@ -8,7 +8,7 @@ marketplace. This plan adds the two things users actually expect:
 | Channel | Command | For |
 | --- | --- | --- |
 | **A. npm** | `npx algoria wallet onboard` | humans, scripts, CI — no agent involved |
-| **B. git marketplace** | `codex plugin marketplace add berkingurcan/algoria-x` | agents, no clone |
+| **B. git marketplace** | `codex plugin marketplace add CenekSanzak/algoria` | agents, no clone |
 
 They are independent. Either can ship without the other.
 
@@ -125,20 +125,37 @@ a user has.
 
 ### A5. Publish
 
+`algoria` is unscoped, so it is public by default — no `--access public` needed.
+
 ```bash
 cd plugins/algoria
-npm publish --access public --dry-run   # check the file list first
-npm publish --access public
+npm publish --dry-run     # 24 files, ~113 kB, zero dependencies
+npm publish
 ```
 
-**Blocked on you:** publishing needs your npm account, and it is effectively
-permanent — a name cannot be reused after unpublish. Confirm the name before
-anyone runs this.
+**npm requires 2FA to publish, and as of now it must be a security key or
+passkey.** Two things that no longer work, both tried:
 
-Verify from a clean machine:
+- `npm profile enable-2fa auth-and-writes` fails with *"Adding a new TOTP 2FA is
+  no longer supported"*. TOTP authenticator apps are out for new setups, so
+  `npm publish --otp=<code>` is not the flow.
+- Granular access tokens with 2FA bypass are
+  [being restricted](https://gh.io/npm-gat-bypass2fa-deprecation) for direct
+  publishing, so that CI-style fallback is closing too.
+
+The working path is browser-only: add a passkey at
+`https://www.npmjs.com/settings/<user>/tfa` — Touch ID counts as a platform
+passkey on a Mac — then run `npm publish`, which opens a browser for the WebAuthn
+prompt.
+
+**Still blocked on a human:** the passkey step cannot be scripted, and publishing
+is permanent. A name cannot be reused after unpublish, so confirm it first.
+
+Verify from a clean machine afterwards:
 
 ```bash
-npx algoria@latest wallet onboard --network testnet --json
+cd $(mktemp -d) && export ALGORIA_HOME=$(mktemp -d)
+npx algoria@latest wallet onboard --network testnet
 ```
 
 ---

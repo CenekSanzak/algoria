@@ -1,17 +1,106 @@
 # Testing this by hand
 
-How to check the Algoria plugin works, before a demo or after a change.
-
 Everything here is testnet. No real money is involved at any point.
 
-**Before you start:** every command below uses a throwaway wallet directory, so
-your own wallet at `~/.algoria` is never touched:
+**Run this first, in any terminal.** It points the wallet at a throwaway folder so
+your real one at `~/.algoria` is never touched. Open a new terminal to get it back:
 
 ```bash
 export ALGORIA_HOME=$(mktemp -d)
 ```
 
-Open a new terminal to get your real wallet back.
+Then pick a section:
+
+- **[Test it as a user](#test-it-as-a-user-5-minutes)** — you have no repo, you just
+  want to see it work. Start here.
+- **[Test it as a maintainer](#test-it-as-a-maintainer)** — you changed the code and
+  need to know you did not break it.
+
+---
+
+# Test it as a user (5 minutes)
+
+Two ways in, and neither needs this repo checked out. Do either or both.
+
+## As a CLI, with `npx`
+
+**`algoria` is not on npm yet, so plain `npx algoria` returns a 404.** Point `npx`
+at the package directory instead — it takes a path, and this runs the identical
+code:
+
+```bash
+cd $(mktemp -d)
+ALG=<repo>/agent-skills/plugins/algoria
+
+npx "$ALG" wallet onboard --network testnet
+```
+
+That is the whole test. You should get an address, a funded balance, and
+`Ready to receive and spend USDC on testnet.` Then:
+
+```bash
+npx "$ALG"                                 # what else can it do
+npx "$ALG" wallet balance --network testnet
+npx "$ALG" topup start --try 200           # 200 mock lira, about 4 USDC
+```
+
+**Once it is published**, drop the path and the commands become what users
+actually type:
+
+```bash
+npx algoria wallet onboard --network testnet
+npx algoria topup start --try 200
+```
+
+Publishing needs an npm account with a passkey on it — npm no longer accepts
+TOTP, and tokens that bypass 2FA are being restricted. See
+`IMPLEMENTATION_PLAN.md` for the steps.
+
+## As an agent skill, from GitHub
+
+This is the one a real user does, and it needs no clone — Codex fetches the repo
+itself.
+
+```bash
+cd $(mktemp -d)
+codex plugin marketplace add CenekSanzak/algoria --ref feat-add-skill-infra
+codex plugin add algoria@algoria-skills
+```
+
+No `codex` on your PATH? The ChatGPT desktop app ships one:
+`alias codex=/Applications/ChatGPT.app/Contents/Resources/codex`
+
+Now open Codex and just ask, in words:
+
+- *"Create a Stellar wallet and fund it on testnet"*
+- *"What is my USDC balance?"*
+- *"Top up my wallet with 200 test lira"*
+
+The agent should pick the skill itself. That is the actual product — you typing
+nothing but a sentence.
+
+To see the same thing in Claude Code:
+
+```
+/plugin marketplace add CenekSanzak/algoria
+/plugin install algoria@algoria-skills
+```
+
+Drop `--ref feat-add-skill-infra` once this is merged to `main`.
+
+**Done with it?**
+
+```bash
+codex plugin remove algoria@algoria-skills
+codex plugin marketplace remove algoria-skills
+```
+
+---
+
+# Test it as a maintainer
+
+The rest of this page is for when you have changed the code. It checks things a
+user never sees.
 
 ---
 
@@ -163,32 +252,32 @@ node skills/algoria-topup/scripts/topup.mjs history --json
 
 ---
 
-## 6. Install it in Claude (2 minutes)
+## 6. Does the agent still choose the right skill? (2 minutes)
 
-Inside Claude Code:
+Install it in Claude from your local checkout and ask in words, rather than
+running commands:
 
 ```
 /plugin marketplace add .
 /plugin install algoria@algoria-skills
 ```
 
-Then just talk to it, instead of running commands:
-
 - "Create a Stellar wallet and fund it on testnet"
 - "What is my USDC balance?"
 - "Top up my wallet with 200 test lira"
 
-It should pick the right skill on its own and report an address and a balance.
-If it does something else, the problem is the `description` line in that
-skill's `SKILL.md` — that text is all the model sees when deciding.
+Each should trigger the right skill without you naming it. If one picks the wrong
+skill or none at all, the cause is the `description` in that `SKILL.md` — that
+line is the only thing the model sees when deciding, so this is the check that
+editing a description cannot skip.
 
 ---
 
 ## 7. Test the `npx` command (3 minutes)
 
-The same code also ships as an npm package. Test it the way a user gets it — from
-a packed tarball, not from the source tree, because only that proves the right
-files are included.
+The user section above shows the npx flow itself. This step checks the thing a
+user cannot: that the tarball contains the right files and drags nothing behind
+it.
 
 ```bash
 cd agent-skills/plugins/algoria
@@ -243,6 +332,7 @@ nothing else to delete. Close the terminal and it is gone.
 
 | Symptom | Cause |
 | --- | --- |
+| `error: fetch failed` | Testnet hiccup, not your code. Run it again. |
 | Install is tens of MB | Something non-shippable is in `plugins/algoria/` |
 | Error naming the Stellar SDK | Bundle missing or stale — `pnpm bundle:sdk` |
 | `"trustline": false` | The trustline step failed; retry `wallet.mjs trustline` |

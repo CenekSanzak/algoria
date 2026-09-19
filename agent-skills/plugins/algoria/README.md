@@ -37,11 +37,11 @@ commands:
 
 ```bash
 # Claude
-/plugin marketplace add berkingurcan/algoria-x
+/plugin marketplace add CenekSanzak/algoria
 /plugin install algoria@algoria-skills
 
 # Codex
-codex plugin marketplace add berkingurcan/algoria-x
+codex plugin marketplace add CenekSanzak/algoria
 codex plugin add algoria@algoria-skills
 ```
 

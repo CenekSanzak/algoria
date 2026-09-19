@@ -63,15 +63,15 @@ Two channels. The plugin is for agents; npm is for people.
 
 ```bash
 # Claude
-/plugin marketplace add berkingurcan/algoria-x
+/plugin marketplace add CenekSanzak/algoria
 /plugin install algoria@algoria-skills
 
 # Codex
-codex plugin marketplace add berkingurcan/algoria-x
+codex plugin marketplace add CenekSanzak/algoria
 codex plugin add algoria@algoria-skills
 ```
 
-Use `.` instead of `berkingurcan/algoria-x` to install from a local checkout.
+Use `.` instead of `CenekSanzak/algoria` to install from a local checkout.
 `codex plugin list` shows what is installed, and
 `codex plugin remove algoria@algoria-skills` undoes it. If the `codex` CLI is not
 on your PATH, the ChatGPT desktop app ships one at
