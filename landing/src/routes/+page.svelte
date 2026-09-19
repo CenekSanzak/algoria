@@ -3,12 +3,12 @@
   import InstallCard from '$lib/components/InstallCard.svelte';
   import StellarMark from '$lib/components/StellarMark.svelte';
 
-  const facts = ['TRY via Stellar anchor', 'Budget you approve', 'Key stays on your machine'];
+  const facts = ['Images, voice & video', 'Pay in TRY via Stellar', 'Key stays on your machine'];
 
   const steps = [
     { title: 'Install', body: 'Your assistant creates a Stellar wallet on your machine. The key never leaves it.' },
     { title: 'Top up in lira', body: 'You get an IBAN and a reference. Send a TRY transfer and it arrives as USDC.' },
-    { title: 'Ask', body: 'It finds the service, shows the price and pays per request within your budget.' }
+    { title: 'Ask', body: 'Ask for an image, a voiceover or a video. It shows the price and pays within your budget.' }
   ];
 </script>
 
@@ -28,7 +28,7 @@
 <section class="wrap hero" aria-labelledby="hero-title">
   <div class="copy rise">
     <p class="eyebrow"><span class="live-dot" aria-hidden="true"></span>Plugin for Claude &amp; Codex</p>
-    <h1 id="hero-title">Buy AI services.<br /><span class="silver">Stay in Claude or&nbsp;Codex.</span></h1>
+    <h1 id="hero-title">Go beyond<br /><span class="nowrap">Claude &amp; Codex.</span><br /><span class="silver nowrap">Without leaving&nbsp;them.</span></h1>
     <p class="pay-line">
       Pay in Turkish lira on
       <span class="stellar-chip"><StellarMark />Stellar</span>
@@ -77,13 +77,16 @@
 
   h1 {
     margin-top: 20px;
-    font-size: clamp(40px, 4.9vw, 58px);
-    line-height: 1.06;
+    font-size: clamp(36px, 4.1vw, 46px);
+    line-height: 1.08;
     font-weight: 600;
     letter-spacing: -0.02em;
     text-wrap: balance;
   }
 
+  .nowrap {
+    white-space: nowrap;
+  }
   .silver {
     background: var(--silver);
     -webkit-background-clip: text;
@@ -123,9 +126,8 @@
 
   .facts {
     list-style: none;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 20px;
+    display: grid;
+    gap: 10px;
     margin-top: 28px;
     padding: 0;
     font: 12px var(--mono);
@@ -228,6 +230,9 @@
   }
 
   @media (max-width: 560px) {
+    .silver.nowrap {
+      white-space: normal;
+    }
     .hero {
       padding-block: 44px 64px;
     }
