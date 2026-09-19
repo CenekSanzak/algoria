@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "description": "Algoria and optional Stellar8004 testnet services: local wallets, mock top-ups, discovery and budgeted x402 payments.",
-  "version": "0.5.2",
+  "description": "Paid tasks start with a USDC balance check, before discovery. Empty wallet: provide the top-up link, confirm funding, then discover and execute Algoria or Stellar8004 testnet services within the approved budget.",
+  "version": "0.5.3",
   "author": {
     "name": "Algoria"
   },

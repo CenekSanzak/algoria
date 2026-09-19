@@ -1,9 +1,17 @@
 ---
 name: algoria-pay
-description: Execute paid Algoria services and discovered Stellar8004 HTTP services using the local Stellar testnet wallet over x402. Use after discovering a service for an image, narration, video, web render or other supported result, or when inspecting a saved job. Algoria jobs support remote recovery; external calls keep local receipts and must not be automatically repaid. Run the commands yourself; the user does not need to name this skill or type algoria pay. If no service is selected, first use algoria-discover.
+description: For every new paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Execute discovered Algoria or Stellar8004 HTTP services over x402 within an approved budget and deliver the result. Use algoria-discover if no service is selected. Recover saved paid jobs without requiring more funds; external requests must not be automatically repaid.
 ---
 
 # Pay and execute an Algoria service
+
+**First action for a new paid task: check wallet balance, before discovery,
+quotes or payment attempts.** Use the wallet helper from this plugin at
+`skills/algoria-wallet/scripts/wallet.mjs balance --network testnet --json`,
+with its absolute path and `node`. Run it separately and inspect the result.
+A zero balance goes straight to the top-up link; only then resume the task
+after confirmed funding. A fresh balance check from discovery satisfies this
+step. Recovering an already-paid job needs no funding.
 
 Use current metadata from `algoria-discover`. The helper supports Algoria's
 pinned API and optional Stellar8004 testnet HTTP services. Both use sponsored

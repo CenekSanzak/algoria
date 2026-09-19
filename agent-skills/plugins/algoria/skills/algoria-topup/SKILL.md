@@ -1,6 +1,6 @@
 ---
 name: algoria-topup
-description: The only way to get USDC into an Algoria wallet. Buys testnet USDC with mock Turkish lira through the TR mock anchor - opens a deposit, gives the user an IBAN, a reference and a payment link, then confirms the USDC arrived. Use whenever the user wants USDC - add, get, buy, fund with or top up USDC - or has too little of it, wants to add balance or funds, or mentions TRY, lira, a bank transfer or a top-up. Prefer this over the wallet's XLM faucet for any request about USDC.
+description: For paid tasks, check wallet balance before discovery; if empty, immediately open or reuse a funding link, verify credit, then resume the original task. The USDC funding flow for an Algoria wallet. Buys testnet USDC with mock Turkish lira through the TR mock anchor - opens a deposit, gives the user an IBAN, a reference and a payment link, then confirms the USDC arrived. Use whenever the user wants USDC - add, get, buy, fund with or top up USDC - or has too little of it, wants to add balance or funds, or mentions TRY, lira, a bank transfer or a top-up. Prefer this over the wallet's XLM faucet for any request about USDC.
 ---
 
 # Algoria top-up

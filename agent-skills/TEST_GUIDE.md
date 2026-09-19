@@ -37,11 +37,19 @@ must show the selected source, ref and host argv without invoking the host. Open
 a new task/session after a real install. This bootstrap never onboards a wallet.
 
 Before publication, pack the plugin and run the same command through the tarball:
-`npx --package=/absolute/path/algoria-0.5.2.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
+`npx --package=/absolute/path/algoria-0.5.3.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
 The installer tests use a fake executable in a temporary path containing spaces;
 they check Codex/Claude argument handling, missing/old CLIs, ref validation,
 streamed host errors, clean JSON output and stopping before plugin installation
 if marketplace registration fails. They do not mutate real host settings.
+
+Codex 0.5.3+ installer regression: repeat installation with an existing older
+marketplace snapshot. The installer must refresh `algoria-skills` before adding
+the plugin. If refresh fails, installation must stop without reporting success.
+Confirm the installed version with `codex plugin list`, then start a fresh
+session and verify its skill paths reference the updated version. A new chat
+alone does not update an old installed plugin. The installer tests model both
+stale-snapshot replacement and refresh failures.
 
 ## Balance-first agent acceptance checks (0.5.2+)
 

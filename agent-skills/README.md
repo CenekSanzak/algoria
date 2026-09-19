@@ -100,7 +100,7 @@ install the application, create a wallet or authorize payments. Open a new task
 or Claude Code session after installation.
 
 `@latest` is usable only after npm publishes this version. To test before release,
-pack `plugins/algoria` and run `npx --package=/absolute/path/algoria-0.5.2.tgz algoria install --agent codex --ref <branch>`.
+pack `plugins/algoria` and run `npx --package=/absolute/path/algoria-0.5.3.tgz algoria install --agent codex --ref <branch>`.
 
 Same code either way — see [Two channels](#two-channels-one-source) below.
 

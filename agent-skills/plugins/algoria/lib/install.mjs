@@ -23,6 +23,7 @@ Options:
 Requires Node 22+ and an installed host with plugin support. On macOS, Codex's
 CLI can be found inside Codex.app or ChatGPT.app even when it is not on PATH.
 The host fetches the GitHub marketplace; no project checkout is needed.
+Codex installations refresh Algoria's marketplace snapshot before installing.
 After installation, open a new task/session to load the skills.
 This command does not create a wallet, fund it, or authorize any payments.`;
 
@@ -67,6 +68,7 @@ export function installCommands(agent, ref) {
   validateRef(ref);
   if (agent === 'codex') return [
     ['plugin', 'marketplace', 'add', REPOSITORY, '--ref', ref],
+    ['plugin', 'marketplace', 'upgrade', MARKETPLACE],
     ['plugin', 'add', PLUGIN]
   ];
   if (agent === 'claude') return [
@@ -97,6 +99,7 @@ export function installPlugin(agent, cli, ref, execute = runHost) {
   // Check capabilities before mutating a marketplace. Older host CLIs fail
   // clearly instead of leaving a partial install after an unsupported command.
   execute(cli, ['plugin', 'marketplace', 'add', '--help'], true);
+  if (agent === 'codex') execute(cli, ['plugin', 'marketplace', 'upgrade', '--help'], true);
   execute(cli, ['plugin', agent === 'codex' ? 'add' : 'install', '--help'], true);
   for (const args of installCommands(agent, ref)) execute(cli, args);
 }

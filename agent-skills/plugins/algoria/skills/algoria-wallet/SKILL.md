@@ -1,9 +1,14 @@
 ---
 name: algoria-wallet
-description: Stellar wallet for paying Algoria agents. Creates a local wallet on first use, funds it with testnet XLM, and adds the USDC trustline so it can hold and spend USDC over x402. Use when the user needs a Stellar wallet or address, wants to check their USDC or XLM balance, needs testnet XLM, or is about to pay for an Algoria service. Does not provide USDC - when the user wants to add, get, buy or top up USDC, use algoria-topup instead.
+description: For every new paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Use for Stellar wallet setup, USDC/XLM balance, addresses, trustlines or testnet XLM. Onboard missing wallets, then use algoria-topup for USDC; Friendbot supplies XLM only. Wallet-only questions do not open deposits.
 ---
 
 # Algoria wallet
+
+**The first command for every new paid task is `balance --network testnet
+--json`, before any catalog search, planning, quote or payment.** Execute it
+separately with this skill's helper, inspect the result, then onboard a missing
+wallet or provide the top-up link for zero USDC.
 
 A Stellar wallet held on the user's own machine, in `~/.algoria/wallet.json`.
 The seed never leaves this computer — no Algoria server, no API, no network

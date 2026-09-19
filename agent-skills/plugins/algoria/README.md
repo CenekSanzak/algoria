@@ -1,5 +1,10 @@
 # algoria
 
+For every new paid task, **check the USDC wallet balance first**, before service
+discovery, planning, quotes or payment attempts. If empty, provide the funding
+link immediately, verify the deposit, then resume the original task within its
+approved budget. The installed skills state this order in their entrypoints.
+
 A Stellar wallet your agent can spend from — on your machine, not a server.
 
 Creates a wallet, funds it on testnet, adds the USDC trustline so it can hold
@@ -30,6 +35,9 @@ Node 22+ and the chosen application with plugin support must already be installe
 The installer adds the GitHub marketplace and installs Algoria using the host's
 own CLI. It can find Codex inside Codex.app/ChatGPT.app on macOS without PATH
 setup. It does not create wallets or authorize spending.
+On Codex, it also refreshes only the `algoria-skills` Git marketplace before
+installing, so repeating the command picks up new plugin versions from the
+selected branch instead of an older marketplace snapshot.
 
 `--ref <branch-or-tag>` selects a GitHub version (default `main`), `--cli` accepts
 an absolute host executable path, and `--dry-run` previews commands without
@@ -40,8 +48,8 @@ npx algoria@latest install --agent codex --ref codex/stellar8004-testnet-service
 ```
 
 Before this version is published, `@latest` still downloads the previous npm
-release. An unpacked checkout or a supplied `algoria-0.5.2.tgz` can exercise the
-same installer: `npx --package=/absolute/path/algoria-0.5.2.tgz algoria install --agent codex --ref <branch>`.
+release. An unpacked checkout or a supplied `algoria-0.5.3.tgz` can exercise the
+same installer: `npx --package=/absolute/path/algoria-0.5.3.tgz algoria install --agent codex --ref <branch>`.
 If a host rejects an existing marketplace with a different source, the installer
 reports its error and stops; it does not remove existing marketplaces or plugins.
 

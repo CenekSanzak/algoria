@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.5.2",
-  "description": "Algoria and optional Stellar8004 testnet services: local wallets, mock top-ups, discovery and budgeted x402 payments.",
+  "version": "0.5.3",
+  "description": "Paid tasks start with a USDC balance check, before discovery. Empty wallet: provide the top-up link, confirm funding, then discover and execute Algoria or Stellar8004 testnet services within the approved budget.",
   "author": {
     "name": "Algoria",
     "url": "https://algoria-agent-economy.berkingurcan.chatgpt.site"
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Algoria",
     "shortDescription": "Create media using paid Algoria services",
-    "longDescription": "Ask for media or find a service for a task. The agent discovers Algoria services or optional Stellar8004 testnet HTTP agents, uses your local wallet within an approved USDC budget, and returns the result. Algoria jobs support remote recovery; external calls retain local results without automatic repayment.",
+    "longDescription": "FIRST check the testnet USDC wallet balance for every new paid task, before service discovery, planning, quotes or payment. If empty, give the funding link immediately, verify the deposit, then resume the original request within its approved budget. Discover Algoria or optional Stellar8004 services and deliver the result. Catalog-only questions and recovery of already-paid jobs do not require funding.",
     "developerName": "Algoria",
     "category": "Developer Tools",
     "capabilities": [

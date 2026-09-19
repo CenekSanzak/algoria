@@ -35,8 +35,9 @@ describe('plugin installer', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({ installed: true, agent: 'codex', ref: 'codex/stellar8004-testnet-services', plugin: 'algoria@algoria-skills' });
     expect(await calls()).toEqual([
-      ['plugin', 'marketplace', 'add', '--help'], ['plugin', 'add', '--help'],
+      ['plugin', 'marketplace', 'add', '--help'], ['plugin', 'marketplace', 'upgrade', '--help'], ['plugin', 'add', '--help'],
       ['plugin', 'marketplace', 'add', 'CenekSanzak/algoria', '--ref', 'codex/stellar8004-testnet-services'],
+      ['plugin', 'marketplace', 'upgrade', 'algoria-skills'],
       ['plugin', 'add', 'algoria@algoria-skills']
     ]);
     expect(result.stderr).toContain('Host operation completed');
@@ -60,6 +61,34 @@ describe('plugin installer', () => {
     const result = invoke(['--agent', 'claude', '--cli', fake, '--json'], { ALGORIA_INSTALL_TEST_FAIL: 'install' });
     expect(result.status).toBe(1); expect(result.stdout).toBe('');
     expect(result.stderr).toContain('host rejected install');
+  });
+  it('refreshes a previously registered Codex snapshot before reinstalling', () => {
+    // Registering an existing source can keep its cached snapshot. Model the
+    // host state rather than merely asserting that an argv array contains upgrade.
+    let snapshot = 'old';
+    let installed = 'old';
+    const execute = (/** @type {string} */ _cli, /** @type {string[]} */ args) => {
+      if (args.includes('--help')) return '';
+      if (args[1] === 'marketplace' && args[2] === 'upgrade') snapshot = 'current';
+      if (args[1] === 'add') installed = snapshot;
+      return '';
+    };
+    installPlugin('codex', '/cli', 'main', execute);
+    expect(installed).toBe('current');
+  });
+  it('does not reinstall a stale plugin or report success if refresh fails', async () => {
+    const result = invoke(['--agent', 'codex', '--cli', fake, '--json'], { ALGORIA_INSTALL_TEST_FAIL: 'upgrade' });
+    expect(result.status).toBe(1); expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('host rejected install');
+    expect((await calls()).filter((a) => a[1] === 'add' && !a.includes('--help'))).toHaveLength(0);
+  });
+  it('checks refresh support before changing the marketplace', () => {
+    const execute = vi.fn((_cli, args) => {
+      if (args.includes('upgrade')) throw new Error('refresh unsupported');
+      return '';
+    });
+    expect(() => installPlugin('codex', '/cli', 'main', execute)).toThrow('refresh unsupported');
+    expect(execute.mock.calls.every(([, args]) => args.includes('--help'))).toBe(true);
   });
   it('previews without starting any host process', async () => {
     const result = invoke(['--agent', 'codex', '--cli', fake, '--dry-run', '--json']);

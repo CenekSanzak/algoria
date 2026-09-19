@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.5.2",
-  "description": "A Stellar wallet your agent can spend from: local wallets, USDC trustlines, and x402 payments.",
+  "version": "0.5.3",
+  "description": "Paid tasks start with a USDC balance check, before discovery. Empty wallet: provide the top-up link, confirm funding, then discover and execute Algoria or Stellar8004 testnet services within the approved budget.",
   "type": "module",
   "bin": {
     "algoria": "./bin/algoria.mjs"
