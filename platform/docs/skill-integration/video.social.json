@@ -31,17 +31,19 @@
       "brief": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 2000
+        "maxLength": 2000,
+        "description": "Campaign context for the approved plan. Not forwarded to the image model; repeat necessary visual details in each scene."
       },
       "scenes": {
         "type": "array",
         "minItems": 1,
         "maxItems": 5,
-        "description": "Approved ordered scene prompts. Default to five in conversation.",
+        "description": "Approved ordered prompts, each for one still image. Default to five in conversation. Each scene must stand alone without the brief.",
         "items": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 2000
+          "maxLength": 2000,
+          "description": "Describe the visible subject, applicable reference numbers, setting, framing, lighting and style. Exclude video, audio, voice, duration, transitions and subtitle instructions. Include exact lettering only when approved as visible image content."
         }
       },
       "narration": {
@@ -394,11 +396,11 @@
           "body": {
             "brief": "Introduce my reusable bottle",
             "scenes": [
-              "Hero product on a sunlit desk",
-              "Bottle in an everyday lifestyle setting",
-              "Close-up of the bottle texture",
-              "Product beside a packed bag",
-              "Clean final hero shot"
+              "Photorealistic vertical product photograph of a matte sage-green reusable bottle with a silver screw cap on a sunlit oak desk. Warm natural light, cream backdrop, no lettering.",
+              "Photorealistic vertical photograph of a matte sage-green reusable bottle with a silver screw cap beside a notebook in a bright cafe. Warm natural light, cream and oak palette, no lettering.",
+              "Photorealistic vertical close-up of the matte sage-green surface and silver screw cap of a reusable bottle. Warm natural light, cream backdrop, no lettering.",
+              "Photorealistic vertical product photograph of a matte sage-green reusable bottle with a silver screw cap beside a beige packed bag on an oak bench. Warm natural light, no lettering.",
+              "Photorealistic vertical hero photograph of a matte sage-green reusable bottle with a silver screw cap centered against a clean cream backdrop. Warm natural light, generous negative space, no lettering."
             ],
             "narration": "Meet your new everyday companion. From slow mornings to busy afternoons, bring your favorite bottle along. Make it part of your day.",
             "voice": "Olivia (en)",
@@ -479,17 +481,19 @@
                   "brief": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "Campaign context for the approved plan. Not forwarded to the image model; repeat necessary visual details in each scene."
                   },
                   "scenes": {
                     "type": "array",
                     "minItems": 1,
                     "maxItems": 5,
-                    "description": "Approved ordered scene prompts. Default to five in conversation.",
+                    "description": "Approved ordered prompts, each for one still image. Default to five in conversation. Each scene must stand alone without the brief.",
                     "items": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 2000
+                      "maxLength": 2000,
+                      "description": "Describe the visible subject, applicable reference numbers, setting, framing, lighting and style. Exclude video, audio, voice, duration, transitions and subtitle instructions. Include exact lettering only when approved as visible image content."
                     }
                   },
                   "narration": {
@@ -849,6 +853,7 @@
   },
   "preparation": {
     "planning": "Discuss the brief, ordered scenes, exact English narration, voice, reference roles and estimated total price before obtaining approval. Submit only the approved plan; the backend executes it without rewriting it.",
+    "scene_prompts": "Write each scenes entry as a self-contained request for one still image. Repeat necessary visual context and identify applicable reference numbers. The campaign brief is not sent to the image model. Keep narration, voice, duration, video editing and subtitle instructions out of scenes; use the dedicated fields. Mention branding as visible image content only when requested, and do not invent logos or silently remove requested branding.",
     "reference_upload": {
       "method": "POST",
       "url_template": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/references/{uuid_v4}",

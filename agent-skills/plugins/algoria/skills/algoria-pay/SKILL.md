@@ -69,6 +69,11 @@ recipient and expiry without paying. Present these before obtaining any missing
 authorization. `--approve` represents that authorization, including an already
 approved workflow budget; it is not a reason to ask twice.
 
+Before preparing `video.social` input, read the
+[per-medium prompt guidance](references/workflows.md#prepare-prompts-for-each-medium).
+Each scene is one self-contained still-image prompt; campaign, speech and editing
+instructions belong outside it, in the matching fields.
+
 Each Algoria job keeps its exact original body, recipient, price and token. The full
 selected offer is preserved when signing. Budget reservations happen atomically
 before signing, including across parallel jobs. `budget --name project` shows

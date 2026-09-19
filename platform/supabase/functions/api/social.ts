@@ -259,11 +259,20 @@ export class SocialWorkflow {
       const prepared = await Promise.all(pending.map(async (step) => {
         let body: Record<string, unknown>;
         if (step.name.startsWith('image-')) {
-          const roles = input.references.map((r, i) => `Reference ${i + 1}: ${r.role}.`).join(' ');
+          const roles = input.references.map((r, i) => {
+            const guidance = r.role === 'person'
+              ? 'Use for appearance and identity only when this scene includes that person.'
+              : r.role === 'product'
+              ? 'Use for the depicted product design, colors and materials.'
+              : 'Use for visual style, lighting and palette.';
+            return `Reference ${i + 1} (${r.role}): ${guidance}`;
+          }).join('\n');
           body = {
-            prompt: `${input.brief}\nScene: ${
+            // The campaign brief can describe speech, editing and timing. Only
+            // the self-contained scene belongs in the image model's request.
+            prompt: `Create one still image in a vertical 9:16 frame.\n\nScene: ${
               input.scenes[Number(step.name.slice(6))]
-            }\n${roles}\nPreserve the referenced product design and any referenced person's identity. Consistent visual style. Vertical social media frame, no added text or watermarks.`,
+            }\n\n${roles}\nUse references only for elements included in this scene. Render lettering only when explicitly requested in the scene; do not add other text or watermarks.`,
             num_images: 1,
             aspect_ratio: '9:16',
             output_format: 'png',

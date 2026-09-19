@@ -22,6 +22,40 @@ optional product/person/style references, and optional captions. It produces a
 vertical MP4 with one quote, payment and job. Internal image, speech and render
 steps run on the server; do not quote those stages separately.
 
+## Prepare prompts for each medium
+
+For `video.social`, keep campaign context in `brief`. Each `scenes` entry is a
+self-contained request for **one still image**; the image model does not receive
+the brief. Repeat the necessary subject/product appearance, applicable reference
+numbers, setting, framing, lighting and shared visual style in every scene.
+Describe what is visible rather than asking the image model to create a Reel,
+five scenes, timed footage, speech, music, transitions or subtitles. Put spoken
+copy in `narration`, the preset in `voice`, and subtitles in `captions`.
+
+Use references for elements actually present in that scene. A product-only
+still life should not ask for the person's face merely because a person reference
+is available. Keep the same product details and style across independent images.
+
+A brand name can stay in the brief and narration when it is campaign context;
+the image prompt can describe the supplied product's shape, color and materials.
+Do not assume brand names are prohibited or silently remove requested branding.
+If the approved scene needs visible lettering, specify that exact lettering and
+do not also say "no text". Otherwise leave typography out of the image request.
+The captions stage transcribes narration; it is not an arbitrary title/logo overlay.
+
+Example scene with person reference 1 and product reference 2:
+"One photorealistic vertical fashion photograph. The woman from reference 1,
+with her curly copper-red hair and cream floral shirt, wears the lime-green woven
+fedora from reference 2 with its black-and-white chevron band. Relaxed medium
+portrait on an urban rooftop, soft daylight, blurred background, realistic
+proportions and natural skin texture. No added lettering or watermarks."
+
+Before quoting, read each scene by itself: it must describe a complete single
+image, use only relevant reference instructions, and agree with the approved plan.
+Keep prompts concise. Do not copy the overall campaign brief into every scene.
+
+## Execute the approved plan
+
 Discuss the plan and estimated cost using
 [the shared planning flow](../../algoria-discover/references/planning.md).
 For user-supplied photos, inspect the attachments and use the discovered
