@@ -18,10 +18,11 @@ Technical challenges and how you solved them
 Pitch Presentation
 
 ### What are you building?
-> Buy AI services.
-> Stay in Claude or Codex.
+> Buy AI services that go beyond the limits of Claude and Codex.
+> Right from within Claude or Codex.
 
-We are building Codex and Claude plugins of Algoria which accepts TRY payments. Algoria lets people buy AI services inside Claude or Codex. Payments on Stellar.
+Algoria lets people buy AI services inside Claude or Codex with TRY payments on Stellar. Access alternative models to bridge the gap when Claude or Codex aren't enough, inside the Claude/Codex.
+
 
 ### What problem does it solve?
 Service builders need users, but it is hard to distribute a new service.
@@ -42,7 +43,7 @@ This can make AI services easier to use.
 
 ### What is your value proposition?
 
-Algoria extends users what can do with AI ie. reaching paid MCP's, services to generate media and extend paid API's.
+Algoria extends users what can do with AI like reaching paid MCP's, services to generate media and extend paid API's.
 They can buy AI services directly inside Claude or Codex using Turkish Lira.
 
 Users pay in TRY through a Stellar Anchor, without managing crypto, wallets, API keys, or separate accounts. It is better UX then even paying USD with Turkish credit card.
