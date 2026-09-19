@@ -1,5 +1,8 @@
 # Optional Stellar8004 testnet services
 
+This guide covers `transport: x402`. Registered `transport: mcp` entries use
+[algoria-mcp](../../algoria-mcp/SKILL.md) and do not go through quote/payment.
+
 Resolve `DISCOVER` and `PAY` from the installed plugin root as in the parent
 skills. Algoria remains the default catalog. Stellar8004 uses the pinned testnet
 identity contract directly (`total_agents` and `agent_uri` simulations); it does

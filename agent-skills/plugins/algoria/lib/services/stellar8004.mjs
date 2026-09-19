@@ -47,23 +47,26 @@ async function readAgent(agentId) {
   return (metadata.services ?? []).map((/** @type {any} */ service, /** @type {number} */ index) => {
     const endpoint = typeof service?.endpoint === 'string' ? service.endpoint : '';
     const name = text(service?.name, 100);
+    const mcp = /^mcp$/i.test(name) || /^mcp$/i.test(service?.type ?? service?.protocol ?? '');
     const x402 = /x402/i.test(name) || ((metadata.x402 === true || metadata.x402Support === true) && /^(https?|rest|web)$/i.test(name));
-    let supported = x402;
+    const transport = mcp ? 'mcp' : x402 ? 'x402' : 'unsupported';
+    let supported = mcp || x402;
     try { externalUrl(endpoint); } catch { supported = false; }
     let inputExample = service?.inputExample;
     if (typeof inputExample === 'string') {
       try { inputExample = JSON.parse(inputExample); } catch { inputExample = text(inputExample, 4000); }
     }
     return {
-      id: `stellar8004:${agentId}:${index}`, source: 'stellar8004', registryNetwork: 'stellar:testnet', paymentNetwork: 'unverified-until-quote',
+      id: `stellar8004:${agentId}:${index}`, source: 'stellar8004', transport, registryNetwork: 'stellar:testnet', paymentNetwork: mcp ? null : 'unverified-until-quote',
       registry: TESTNET_REGISTRY, agentId, serviceIndex: index, metadataFingerprint: fingerprint,
       agentName: text(metadata.name, 150), name, description: text(service?.description ?? metadata.description, 2000),
       resource: endpoint, method: ['GET', 'POST'].includes(service?.method) ? service.method : null,
       version: text(service?.version, 100) || 'unversioned', inputExample,
       input_schema: service?.inputSchema ?? service?.input_schema ?? null,
-      supported, price: 'Obtain an unsigned x402 quote',
+      supported, price: mcp ? 'Provider-defined; MCP does not imply free access. No automatic x402 payment.' : 'Obtain an unsigned x402 quote',
+      ...(mcp ? { invocation: 'algoria mcp tools <id>, then algoria mcp call <id> --tool <name> --input <file> --approve', availability: 'unverified-until-MCP-handshake' } : {}),
       trust: 'On-chain identity; capabilities and endpoints are self-declared. This is not an endorsement.',
-      unsupportedReason: supported ? null : 'Requires an x402 HTTP service at a public HTTPS endpoint; MCP/A2A are not supported here.'
+      unsupportedReason: supported ? null : 'Requires public HTTPS x402 or Streamable HTTP MCP. A2A, local and stdio endpoints are not supported.'
     };
   });
 }

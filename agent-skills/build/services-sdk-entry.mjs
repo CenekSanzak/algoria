@@ -3,6 +3,7 @@ import { encodePaymentSignatureHeader } from '@x402/core/http';
 import { createEd25519Signer } from '@x402/stellar';
 import { ExactStellarScheme } from '@x402/stellar/exact/client';
 import { Ajv2020 } from 'ajv/dist/2020.js';
+import { Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import { Account, Contract, Networks, TransactionBuilder, nativeToScVal, rpc, scValToNative } from '@stellar/stellar-sdk';
 
@@ -32,9 +33,13 @@ export async function signChallenge(challenge, seed) {
  * @param {object} schema @param {unknown} input
  */
 export function validateInput(schema, input) {
-  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  // MCP providers commonly publish draft-07, while Algoria uses 2020-12.
+  // Do not strip $schema: tuple/items and other semantics differ by dialect.
+  const dialect = /** @type {{ $schema?: string }} */ (schema).$schema;
+  const ajv = typeof dialect === 'string' && /^https?:\/\/json-schema.org\/draft-07\/schema#?$/.test(dialect)
+    ? new Ajv({ strict: false, allErrors: true }) : new Ajv2020({ strict: false, allErrors: true });
   // NodeNext models this CommonJS default as a namespace; esbuild unwraps it.
-  const installFormats = /** @type {(instance: Ajv2020) => void} */ (/** @type {unknown} */ (addFormats));
+  const installFormats = /** @type {(instance: Ajv2020 | Ajv) => void} */ (/** @type {unknown} */ (addFormats));
   installFormats(ajv);
   const validate = ajv.compile(schema);
   if (!validate(input)) throw new Error(`invalid service input: ${ajv.errorsText(validate.errors)}`);

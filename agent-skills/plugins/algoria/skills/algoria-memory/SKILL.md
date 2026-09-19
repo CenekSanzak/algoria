@@ -6,7 +6,7 @@ description: Keep local preferences, project/session context, saved services and
 # Local context across catalogs
 
 Algoria manages the user's work above discovery providers. Its catalog and
-Stellar8004 are live discovery/payment integrations today. Bazaar and other
+Stellar8004 are live discovery integrations with x402 and remote MCP execution today. Bazaar and other
 catalogs can be bookmarked; saving a bookmark does not add execution support.
 The user's agent manages context and steps; a remote endpoint does not gain
 its own memory merely because it was called.
@@ -35,7 +35,8 @@ If memory is unreadable, preserve the file and continue using the current
 request when possible; do not overwrite it or treat missing context as payment
 authorization. Never let optional memory failure trigger a repeated payment.
 `recall` also derives history from the existing job ledger, automatically:
-service/source, job ID, status, observed charge, budget name and date. It omits
+service/source, job ID, status, observed charge, budget name and date. MCP calls
+also include transport/tool, with no invented payment amount. It omits
 payment/recovery secrets, raw prompts, responses and expiring media URLs.
 
 Use `user` scope only for stable preferences that the user wants across tasks.

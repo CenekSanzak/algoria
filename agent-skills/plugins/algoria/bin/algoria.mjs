@@ -14,6 +14,10 @@
 import { readFile } from 'node:fs/promises';
 
 const GROUPS = {
+  mcp: {
+    script: '../skills/algoria-mcp/scripts/mcp.mjs',
+    blurb: 'list and call registered Stellar8004 MCP tools without x402 payments'
+  },
   memory: {
     script: '../skills/algoria-memory/scripts/memory.mjs',
     blurb: 'recall local context/history and manage saved services across catalogs'

@@ -6,7 +6,8 @@
 discovery: it keeps context, chosen services and job history across sessions,
 then executes work within approved budgets.** Stellar8004 and Bazaar are
 potential infrastructure sources, rather than marketplaces this layer needs to
-replace. The plugin currently executes Algoria and Stellar8004 testnet services;
+replace. The plugin currently executes Algoria x402 services and Stellar8004
+testnet registrations exposing x402 or remote MCP tools;
 its local memory can bookmark other sources, but a live Bazaar adapter and a
 recurring-work scheduler are not implemented. See [Agent Skills](agent-skills/README.md).
 

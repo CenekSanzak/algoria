@@ -20,6 +20,26 @@ Then pick a section:
 
 # Test it as a user (5 minutes)
 
+## Stellar8004 MCP (0.7.0+)
+
+Discover current testnet entries and route by `transport`, not by assuming every
+`supported: true` service requires x402. For an explicitly requested public MCP
+read, no USDC funding or wallet creation should occur. `algoria mcp tools <id>`
+must connect and expose current schemas. A-Identity was observed at
+`stellar8004:25:0`: initialize + tools/list and one `get_chain_status` call with
+`{}` were successfully tested without wallet/payment, using isolated local state.
+This is an observation, not a permanent provider availability guarantee.
+
+CLI tests cover session negotiation, stateless metadata, JSON/SSE framing,
+draft-07 schema validation, pagination, origin-bound auth, metadata changes,
+pre-dispatch persistence and no second dispatch after a lost response. Test
+that malformed/tool-error responses are not reported as success; 401/403/402
+must not sign payments or initiate a top-up. Session IDs and bearer tokens must
+not appear in the ledger or memory. MCP history must not invent a USDC charge.
+
+Never live-test hiring, escrow, transfers or policy changes as a connectivity
+probe. The testnet registry can advertise tools operating on other networks.
+
 ## Memory and media delivery (0.6.0+)
 
 In a fresh session, ask to remember a visual preference for a named project and
@@ -55,7 +75,7 @@ must show the selected source, ref and host argv without invoking the host. Open
 a new task/session after a real install. This bootstrap never onboards a wallet.
 
 Before publication, pack the plugin and run the same command through the tarball:
-`npx --package=/absolute/path/algoria-0.6.0.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
+`npx --package=/absolute/path/algoria-0.7.0.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
 The installer tests use a fake executable in a temporary path containing spaces;
 they check Codex/Claude argument handling, missing/old CLIs, ref validation,
 streamed host errors, clean JSON output and stopping before plugin installation

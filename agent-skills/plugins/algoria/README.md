@@ -11,8 +11,10 @@ spending limits together, then uses discovery and x402 to get work done.
 Stellar8004 and Bazaar are infrastructure to build on, not competing products
 that Algoria needs to replace.
 
-Today, executable integrations are Algoria's own catalog and Stellar8004 on
-Stellar testnet. Bazaar/other service bookmarks are supported in local memory;
+Today, executable integrations are Algoria's own x402 catalog and Stellar8004
+testnet registrations exposing x402 or remote MCP tools. MCP does not require
+USDC funding; its tools may target other chains, so the registration network
+does not authorize cross-chain actions. Bazaar/other bookmarks work in memory;
 live Bazaar discovery/payment adapters are not implemented yet. A saved endpoint
 does not bypass supported-network, payment or provider checks.
 
@@ -57,8 +59,8 @@ npx algoria@latest install --agent codex --ref codex/stellar8004-testnet-service
 ```
 
 Before this version is published, `@latest` still downloads the previous npm
-release. An unpacked checkout or a supplied `algoria-0.6.0.tgz` can exercise the
-same installer: `npx --package=/absolute/path/algoria-0.6.0.tgz algoria install --agent codex --ref <branch>`.
+release. An unpacked checkout or a supplied `algoria-0.7.0.tgz` can exercise the
+same installer: `npx --package=/absolute/path/algoria-0.7.0.tgz algoria install --agent codex --ref <branch>`.
 If a host rejects an existing marketplace with a different source, the installer
 reports its error and stops; it does not remove existing marketplaces or plugins.
 
@@ -69,6 +71,9 @@ npx algoria memory recall --json
 npx algoria memory remember --scope project:campaign --key style --value "Warm cinematic colours"
 npx algoria memory save-service --source algoria --service image.generate
 npx algoria memory forget --scope project:campaign --key style
+npx algoria mcp tools stellar8004:25:0 --json
+npx algoria mcp call stellar8004:25:0 --tool get_chain_status --input args.json --approve --json
+npx algoria mcp status SAVED_CALL_ID --json
 npx algoria wallet onboard --network testnet   # create + fund + trustline
 npx algoria wallet balance --json              # USDC and XLM
 npx algoria wallet accounts                    # every wallet on this machine
@@ -144,9 +149,25 @@ algoria pay quote stellar8004:0:0 --method GET --input render.json --budget proj
 ```
 
 The example RenderGate input is `{"url":"https://stellar.org"}`; inspect current
-metadata before using it. Only public HTTPS x402 services accepting sponsored
-testnet USDC are supported, not MCP/A2A services. Discovery pagination scans
+metadata before using it. Public HTTPS x402 accepts sponsored testnet USDC.
+Entries with `transport: mcp` use `algoria mcp tools` and `algoria mcp call`;
+these do not quote, sign or charge through x402. Discovery pagination scans
 agent IDs; follow `nextOffset` even if a search page is empty.
+
+MCP supports public HTTPS Streamable HTTP (JSON/POST SSE), current tool schemas,
+and local call history. Legacy session-based versions negotiate from 2025-11-25;
+stateless 2026-07-28 basic tool list/call is selectable with `--protocol`.
+Interactive input rounds and parameter-mirrored headers in that newer revision
+are not implemented. Old standalone SSE endpoints, stdio, A2A and IPv6-only
+hosts are not supported. HTTP 401/403 or 402 never triggers an automatic payment.
+Provider bearer access can be supplied via `--token-file` plus the matching
+`--auth-origin`; OAuth/SIWE login is not automated and tokens are never persisted.
+
+The A-Identity example's `args.json` is `{}`. Read-only calls already authorized
+by the task need no additional user prompt; `--approve` represents that scope.
+MCP may also expose purchases, escrow and policy changes; those need their own
+applicable authorization. Lost call responses are retained as uncertain and
+never automatically dispatched twice. `status` is local-only, not remote recovery.
 
 To update later:
 
@@ -157,6 +178,7 @@ claude plugin update algoria@algoria-skills
 
 # Codex
 codex plugin marketplace upgrade algoria-skills
+codex plugin add algoria@algoria-skills
 ```
 
 ## Things worth knowing

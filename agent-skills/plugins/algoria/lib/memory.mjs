@@ -109,9 +109,10 @@ export async function recall({ scope, query = '', limit = 20 } = {}) {
   const ledger = await readLedger();
   const history = Object.values(ledger.jobs).map((job) => ({
     id: job.id, source: job.source ?? 'algoria', service: job.service,
+    ...(job.transport === 'mcp' ? { transport: 'mcp', tool: job.tool } : {}),
     budget: job.budget, status: job.status,
     charged: job.payment?.success === true ? displayAmount((job.offer ?? job.expectedOffer).amount) : null,
-    unit: 'test USDC', updatedAt: job.updatedAt ?? job.createdAt ?? null,
+    unit: job.transport === 'mcp' ? null : 'test USDC', updatedAt: job.updatedAt ?? job.createdAt ?? null,
     recoverable: job.source !== 'stellar8004',
     requiresAttention: job.phase === 'uncertain' || String(job.status).endsWith('-uncertain')
   })).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));

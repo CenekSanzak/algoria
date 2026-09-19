@@ -115,12 +115,13 @@ export function publicJob(job) {
     id: job.id, service: job.service, serviceVersion: job.serviceVersion, budget: job.budget,
     source: job.source ?? 'algoria',
     status: job.status, phase: job.phase,
-    amount: offer?.amount ? displayAmount(offer.amount) : null, unit: 'test USDC',
+    amount: offer?.amount ? displayAmount(offer.amount) : null, unit: job.transport === 'mcp' ? null : 'test USDC',
+    ...(job.transport === 'mcp' ? { transport: 'mcp', tool: job.tool, protocol: job.protocol } : {}),
     payTo: offer?.payTo ?? null, expiresAt: job.expiresAt ?? null,
     payment: job.payment ?? null, output: job.output ?? null, error: job.error ?? null,
     delivery: deliveryFor(job),
     requiresAttention: job.phase === 'uncertain' || String(job.status).endsWith('-uncertain'),
     ...(job.source === 'stellar8004' ? { endpoint: job.registeredEndpoint, method: job.method, registry: job.registry, statusSource: 'local', httpStatus: job.httpStatus ?? null } : {}),
-    note: job.phase === 'uncertain' ? 'Do not pay again. Reconcile this existing job; its budget remains reserved.' : job.source === 'stellar8004' ? 'External service: status reads only the saved response. No automatic retry, remote polling or Algoria recovery token.' : undefined
+    note: job.transport === 'mcp' ? 'MCP call, no x402 payment sent. Status is local only. Never redispatch an uncertain call; it may have performed a remote action.' : job.phase === 'uncertain' ? 'Do not pay again. Reconcile this existing job; its budget remains reserved.' : job.source === 'stellar8004' ? 'External service: status reads only the saved response. No automatic retry, remote polling or Algoria recovery token.' : undefined
   };
 }

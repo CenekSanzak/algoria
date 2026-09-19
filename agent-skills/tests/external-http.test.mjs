@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { lookup } from 'node:dns/promises';
 import { request } from 'node:https';
-import { externalRequest, externalUrl, publicAddresses } from '../plugins/algoria/lib/services/external-http.mjs';
+import { externalRequest, externalUrl, publicAddresses, sseResponse } from '../plugins/algoria/lib/services/external-http.mjs';
 
 vi.mock('node:dns/promises', () => ({ lookup: vi.fn() }));
 vi.mock('node:https', () => ({ request: vi.fn() }));
@@ -11,9 +11,10 @@ vi.mock('node:https', () => ({ request: vi.fn() }));
 let status = 200;
 /** @type {Record<string, string>} */ let headers;
 let body = '{}';
+let endStream = true;
 
 beforeEach(() => {
-  status = 200; headers = { 'content-type': 'application/json' }; body = '{}';
+  status = 200; headers = { 'content-type': 'application/json' }; body = '{}'; endStream = true;
   vi.mocked(lookup).mockResolvedValue(/** @type {any} */ ([{ address: '93.184.216.34', family: 4 }]));
   vi.mocked(request).mockImplementation(/** @type {any} */ ((/** @type {URL} */ url, /** @type {any} */ options, /** @type {any} */ callback) => {
     socketOptions = options;
@@ -27,7 +28,7 @@ beforeEach(() => {
             if (e) queueMicrotask(() => incoming.emit('error', e));
           } });
           callback(incoming);
-          incoming.emit('data', Buffer.from(body)); incoming.emit('end'); req.emit('close');
+          incoming.emit('data', Buffer.from(body)); if (endStream) incoming.emit('end'); req.emit('close');
         });
       }
     });
@@ -75,5 +76,29 @@ describe('external HTTPS boundary', () => {
   it('rejects binary media instead of corrupting it into a text result', async () => {
     headers['content-type'] = 'image/png';
     await expect(externalRequest('https://provider.example.com')).rejects.toThrow('binary media');
+  });
+  it('accepts a matching MCP SSE reply and only the explicit MCP headers', async () => {
+    endStream = false; // A matching reply must finish even if the server keeps SSE open.
+    headers = { 'content-type': 'text/event-stream', 'mcp-session-id': 'server-session' };
+    body = 'data: {"jsonrpc":"2.0","method":"notifications/progress"}\n\n' +
+      'data: {"jsonrpc":"2.0","id":"rpc-1","result":{"tools":[]}}\n\n';
+    const result = await externalRequest('https://provider.example.com/mcp', { method: 'POST', body: '{}', mcp: { id: 'rpc-1', sessionId: 'session', protocol: '2025-11-25', bearer: 'explicit-token' } });
+    expect(result.body).toMatchObject({ id: 'rpc-1', result: { tools: [] } });
+    expect(result.response.headers.get('mcp-session-id')).toBe('server-session');
+    expect(socketOptions.headers.accept).toBe('application/json, text/event-stream');
+    expect(socketOptions.headers.authorization).toBe('Bearer explicit-token');
+    expect(socketOptions.headers['Mcp-Session-Id']).toBe('session');
+    expect(socketOptions.headers['PAYMENT-SIGNATURE']).toBeUndefined();
+  });
+  it('does not parse unfinished events and handles CRLF/multiline data', () => {
+    const part = 'data: {"id":"1",\r\ndata: "result":{"ok":true}}\r\n';
+    expect(sseResponse(part, '1')).toBeUndefined();
+    expect(sseResponse(part + '\r\n', '1')).toEqual({ id: '1', result: { ok: true } });
+    expect(() => sseResponse('data: {"id":"request","method":"sampling/createMessage"}\n\n', '1')).toThrow('server-to-client');
+  });
+  it('rejects header injection and combining MCP with payment authorization before sending', async () => {
+    await expect(externalRequest('https://provider.example.com/mcp', { mcp: { sessionId: 'a\r\nb' } })).rejects.toThrow('header');
+    await expect(externalRequest('https://provider.example.com/mcp', { mcp: {}, signature: 'signed' })).rejects.toThrow('x402');
+    expect(request).not.toHaveBeenCalled();
   });
 });

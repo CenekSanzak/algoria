@@ -109,6 +109,7 @@ async function fetchStatus(job) {
  */
 export async function runJob(id, { approve = false } = {}) {
   jobUrl(id);
+  if ((await readJob(id)).transport === 'mcp') throw new Error('MCP calls cannot run through pay; use algoria mcp status for this saved call');
   if ((await readJob(id)).source === 'stellar8004') return runExternal(id, { approve });
   return withLock(`job-${id}`, async () => {
     let job = await fetchStatus(await readJob(id));

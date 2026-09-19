@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.6.0",
-  "description": "Check wallet balance first, fund if needed, then recall local context and execute paid services. Personal memory, saved services and budgeted x402 execution above Algoria and Stellar8004 testnet discovery.",
+  "version": "0.7.0",
+  "description": "Check balance first for paid tasks, then use local memory and discovery. Execute Algoria/Stellar8004 x402 services or registered MCP tools; MCP access does not require USDC funding.",
   "author": {
     "name": "Algoria",
     "url": "https://algoria-agent-economy.berkingurcan.chatgpt.site"
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Algoria",
     "shortDescription": "Remember context and use paid services",
-    "longDescription": "FIRST check wallet balance for new paid tasks; if empty, provide a funding link. Then recall local preferences, project context and job history, discover current services, execute within the approved budget and show the result in a verified preview. Algoria and Stellar8004 testnet integrations are live; Bazaar/other bookmarks do not imply payment support. Memory does not grant spending permission or schedule work.",
+    "longDescription": "FIRST check wallet balance for paid x402 tasks and fund if needed. Recall local context, discover services, and execute within the approved scope. Stellar8004 MCP tools are a separate path with no automatic wallet payment; public MCP reads need no top-up. Keep service history and show results. Registry/testnet identity and tool annotations never authorize financial actions. Bazaar bookmarks do not imply a live payment adapter.",
     "developerName": "Algoria",
     "category": "Developer Tools",
     "capabilities": [

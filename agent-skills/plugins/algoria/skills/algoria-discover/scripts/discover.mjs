@@ -36,7 +36,7 @@ export function main(argv) {
     const options = { query: command === 'search' ? args.join(' ') : undefined, limit: Number(flags.limit ?? 20), offset: Number(flags.offset ?? 0) };
     if (flags.source === 'stellar8004') {
       const result = await discoverStellar8004(options);
-      emit(flags, result, [...result.resources.map((service) => `${service.id} — ${service.agentName}: ${service.name} (${service.supported ? 'x402 quote required' : 'unsupported'})\n  ${service.description}`),
+      emit(flags, result, [...result.resources.map((service) => `${service.id} — ${service.agentName}: ${service.name} (${service.supported ? service.transport === 'mcp' ? 'MCP tools; handshake required' : 'x402 quote required' : 'unsupported'})\n  ${service.description}`),
         `Scanned agent IDs from ${result.pagination.offset}; total agents ${result.pagination.totalAgents}; nextOffset ${result.pagination.nextOffset ?? 'none'}; unreadable ${result.unavailable.length}.`]);
       return;
     }

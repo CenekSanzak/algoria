@@ -33,11 +33,14 @@ describe('on-chain Stellar8004 discovery', () => {
     vi.spyOn(sdkModule, 'loadServicesSdk').mockResolvedValue({ ...sdk, readRegistry: async () => { throw new Error('RPC offline'); } });
     await expect(discoverStellar8004()).rejects.toThrow('RPC offline');
   });
-  it('marks private, MCP and A2A endpoints unsupported without calling them', async () => {
+  it('routes MCP separately from x402 and rejects private/A2A endpoints without calling them', async () => {
     const m = { name: 'Untrusted', x402: true, services: [{ name: 'x402', endpoint: 'https://127.0.0.1/run' }, { name: 'mcp', endpoint: 'https://provider.example.com/mcp' }, { name: 'a2a', endpoint: 'http://localhost:8787' }] };
     vi.spyOn(sdkModule, 'loadServicesSdk').mockResolvedValue({ ...sdk, readRegistry: async (_, method) => method === 'total_agents' ? 1 : dataUri(m) });
     const request = vi.spyOn(http, 'externalRequest');
-    expect((await discoverStellar8004()).resources.every((s) => !s.supported)).toBe(true);
+    const resources = (await discoverStellar8004()).resources;
+    expect(resources[0].supported).toBe(false);
+    expect(resources[1]).toMatchObject({ supported: true, transport: 'mcp', paymentNetwork: null, availability: 'unverified-until-MCP-handshake' });
+    expect(resources[2].supported).toBe(false);
     expect(request).not.toHaveBeenCalled();
   });
   it('reads HTTPS metadata through the bounded public connector and fingerprints changes', async () => {

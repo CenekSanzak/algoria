@@ -76,7 +76,7 @@ export async function quoteExternal(service, input, budget, id = randomUUID(), m
       return publicJob(saved); // No probe/retry of an existing external call.
     }
     const contract = await getStellar8004Service(service);
-    if (!contract.supported) throw new Error('registered service is not a supported public x402 HTTP endpoint');
+    if (!contract.supported || contract.transport === 'mcp') throw new Error('registered service is not a supported public x402 HTTP endpoint; use algoria mcp for MCP services');
     if (contract.input_schema) (await loadServicesSdk()).validateInput(contract.input_schema, input);
     const invocation = externalInvocation(contract, input, method);
     const job = { id, source: 'stellar8004', service, serviceVersion: contract.version, budget, ...invocation,
