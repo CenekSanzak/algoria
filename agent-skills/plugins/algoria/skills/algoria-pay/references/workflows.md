@@ -15,7 +15,30 @@ not change the user's intent.
 Discover each service's current schema and price. Do not assume all services
 accept the same body or charge the same recipient.
 
-The current product-ad flow is image.generate for each scene, speech.generate
+Prefer a discoverable composite service such as `video.social` when its live
+contract covers the request. It takes the approved brief, 1–5 ordered scene
+prompts (default five), exact English narration, preset voice (default female),
+optional product/person/style references, and optional captions. It produces a
+vertical MP4 with one quote, payment and job. Internal image, speech and render
+steps run on the server; do not quote those stages separately.
+
+Discuss the plan and estimated cost using
+[the shared planning flow](../../algoria-discover/references/planning.md).
+For user-supplied photos, inspect the attachments and use the discovered
+`preparation.reference_upload` contract. The existing payment helper supports
+`upload-reference /absolute/path/photo.png --json`; it uploads only that file,
+saves a recovery identity before dispatch, and returns a private signed URL.
+Use `--id SAVED_REFERENCE_ID` with identical bytes after an interruption or to
+refresh its URL before a new quote. Include that URL and its role in the plan
+input. Once quoted, keep the input unchanged, even when those URLs expire;
+the server refreshes its admitted references internally. No new media skill
+is needed. Never substitute unrelated existing files for missing attachments.
+
+Status reads may advance already-approved internal steps, but do not create
+a new purchase or restart completed generations. Surface progress and reuse
+the same job. The backend's scheduled recovery also runs without the client.
+
+When the composite contract does not cover the request, the fallback flow is image.generate for each scene, speech.generate
 for narration, video.slideshow for ordered scenes, video.compose to combine the
 slideshow and narration, then video.caption. Use separate saved job IDs under
 one approved named budget, and record which outputs feed the next step.

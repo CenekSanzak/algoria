@@ -41,6 +41,7 @@ const CONFIG: Config = {
 const ALL_CONFIG: Config = {
   ...CONFIG,
   servicePayments: {
+    'video.social': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 6)), priceAtomic: '1100000' },
     'speech.generate': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 2)), priceAtomic: '200000' },
     'video.slideshow': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 5)), priceAtomic: '100000' },
     'video.compose': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 3)), priceAtomic: '300000' },
@@ -290,7 +291,7 @@ Deno.test('actual invalid input matches the documented POST error shape', async 
 });
 
 Deno.test('all service documents publish matching public schemas without provider configuration', () => {
-  equal(SERVICES.length, 5);
+  equal(SERVICES.length, 6);
   for (const service of SERVICES) {
     const payment = servicePayment(ALL_CONFIG, service.id)!;
     const requirements = { ...REQUIREMENTS, payTo: payment.payTo, amount: payment.priceAtomic };
@@ -393,16 +394,16 @@ Deno.test('OpenAPI exposes exact enabled service paths and request examples', ()
   }
 });
 
-Deno.test('five-service discovery paginates and filters by recipient, tags, and protocol', async () => {
+Deno.test('six-service discovery paginates and filters by recipient, tags, and protocol', async () => {
   const app = await testApp(ALL_CONFIG);
   const all = await (await app.request('/discovery/resources')).json();
-  equal(all.pagination.total, 5);
+  equal(all.pagination.total, 6);
   deepEqual(all.resources.map((s: { id: string }) => s.id), SERVICES.map((s) => s.id));
-  deepEqual(all.resources.map((s: { version: string }) => s.version), ['1', '1', '1', '2', '1']);
-  equal(new Set(all.resources.map((s: { accepts: { payTo: string }[] }) => s.accepts[0].payTo)).size, 5);
+  deepEqual(all.resources.map((s: { version: string }) => s.version), ['1', '1', '1', '2', '1', '1']);
+  equal(new Set(all.resources.map((s: { accepts: { payTo: string }[] }) => s.accepts[0].payTo)).size, 6);
   for (const [offset, limit] of [[0, 2], [2, 2], [4, 2], [6, 2]]) {
     const page = await (await app.request(`/discovery/resources?offset=${offset}&limit=${limit}`)).json();
-    equal(page.pagination.total, 5);
+    equal(page.pagination.total, 6);
     equal(page.pagination.offset, offset);
     equal(page.pagination.limit, limit);
     equal(page.pagination.cursor, null);
@@ -425,6 +426,7 @@ Deno.test('five-service discovery paginates and filters by recipient, tags, and 
     'video.slideshow',
     'video.compose',
     'video.caption',
+    'video.social',
   ]);
   for (
     const query of [

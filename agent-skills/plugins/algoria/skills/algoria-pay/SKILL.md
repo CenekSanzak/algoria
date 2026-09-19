@@ -35,6 +35,10 @@ from this file's location (two directories above its folder) as `PLUGIN_ROOT`.
 PAY="${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/skills/algoria-pay/scripts/pay.mjs"
 ```
 
+Follow [the shared planning flow](../algoria-discover/references/planning.md)
+for every new service: discuss the output and estimated cost before production,
+then compare the definitive quote with the approved plan and budget.
+
 ## Budget, quote, execute
 
 For a new paid task, check `algoria-wallet balance --network testnet --json`

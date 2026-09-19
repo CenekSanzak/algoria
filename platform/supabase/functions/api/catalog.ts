@@ -1,6 +1,8 @@
+import { normalizeSocial, SOCIAL_INPUT_SCHEMA } from './social-input.ts';
 import type { Config } from './config.ts';
 
 export type ServiceId =
+  | 'video.social'
   | 'image.generate'
   | 'speech.generate'
   | 'video.slideshow'
@@ -197,6 +199,46 @@ export const SERVICES: Service[] = [
     queuePath: 'fal-ai/workflow-utilities',
   },
 ];
+export const SOCIAL_SERVICE: Service = {
+  id: 'video.social',
+  version: '1',
+  name: 'Algoria Social Video',
+  description:
+    'One approved plan to a vertical 9:16 social video: 1–5 reference-guided scenes and narration generated in parallel, timed to the actual voiceover, composed and optionally captioned. English preset voices; default female. One payment and recoverable job. Discuss scenes and narration with the user before execution.',
+  tags: [
+    'social',
+    'video',
+    'instagram',
+    'tiktok',
+    'reel',
+    'product',
+    'influencer',
+    'reference',
+    'voiceover',
+    'advertisement',
+  ],
+  inputSchema: SOCIAL_INPUT_SCHEMA,
+  exampleInput: {
+    brief: 'Introduce my reusable bottle',
+    scenes: [
+      'Hero product on a sunlit desk',
+      'Bottle in an everyday lifestyle setting',
+      'Close-up of the bottle texture',
+      'Product beside a packed bag',
+      'Clean final hero shot',
+    ],
+    narration:
+      'Meet your new everyday companion. From slow mornings to busy afternoons, bring your favorite bottle along. Make it part of your day.',
+    voice: 'Olivia (en)',
+    references: [],
+    captions: true,
+  },
+  outputKind: 'video',
+  providerOutput: 'video',
+  model: 'internal/social-video',
+  queuePath: 'internal/social-video',
+};
+SERVICES.push(SOCIAL_SERVICE);
 export const IMAGE_SERVICE = SERVICES[0];
 export const SPEECH_SERVICE = SERVICES[1];
 export const SLIDESHOW_SERVICE = SERVICES[2];
@@ -221,6 +263,7 @@ export const enabledServices = (config: Config) => SERVICES.filter((s) => servic
 export function normalizeInput(service: Service, body: unknown): ServiceInput {
   if (!body || Array.isArray(body) || typeof body !== 'object') throw new Error('Provide a JSON object.');
   const value = body as Record<string, unknown>;
+  if (service.id === 'video.social') return normalizeSocial(value);
   if (service.id === 'image.generate') {
     if (
       Object.keys(value).some((key) => key !== 'prompt') || typeof value.prompt !== 'string' ||

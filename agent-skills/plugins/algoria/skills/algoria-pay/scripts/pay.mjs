@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { uploadReference } from '../../../lib/services/references.mjs';
 import { readFile } from 'node:fs/promises';
 import { emit, isMain, parseArgs, run } from '../../../lib/cli.mjs';
 import { listJobs, quote, runJob, statusJob } from '../../../lib/services/client.mjs';
@@ -12,6 +13,7 @@ const USAGE = `algoria pay — execute services with local x402 testnet USDC pay
   run <job-id> --approve                               pay within budget or resume
   status <job-id> [--wait] [--timeout 180]               same job and fresh media URLs
   list                                                local jobs (no secrets)
+  upload-reference <photo-path> [--id <UUID-v4>]         private reference upload; no payment
 
 Options: --json; quote --id <UUID-v4> reuses a known identity and identical input.
 External: quote stellar8004:<agent>:<service-index> --method GET|POST ...
@@ -43,13 +45,14 @@ export function main(argv) {
     } else if (command === 'list') result = { jobs: await listJobs() };
     else {
       if (!target) throw new Error('a service ID or saved job ID is required');
-      if (command === 'quote') {
+      if (command === 'upload-reference') result = await uploadReference(target, typeof flags.id === 'string' ? flags.id : undefined);
+      else if (command === 'quote') {
         const data = await readFile(value(flags, 'input'), 'utf8');
         if (Buffer.byteLength(data) > 32768) throw new Error('input file exceeds 32768 bytes');
         result = await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined, typeof flags.method === 'string' ? flags.method : undefined);
       } else if (command === 'run') result = await runJob(target, { approve: flags.approve === true });
       else if (command === 'status') result = await statusJob(target, { wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
-      else throw new Error('expected budget, quote, run, status or list');
+      else throw new Error('expected budget, quote, run, status, list or upload-reference');
     }
     emit(flags, result, [JSON.stringify(result, null, 2)]);
   });
