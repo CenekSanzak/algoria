@@ -119,6 +119,28 @@ function jobSchema(services: Service[]) {
       payment: nullable(PAYMENT_RECEIPT_SCHEMA),
       output: nullable(kinds.length === 1 ? outputSchema(kinds[0]) : { oneOf: kinds.map(outputSchema) }),
       error: nullable(ERROR_SCHEMA),
+      progress: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['completed', 'total', 'steps', 'needs_reconciliation'],
+        properties: {
+          completed: { type: 'integer', minimum: 0 },
+          total: { type: 'integer', minimum: 1 },
+          needs_reconciliation: { type: 'boolean' },
+          steps: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['name', 'status'],
+              properties: {
+                name: { type: 'string' },
+                status: { enum: ['pending', 'submitting', 'queued', 'succeeded', 'failed', 'uncertain'] },
+              },
+            },
+          },
+        },
+      },
       message: { type: 'string' },
     },
     ...(services.length > 1
@@ -239,6 +261,26 @@ export function serviceDocument(config: Config, requirements: unknown, service: 
     execution: MODES,
     accepts: [requirements],
     extensions: { bazaar: bazaarFor(service) },
+    ...(service.id === 'video.social'
+      ? {
+        preparation: {
+          planning:
+            'Discuss the brief, ordered scenes, exact English narration, voice, reference roles and estimated total price before obtaining approval. Submit only the approved plan; the backend executes it without rewriting it.',
+          reference_upload: {
+            method: 'POST',
+            url_template: `${config.baseUrl}/v1/references/{uuid_v4}`,
+            content_types: ['image/png', 'image/jpeg', 'image/webp'],
+            max_bytes: 10485760,
+            headers: {
+              'X-Recovery-Token':
+                'Random 32-byte base64url secret; save with the UUID before uploading. Repeat the same bytes and identity to refresh the signed URL.',
+            },
+          },
+          output:
+            'Vertical 9:16 MP4, English preset voice (female by default), up to 30 seconds. Generated still-image scenes; optional animated captions.',
+        },
+      }
+      : {}),
     headers: {
       'Idempotency-Key': 'Required UUID v4; preserve it on retries.',
       'X-Recovery-Token': 'Required random 32-byte base64url secret; preserve locally. Never put in a URL.',
@@ -332,6 +374,7 @@ const SERVICE_DOCUMENT_SCHEMA = {
     },
     headers: { type: 'object', additionalProperties: { type: 'string' } },
     responses: { type: 'object', additionalProperties: { type: 'string' } },
+    preparation: { type: 'object' },
     recovery: {
       type: 'object',
       required: ['method', 'url_template', 'authorization', 'polling_interval_ms'],
@@ -438,6 +481,48 @@ export function openApi(config: Config) {
     },
     servers: [{ url: config.baseUrl }],
     paths: {
+      '/v1/references/{id}': {
+        post: {
+          description:
+            'Upload a reference photo to private storage. Same UUID, recovery token and bytes are safe to repeat. Does not start generation or payment.',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+            {
+              name: 'X-Recovery-Token',
+              in: 'header',
+              required: true,
+              schema: { type: 'string', minLength: 43, maxLength: 128 },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: Object.fromEntries(
+              ['image/png', 'image/jpeg', 'image/webp'].map(
+                (type) => [type, { schema: { type: 'string', format: 'binary' } }],
+              ),
+            ),
+          },
+          responses: {
+            '200': response('Private signed reference URL, valid for one hour', {
+              type: 'object',
+              required: ['reference_id', 'url', 'content_type', 'url_expires_in'],
+              properties: {
+                reference_id: { type: 'string', format: 'uuid' },
+                url: { type: 'string', format: 'uri' },
+                content_type: { type: 'string' },
+                url_expires_in: { const: 3600 },
+              },
+            }),
+            '400': response('Invalid reference', error),
+            '404': response('Reference not found', error),
+            '409': response('Reference identity conflict', error),
+            '413': response('Reference exceeds 10 MB', error),
+            '415': response('Unsupported type', error),
+            '429': response('Upload demo capacity exhausted', error),
+            '503': unavailable,
+          },
+        },
+      },
       '/health': { get: { responses: { '200': response('API health', health) } } },
       '/openapi.json': {
         get: {

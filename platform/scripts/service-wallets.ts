@@ -17,6 +17,7 @@ const directory = new URL('../.local/wallets/', import.meta.url);
 await Deno.mkdir(directory, { recursive: true, mode: 0o700 });
 for (
   const [id, prefix, price] of [
+    ['video.social', 'VIDEO_SOCIAL', '1100000'],
     ['speech.generate', 'SPEECH_GENERATE', '200000'],
     ['video.slideshow', 'VIDEO_SLIDESHOW', '100000'],
     ['video.compose', 'VIDEO_COMPOSE', '100000'],

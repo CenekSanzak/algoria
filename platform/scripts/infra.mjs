@@ -41,6 +41,9 @@ else if (action === 'secrets') {
   const path = new URL('../.local/deploy.env', import.meta.url);
   const names = [
     'FAL_KEY',
+    'VIDEO_SOCIAL_PAY_TO',
+    'VIDEO_SOCIAL_PRICE_ATOMIC',
+    'SOCIAL_WORKFLOW_SECRET',
     'IMAGE_GENERATE_PAY_TO',
     'IMAGE_GENERATE_PRICE_ATOMIC',
     'SPEECH_GENERATE_PAY_TO',

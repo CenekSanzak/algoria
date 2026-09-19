@@ -20,7 +20,7 @@ function accessToken() {
   cachedToken = result.stdout.trim();
   return cachedToken;
 }
-export async function management(path, body) {
+export async function management(path, body, sensitive = false) {
   const result = await fetch(`https://api.supabase.com/v1/projects/${ref}/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { authorization: `Bearer ${accessToken()}`, 'content-type': 'application/json' },
@@ -29,7 +29,7 @@ export async function management(path, body) {
   });
   if (!result.ok) {
     // Database errors are useful; only database endpoint bodies are printed.
-    const details = path.startsWith('database/') ? await result.text() : '';
+    const details = !sensitive && path.startsWith('database/') ? await result.text() : '';
     throw new Error(`Management API HTTP ${result.status}: ${details.slice(0, 1000)}`);
   }
   return result.json();

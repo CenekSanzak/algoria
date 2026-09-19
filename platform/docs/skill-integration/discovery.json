@@ -252,6 +252,55 @@
               }
             ]
           },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completed",
+              "total",
+              "steps",
+              "needs_reconciliation"
+            ],
+            "properties": {
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "needs_reconciliation": {
+                "type": "boolean"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "submitting",
+                        "queued",
+                        "succeeded",
+                        "failed",
+                        "uncertain"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "message": {
             "type": "string"
           }
@@ -615,6 +664,55 @@
                           }
                         ]
                       },
+                      "progress": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "completed",
+                          "total",
+                          "steps",
+                          "needs_reconciliation"
+                        ],
+                        "properties": {
+                          "completed": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "total": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "needs_reconciliation": {
+                            "type": "boolean"
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "name",
+                                "status"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "enum": [
+                                    "pending",
+                                    "submitting",
+                                    "queued",
+                                    "succeeded",
+                                    "failed",
+                                    "uncertain"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
                       "message": {
                         "type": "string"
                       }
@@ -895,6 +993,55 @@
                 "type": "null"
               }
             ]
+          },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completed",
+              "total",
+              "steps",
+              "needs_reconciliation"
+            ],
+            "properties": {
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "needs_reconciliation": {
+                "type": "boolean"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "submitting",
+                        "queued",
+                        "succeeded",
+                        "failed",
+                        "uncertain"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "message": {
             "type": "string"
@@ -1255,6 +1402,55 @@
                           }
                         ]
                       },
+                      "progress": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "completed",
+                          "total",
+                          "steps",
+                          "needs_reconciliation"
+                        ],
+                        "properties": {
+                          "completed": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "total": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "needs_reconciliation": {
+                            "type": "boolean"
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "name",
+                                "status"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "enum": [
+                                    "pending",
+                                    "submitting",
+                                    "queued",
+                                    "succeeded",
+                                    "failed",
+                                    "uncertain"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
                       "message": {
                         "type": "string"
                       }
@@ -1552,6 +1748,55 @@
                 "type": "null"
               }
             ]
+          },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completed",
+              "total",
+              "steps",
+              "needs_reconciliation"
+            ],
+            "properties": {
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "needs_reconciliation": {
+                "type": "boolean"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "submitting",
+                        "queued",
+                        "succeeded",
+                        "failed",
+                        "uncertain"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "message": {
             "type": "string"
@@ -1936,6 +2181,55 @@
                           }
                         ]
                       },
+                      "progress": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "completed",
+                          "total",
+                          "steps",
+                          "needs_reconciliation"
+                        ],
+                        "properties": {
+                          "completed": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "total": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "needs_reconciliation": {
+                            "type": "boolean"
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "name",
+                                "status"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "enum": [
+                                    "pending",
+                                    "submitting",
+                                    "queued",
+                                    "succeeded",
+                                    "failed",
+                                    "uncertain"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
                       "message": {
                         "type": "string"
                       }
@@ -2220,6 +2514,55 @@
                 "type": "null"
               }
             ]
+          },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completed",
+              "total",
+              "steps",
+              "needs_reconciliation"
+            ],
+            "properties": {
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "needs_reconciliation": {
+                "type": "boolean"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "submitting",
+                        "queued",
+                        "succeeded",
+                        "failed",
+                        "uncertain"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "message": {
             "type": "string"
@@ -2586,6 +2929,55 @@
                           }
                         ]
                       },
+                      "progress": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "completed",
+                          "total",
+                          "steps",
+                          "needs_reconciliation"
+                        ],
+                        "properties": {
+                          "completed": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "total": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "needs_reconciliation": {
+                            "type": "boolean"
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "name",
+                                "status"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "enum": [
+                                    "pending",
+                                    "submitting",
+                                    "queued",
+                                    "succeeded",
+                                    "failed",
+                                    "uncertain"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
                       "message": {
                         "type": "string"
                       }
@@ -2862,6 +3254,55 @@
                 "type": "null"
               }
             ]
+          },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completed",
+              "total",
+              "steps",
+              "needs_reconciliation"
+            ],
+            "properties": {
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "needs_reconciliation": {
+                "type": "boolean"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "submitting",
+                        "queued",
+                        "succeeded",
+                        "failed",
+                        "uncertain"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "message": {
             "type": "string"
@@ -3220,6 +3661,55 @@
                           }
                         ]
                       },
+                      "progress": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "completed",
+                          "total",
+                          "steps",
+                          "needs_reconciliation"
+                        ],
+                        "properties": {
+                          "completed": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "total": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "needs_reconciliation": {
+                            "type": "boolean"
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "name",
+                                "status"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "enum": [
+                                    "pending",
+                                    "submitting",
+                                    "queued",
+                                    "succeeded",
+                                    "failed",
+                                    "uncertain"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
                       "message": {
                         "type": "string"
                       }
@@ -3251,12 +3741,895 @@
         "authorization": "Bearer <recovery token>",
         "polling_interval_ms": 3000
       }
+    },
+    {
+      "id": "video.social",
+      "version": "1",
+      "name": "Algoria Social Video",
+      "description": "One approved plan to a vertical 9:16 social video: 1–5 reference-guided scenes and narration generated in parallel, timed to the actual voiceover, composed and optionally captioned. English preset voices; default female. One payment and recoverable job. Discuss scenes and narration with the user before execution.",
+      "tags": [
+        "social",
+        "video",
+        "instagram",
+        "tiktok",
+        "reel",
+        "product",
+        "influencer",
+        "reference",
+        "voiceover",
+        "advertisement"
+      ],
+      "type": "http",
+      "x402Version": 2,
+      "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/video.social",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "brief",
+          "scenes",
+          "narration"
+        ],
+        "properties": {
+          "brief": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "scenes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "description": "Approved ordered scene prompts. Default to five in conversation.",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "narration": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Approved English voiceover, at most 65 words; aim for 15–25 seconds."
+          },
+          "voice": {
+            "enum": [
+              "Olivia (en)",
+              "Sarah (en)",
+              "Craig (en)",
+              "Dennis (en)"
+            ],
+            "default": "Olivia (en)"
+          },
+          "references": {
+            "type": "array",
+            "maxItems": 4,
+            "default": [],
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "url",
+                "role"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "maxLength": 4096,
+                  "description": "Signed URL returned by POST /v1/references/:id."
+                },
+                "role": {
+                  "enum": [
+                    "product",
+                    "person",
+                    "style"
+                  ]
+                }
+              }
+            }
+          },
+          "captions": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "service_id",
+          "service_version",
+          "status",
+          "status_url",
+          "payment",
+          "output",
+          "error"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_id": {
+            "const": "video.social"
+          },
+          "service_version": {
+            "const": "1"
+          },
+          "status": {
+            "enum": [
+              "awaiting_payment",
+              "settling",
+              "payment-uncertain",
+              "paid",
+              "submitting",
+              "submission-uncertain",
+              "queued",
+              "running",
+              "saving",
+              "succeeded",
+              "failed",
+              "result-ready"
+            ]
+          },
+          "status_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "poll_after_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "payment": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "success",
+                  "network",
+                  "transaction"
+                ],
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "network": {
+                    "const": "stellar:testnet"
+                  },
+                  "transaction": {
+                    "type": "string"
+                  },
+                  "payer": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "errorReason": {
+                    "type": "string"
+                  },
+                  "errorMessage": {
+                    "type": "string"
+                  },
+                  "extensions": {
+                    "type": "object"
+                  },
+                  "extra": {
+                    "type": "object"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "video",
+                  "url_expires_in"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "video": {
+                    "type": "object",
+                    "required": [
+                      "url",
+                      "content_type"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "file_size": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "duration": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Media duration in seconds."
+                      },
+                      "content_type": {
+                        "enum": [
+                          "video/mp4"
+                        ]
+                      },
+                      "width": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "height": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    }
+                  },
+                  "url_expires_in": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Signed media URL lifetime in seconds."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "job_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "payment": {
+                    "type": "object",
+                    "required": [
+                      "success",
+                      "network",
+                      "transaction"
+                    ],
+                    "properties": {
+                      "success": {
+                        "type": "boolean"
+                      },
+                      "network": {
+                        "const": "stellar:testnet"
+                      },
+                      "transaction": {
+                        "type": "string"
+                      },
+                      "payer": {
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string",
+                        "pattern": "^\\d+$"
+                      },
+                      "errorReason": {
+                        "type": "string"
+                      },
+                      "errorMessage": {
+                        "type": "string"
+                      },
+                      "extensions": {
+                        "type": "object"
+                      },
+                      "extra": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completed",
+              "total",
+              "steps",
+              "needs_reconciliation"
+            ],
+            "properties": {
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "needs_reconciliation": {
+                "type": "boolean"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "submitting",
+                        "queued",
+                        "succeeded",
+                        "failed",
+                        "uncertain"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "execution": {
+        "supported": [
+          "sync",
+          "async"
+        ],
+        "default": "sync",
+        "default_wait_ms": 45000,
+        "max_wait_ms": 60000
+      },
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "stellar:testnet",
+          "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+          "amount": "1100000",
+          "payTo": "GBNPELSW5MSUOOCMB6YJS3HWGXKSIQQRTDBRXM4E3WFTBGKZSRAZXRSN",
+          "maxTimeoutSeconds": 120,
+          "extra": {
+            "areFeesSponsored": true
+          }
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "info": {
+            "input": {
+              "type": "http",
+              "method": "POST",
+              "bodyType": "json",
+              "body": {
+                "brief": "Introduce my reusable bottle",
+                "scenes": [
+                  "Hero product on a sunlit desk",
+                  "Bottle in an everyday lifestyle setting",
+                  "Close-up of the bottle texture",
+                  "Product beside a packed bag",
+                  "Clean final hero shot"
+                ],
+                "narration": "Meet your new everyday companion. From slow mornings to busy afternoons, bring your favorite bottle along. Make it part of your day.",
+                "voice": "Olivia (en)",
+                "references": [],
+                "captions": true
+              },
+              "queryParams": {
+                "mode": "sync"
+              },
+              "headers": {
+                "Idempotency-Key": "YOUR_UUID_V4",
+                "X-Recovery-Token": "YOUR_RANDOM_32_BYTE_BASE64URL_TOKEN"
+              }
+            },
+            "output": {
+              "type": "json",
+              "example": {
+                "job_id": "00000000-0000-4000-8000-000000000001",
+                "service_id": "video.social",
+                "service_version": "1",
+                "status": "succeeded",
+                "status_url": "https://api.example.com/v1/jobs/00000000-0000-4000-8000-000000000001",
+                "payment": {
+                  "success": true,
+                  "network": "stellar:testnet",
+                  "transaction": "0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                "output": {
+                  "video": {
+                    "url": "https://storage.example.com/video.mp4?token=example",
+                    "content_type": "video/mp4",
+                    "width": 1024,
+                    "height": 1024,
+                    "file_size": 1500000,
+                    "duration": 20
+                  },
+                  "url_expires_in": 3600
+                },
+                "error": null
+              }
+            }
+          },
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "required": [
+              "input"
+            ],
+            "properties": {
+              "input": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "method",
+                  "bodyType",
+                  "body"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "const": "http"
+                  },
+                  "method": {
+                    "const": "POST"
+                  },
+                  "bodyType": {
+                    "const": "json"
+                  },
+                  "body": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "brief",
+                      "scenes",
+                      "narration"
+                    ],
+                    "properties": {
+                      "brief": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      "scenes": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 5,
+                        "description": "Approved ordered scene prompts. Default to five in conversation.",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      },
+                      "narration": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "description": "Approved English voiceover, at most 65 words; aim for 15–25 seconds."
+                      },
+                      "voice": {
+                        "enum": [
+                          "Olivia (en)",
+                          "Sarah (en)",
+                          "Craig (en)",
+                          "Dennis (en)"
+                        ],
+                        "default": "Olivia (en)"
+                      },
+                      "references": {
+                        "type": "array",
+                        "maxItems": 4,
+                        "default": [],
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "url",
+                            "role"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "format": "uri",
+                              "maxLength": 4096,
+                              "description": "Signed URL returned by POST /v1/references/:id."
+                            },
+                            "role": {
+                              "enum": [
+                                "product",
+                                "person",
+                                "style"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "captions": {
+                        "type": "boolean",
+                        "default": true
+                      }
+                    }
+                  },
+                  "queryParams": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "enum": [
+                          "sync",
+                          "async"
+                        ]
+                      },
+                      "wait_ms": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "output": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "json"
+                  },
+                  "example": {
+                    "type": "object",
+                    "required": [
+                      "job_id",
+                      "service_id",
+                      "service_version",
+                      "status",
+                      "status_url",
+                      "payment",
+                      "output",
+                      "error"
+                    ],
+                    "properties": {
+                      "job_id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "service_id": {
+                        "const": "video.social"
+                      },
+                      "service_version": {
+                        "const": "1"
+                      },
+                      "status": {
+                        "enum": [
+                          "awaiting_payment",
+                          "settling",
+                          "payment-uncertain",
+                          "paid",
+                          "submitting",
+                          "submission-uncertain",
+                          "queued",
+                          "running",
+                          "saving",
+                          "succeeded",
+                          "failed",
+                          "result-ready"
+                        ]
+                      },
+                      "status_url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "poll_after_ms": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "payment": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "success",
+                              "network",
+                              "transaction"
+                            ],
+                            "properties": {
+                              "success": {
+                                "type": "boolean"
+                              },
+                              "network": {
+                                "const": "stellar:testnet"
+                              },
+                              "transaction": {
+                                "type": "string"
+                              },
+                              "payer": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "errorReason": {
+                                "type": "string"
+                              },
+                              "errorMessage": {
+                                "type": "string"
+                              },
+                              "extensions": {
+                                "type": "object"
+                              },
+                              "extra": {
+                                "type": "object"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "output": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "video",
+                              "url_expires_in"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                              "video": {
+                                "type": "object",
+                                "required": [
+                                  "url",
+                                  "content_type"
+                                ],
+                                "additionalProperties": false,
+                                "properties": {
+                                  "url": {
+                                    "type": "string",
+                                    "format": "uri"
+                                  },
+                                  "file_size": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "duration": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "description": "Media duration in seconds."
+                                  },
+                                  "content_type": {
+                                    "enum": [
+                                      "video/mp4"
+                                    ]
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  }
+                                }
+                              },
+                              "url_expires_in": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "Signed media URL lifetime in seconds."
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "error": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "code"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "job_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "payment": {
+                                "type": "object",
+                                "required": [
+                                  "success",
+                                  "network",
+                                  "transaction"
+                                ],
+                                "properties": {
+                                  "success": {
+                                    "type": "boolean"
+                                  },
+                                  "network": {
+                                    "const": "stellar:testnet"
+                                  },
+                                  "transaction": {
+                                    "type": "string"
+                                  },
+                                  "payer": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "errorReason": {
+                                    "type": "string"
+                                  },
+                                  "errorMessage": {
+                                    "type": "string"
+                                  },
+                                  "extensions": {
+                                    "type": "object"
+                                  },
+                                  "extra": {
+                                    "type": "object"
+                                  }
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "progress": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "completed",
+                          "total",
+                          "steps",
+                          "needs_reconciliation"
+                        ],
+                        "properties": {
+                          "completed": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "total": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "needs_reconciliation": {
+                            "type": "boolean"
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "name",
+                                "status"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "enum": [
+                                    "pending",
+                                    "submitting",
+                                    "queued",
+                                    "succeeded",
+                                    "failed",
+                                    "uncertain"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "preparation": {
+        "planning": "Discuss the brief, ordered scenes, exact English narration, voice, reference roles and estimated total price before obtaining approval. Submit only the approved plan; the backend executes it without rewriting it.",
+        "reference_upload": {
+          "method": "POST",
+          "url_template": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/references/{uuid_v4}",
+          "content_types": [
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ],
+          "max_bytes": 10485760,
+          "headers": {
+            "X-Recovery-Token": "Random 32-byte base64url secret; save with the UUID before uploading. Repeat the same bytes and identity to refresh the signed URL."
+          }
+        },
+        "output": "Vertical 9:16 MP4, English preset voice (female by default), up to 30 seconds. Generated still-image scenes; optional animated captions."
+      },
+      "headers": {
+        "Idempotency-Key": "Required UUID v4; preserve it on retries.",
+        "X-Recovery-Token": "Required random 32-byte base64url secret; preserve locally. Never put in a URL.",
+        "PAYMENT-SIGNATURE": "Standard x402 v2 payment authorization, after receiving 402."
+      },
+      "responses": {
+        "200": "Completed result and payment receipt",
+        "202": "Same job continues; poll status_url with recovery token",
+        "402": "Payment required; no service execution started"
+      },
+      "recovery": {
+        "method": "GET",
+        "url_template": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/jobs/{job_id}",
+        "authorization": "Bearer <recovery token>",
+        "polling_interval_ms": 3000
+      }
     }
   ],
   "pagination": {
     "limit": 20,
     "offset": 0,
-    "total": 5,
+    "total": 6,
     "cursor": null
   }
 }

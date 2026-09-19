@@ -38,6 +38,11 @@ service bookmarks; call history is already in `services.json` and memory recall.
 Use host preview tools for returned media, as described in
 [delivery.md](../algoria-pay/references/delivery.md).
 
+Follow [the shared planning flow](../algoria-discover/references/planning.md):
+briefly explain the operation, expected result and known/unknown costs before
+calling a newly selected agent. Read-only work already requested needs no
+additional permission turn.
+
 ## Authorization and task completion
 
 - Run read-only tools covered by the user's request without an extra approval
