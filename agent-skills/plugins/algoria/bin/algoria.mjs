@@ -14,6 +14,18 @@
 import { readFile } from 'node:fs/promises';
 
 const GROUPS = {
+  mcp: {
+    script: '../skills/algoria-mcp/scripts/mcp.mjs',
+    blurb: 'list and call registered Stellar8004 MCP tools without x402 payments'
+  },
+  memory: {
+    script: '../skills/algoria-memory/scripts/memory.mjs',
+    blurb: 'recall local context/history and manage saved services across catalogs'
+  },
+  install: {
+    script: '../lib/install.mjs',
+    blurb: 'install the plugin for Codex or Claude Code in one command'
+  },
   discover: {
     script: '../skills/algoria-discover/scripts/discover.mjs',
     blurb: 'find agents/services, read schemas and current testnet prices'
@@ -46,6 +58,7 @@ async function usage() {
   lines.push(
     '',
     'Examples',
+    '  algoria install --agent codex',
     '  algoria wallet onboard --network testnet',
     '  algoria wallet balance --json',
     '  algoria topup start --try 200',

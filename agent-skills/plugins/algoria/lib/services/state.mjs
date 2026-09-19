@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { algoriaHome } from '../stellar/keystore.mjs';
 import { withLock } from '../lock.mjs';
 import { atomicAmount, displayAmount } from './policy.mjs';
+import { deliveryFor } from './delivery.mjs';
 
 /** @typedef {{total: string, perCall: string, reservations: Record<string, string>}} Budget */
 /** @typedef {{version: number, budgets: Record<string, Budget>, jobs: Record<string, any>}} Ledger */
@@ -109,13 +110,18 @@ export async function reserveBudget(id, amount) {
  * @param {any} job
  */
 export function publicJob(job) {
+  const offer = job.offer ?? job.expectedOffer;
   return {
     id: job.id, service: job.service, serviceVersion: job.serviceVersion, budget: job.budget,
+    source: job.source ?? 'algoria',
     status: job.status, phase: job.phase,
-    amount: displayAmount(job.offer?.amount ?? job.expectedOffer.amount), unit: 'test USDC',
-    payTo: job.offer?.payTo ?? job.expectedOffer.payTo, expiresAt: job.expiresAt ?? null,
+    amount: offer?.amount ? displayAmount(offer.amount) : null, unit: job.transport === 'mcp' ? null : 'test USDC',
+    ...(job.transport === 'mcp' ? { transport: 'mcp', tool: job.tool, protocol: job.protocol } : {}),
+    payTo: offer?.payTo ?? null, expiresAt: job.expiresAt ?? null,
     payment: job.payment ?? null, output: job.output ?? null, error: job.error ?? null,
+    delivery: deliveryFor(job),
     requiresAttention: job.phase === 'uncertain' || String(job.status).endsWith('-uncertain'),
-    note: job.phase === 'uncertain' ? 'Do not pay again. Reconcile this existing job; its budget remains reserved.' : undefined
+    ...(job.source === 'stellar8004' ? { endpoint: job.registeredEndpoint, method: job.method, registry: job.registry, statusSource: 'local', httpStatus: job.httpStatus ?? null } : {}),
+    note: job.transport === 'mcp' ? 'MCP call, no x402 payment sent. Status is local only. Never redispatch an uncertain call; it may have performed a remote action.' : job.phase === 'uncertain' ? 'Do not pay again. Reconcile this existing job; its budget remains reserved.' : job.source === 'stellar8004' ? 'External service: status reads only the saved response. No automatic retry, remote polling or Algoria recovery token.' : undefined
   };
 }

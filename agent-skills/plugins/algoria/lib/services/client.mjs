@@ -7,9 +7,12 @@ import { getService } from './discovery.mjs';
 import { validateChallenge } from './policy.mjs';
 import { loadServicesSdk } from './sdk.mjs';
 import { editLedger, getBudget, publicJob, readJob, readLedger, reserveBudget, updateJob } from './state.mjs';
+import { quoteExternal, runExternal } from './external-client.mjs';
 
-/** @param {string} service @param {unknown} input @param {string} budget @param {string} [id] */
-export async function quote(service, input, budget, id = randomUUID()) {
+/** @param {string} service @param {unknown} input @param {string} budget @param {string} [id] @param {string} [method] */
+export async function quote(service, input, budget, id = randomUUID(), method) {
+  if (service.startsWith('stellar8004:')) return quoteExternal(service, input, budget, id, method);
+  if (method && method !== 'POST') throw new Error('Algoria services require POST');
   jobUrl(id);
   return withLock(`job-${id}`, async () => {
     await getBudget(budget);
@@ -106,6 +109,8 @@ async function fetchStatus(job) {
  */
 export async function runJob(id, { approve = false } = {}) {
   jobUrl(id);
+  if ((await readJob(id)).transport === 'mcp') throw new Error('MCP calls cannot run through pay; use algoria mcp status for this saved call');
+  if ((await readJob(id)).source === 'stellar8004') return runExternal(id, { approve });
   return withLock(`job-${id}`, async () => {
     let job = await fetchStatus(await readJob(id));
     if (job.status === 'paid') {
@@ -151,6 +156,8 @@ export async function runJob(id, { approve = false } = {}) {
 export async function statusJob(id, { wait = false, timeout = 180 } = {}) {
   jobUrl(id);
   if (!Number.isFinite(timeout) || timeout < 0 || timeout > 3600) throw new Error('timeout must be 0–3600 seconds');
+  const saved = await readJob(id);
+  if (saved.source === 'stellar8004') return publicJob(saved);
   return withLock(`job-${id}`, async () => {
     const deadline = Date.now() + timeout * 1000;
     let job = await fetchStatus(await readJob(id));

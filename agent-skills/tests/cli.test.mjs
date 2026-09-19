@@ -12,7 +12,7 @@ await cp(fileURLToPath(new URL('../plugins/algoria', import.meta.url)), plugin, 
 afterAll(() => rm(temp, { recursive: true, force: true }));
 
 describe('installed entrypoints', () => {
-  for (const [group, script] of [['wallet', 'wallet'], ['topup', 'topup'], ['discover', 'discover'], ['pay', 'pay']]) {
+  for (const [group, script] of [['wallet', 'wallet'], ['topup', 'topup'], ['discover', 'discover'], ['pay', 'pay'], ['memory', 'memory'], ['mcp', 'mcp']]) {
     it(`runs ${group} from a path with spaces, Unicode and a hash without node_modules`, () => {
       const standalone = execFileSync(process.execPath, [join(plugin, `skills/algoria-${group}/scripts/${script}.mjs`), '--help'], { encoding: 'utf8', cwd: temp });
       const dispatcher = execFileSync(process.execPath, [join(plugin, 'bin/algoria.mjs'), group, '--help'], { encoding: 'utf8', cwd: temp });

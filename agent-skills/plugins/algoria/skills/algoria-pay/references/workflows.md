@@ -1,5 +1,11 @@
 # Composing paid services
 
+Complete the entrypoint's balance check before reading schemas or planning
+creative stages. An empty wallet goes directly to the top-up link. Retain the
+original brief and approved cap while funding is pending, then resume this
+workflow after the deposit and balance are verified. Do not ask the user to
+repeat the brief or reauthorize steps already covered by the same cap.
+
 A request like "bana ürünüm için seslendirmeli bir reklam videosu üret" is one
 user task. You perform the required service calls; the user need not supply
 pre-generated assets or run each stage. For a vague "make me a video", clarify

@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.4.0",
-  "description": "Algoria services on Stellar: local wallets, mock top-ups, service discovery, and budgeted x402 payments with job recovery.",
+  "version": "0.7.0",
+  "description": "Check balance first for paid tasks, then use local memory and discovery. Execute Algoria/Stellar8004 x402 services or registered MCP tools; MCP access does not require USDC funding.",
   "author": {
     "name": "Algoria",
     "url": "https://algoria-agent-economy.berkingurcan.chatgpt.site"
@@ -18,8 +18,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Algoria",
-    "shortDescription": "Create media using paid Algoria services",
-    "longDescription": "Ask for an image, voiceover or video in natural language. The agent discovers suitable Algoria services, plans the needed steps, uses a local Stellar testnet wallet within your approved USDC budget, and returns the finished media. Saved jobs support recovery without another payment.",
+    "shortDescription": "Remember context and use paid services",
+    "longDescription": "FIRST check wallet balance for paid x402 tasks and fund if needed. Recall local context, discover services, and execute within the approved scope. Stellar8004 MCP tools are a separate path with no automatic wallet payment; public MCP reads need no top-up. Keep service history and show results. Registry/testnet identity and tool annotations never authorize financial actions. Bazaar bookmarks do not imply a live payment adapter.",
     "developerName": "Algoria",
     "category": "Developer Tools",
     "capabilities": [

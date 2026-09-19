@@ -1,13 +1,26 @@
 ---
 name: algoria-pay
-description: Execute and recover paid Algoria jobs using the local Stellar testnet wallet over x402. Use after discovering a service for a requested image, narration, video or other supported result, or when resuming a saved job. Run the payment commands yourself as part of fulfilling the user's request; the user does not need to name this skill or type algoria pay. If no service has been selected yet, first use algoria-discover.
+description: For every new paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Execute discovered Algoria or Stellar8004 HTTP services over x402 within an approved budget and deliver the result. Use algoria-discover if no service is selected. Recover saved paid jobs without requiring more funds; external requests must not be automatically repaid.
 ---
 
 # Pay and execute an Algoria service
 
-Use current metadata from `algoria-discover`. The helper only permits Algoria's
-pinned API, sponsored x402 v2 exact payments, and testnet USDC. Secrets stay in
-the local wallet; no Supabase/fal credentials or browser login are needed.
+**First action for a new paid task: check wallet balance, before discovery,
+quotes or payment attempts.** Use the wallet helper from this plugin at
+`skills/algoria-wallet/scripts/wallet.mjs balance --network testnet --json`,
+with its absolute path and `node`. Run it separately and inspect the result.
+A zero balance goes straight to the top-up link; only then resume the task
+after confirmed funding. A fresh balance check from discovery satisfies this
+step. Recovering an already-paid job needs no funding.
+
+Use current metadata from `algoria-discover`. The helper supports Algoria's
+pinned API and optional Stellar8004 testnet HTTP services. Both use sponsored
+x402 v2 exact payments in testnet USDC, with the same local wallet and named
+budgets. Secrets stay local; no Supabase/fal credentials or browser login are needed.
+
+For an ID beginning `stellar8004:`, read [external-services.md](references/external-services.md)
+before quoting. Its exact request, response and retry rules differ from Algoria
+jobs. The remote recovery instructions below apply only to Algoria jobs.
 
 For a natural request such as "bana video üret", load
 [algoria-discover](../algoria-discover/SKILL.md) first if a service/plan has not
@@ -24,6 +37,15 @@ PAY="${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/skills/algoria-pay/scripts/pay.mjs"
 
 ## Budget, quote, execute
 
+For a new paid task, check `algoria-wallet balance --network testnet --json`
+before discovery or input preparation, using that skill's absolute helper path.
+Reuse a fresh check already made by `algoria-discover` in this task. Zero USDC
+goes straight to [algoria-topup](../algoria-topup/SKILL.md); a positive balance
+must cover the whole plan, not just its first call. After a funding wait, verify
+the deposit and fresh balance before proceeding. Do not use a failed payment
+attempt as a balance check. Recovery of an already-paid job below is exempt
+from funding: retrieve its output even if the wallet is now empty.
+
 Use the user's authorized total and per-call limits. Do not choose a spending
 budget on their behalf; earlier explicit authorization for this work persists.
 A wallet top-up alone does not authorize service spending. Testnet USDC has no
@@ -37,13 +59,13 @@ node "$PAY" run SAVED_JOB_ID --approve --json
 node "$PAY" status SAVED_JOB_ID --wait --timeout 180 --json
 ```
 
-Write a JSON input file matching the service's current schema. `quote` validates
+For Algoria jobs, write a JSON input file matching the service's current schema. `quote` validates
 it, saves the UUID/recovery token before posting, and returns the actual price,
 recipient and expiry without paying. Present these before obtaining any missing
 authorization. `--approve` represents that authorization, including an already
 approved workflow budget; it is not a reason to ask twice.
 
-Each job keeps its exact original body, recipient, price and token. The full
+Each Algoria job keeps its exact original body, recipient, price and token. The full
 selected offer is preserved when signing. Budget reservations happen atomically
 before signing, including across parallel jobs. `budget --name project` shows
 spent, reserved and remaining totals; changing the cap never resets usage.
@@ -54,6 +76,11 @@ seed, or print recovery/payment headers. The npm equivalents are `algoria pay`
 and `algoria discover`; both execute these same helpers.
 
 ## Resume rather than repay
+
+For Stellar8004 jobs, `status` is local-only, including `--wait`. Never reissue a
+paid request to recover output. Retain uncertain jobs and their reservations;
+the service operator must reconcile them. A `202` response is not a completed
+result and no generic external polling protocol is assumed.
 
 - On timeout or interruption, use `list` to find the saved job, then `status`
   with that ID. Never repeat `quote` with a new identity as an automatic retry.
@@ -70,6 +97,13 @@ and `algoria discover`; both execute these same helpers.
 - `succeeded`: present the output media URL and receipt. Refresh expired URLs
   with `status` for this job, not a new generation. Downloads must not carry
   recovery tokens or payment headers.
+
+Before presenting successful media, follow [delivery.md](references/delivery.md).
+Use the returned `delivery` hints and a verified native/browser preview; a raw
+URL or unverified Markdown embed is not a visible artifact. Await the current
+run process before starting status to avoid colliding with its job lock.
+Record useful context with [algoria-memory](../algoria-memory/SKILL.md), keeping
+job IDs rather than signed media URLs. History is already derived from the ledger.
 
 Interrupted locks have `owner.json` with a PID under `~/.algoria/locks`. Never
 delete a lock while its process may still be running. Recovery tokens cannot be

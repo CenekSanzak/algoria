@@ -3,7 +3,11 @@
 The skill half of Algoria. These are shipped to users, not developer tooling:
 an Algoria user installs this plugin into Claude or Codex, and their agent gains
 the ability to hold a Stellar wallet, pay for services over x402, and work
-inside the agent economy without leaving the conversation.
+inside the agent economy without leaving the conversation. The plugin is a
+personal memory and execution layer over discovery sources: current integrations
+are Algoria x402 and Stellar8004 x402/MCP; Bazaar is a future discovery adapter, not a rival
+marketplace. Local JSON memory holds preferences, project context and saved
+services, while existing job records supply safe cross-session history.
 
 This directory is self-contained. It has its own dependencies, its own tests and
 its own version, and it does not import from the application at the repository
@@ -83,6 +87,24 @@ on your PATH, the ChatGPT desktop app ships one at
 npx algoria wallet onboard --network testnet
 npx algoria topup start --try 200
 ```
+
+Starting with npm version **0.5.1**, the CLI can also install the agent plugin:
+
+```bash
+npx algoria@latest install --agent codex
+npx algoria@latest install --agent claude
+```
+
+This delegates to the host's plugin marketplace commands with the GitHub source,
+so users do not need a checkout. `--ref` selects a branch/tag (default `main`),
+`--cli /absolute/path` selects a host binary, and `--dry-run --json` previews the
+commands without running them. Codex's macOS app-bundled CLI is detected if it
+is absent from PATH. Installation uses the existing application; it does not
+install the application, create a wallet or authorize payments. Open a new task
+or Claude Code session after installation.
+
+`@latest` is usable only after npm publishes this version. To test before release,
+pack `plugins/algoria` and run `npx --package=/absolute/path/algoria-0.7.0.tgz algoria install --agent codex --ref <branch>`.
 
 Same code either way — see [Two channels](#two-channels-one-source) below.
 
@@ -199,8 +221,38 @@ with an unsigned POST. `status` refreshes completed media URLs without paying.
 The local `services.json` holds recovery tokens and signatures (0600), while
 `pay list/status` expose only public fields. Process locks guard jobs and budget
 updates. An interrupted lock is recovered only after checking its owner PID;
-uncertain payments keep their reservations. The client supports Algoria's own
-HTTP service catalog on testnet, not arbitrary third-party endpoints.
+uncertain payments keep their reservations.
+
+### Optional Stellar8004 discovery
+
+The default catalog remains Algoria. `--source stellar8004` discovers services
+directly from Stellar8004's testnet identity registry, without the mainnet-only
+public explorer. Both sources use the same local wallet and budget ledger.
+
+```bash
+node plugins/algoria/bin/algoria.mjs discover search render --source stellar8004 --json
+node plugins/algoria/bin/algoria.mjs discover show stellar8004:0:0 --json
+node plugins/algoria/bin/algoria.mjs pay quote stellar8004:0:0 --method GET --input render.json --budget demo --json
+```
+
+For the observed RenderGate example, `render.json` is `{"url":"https://stellar.org"}`.
+Recheck current metadata and API documentation. The ID identifies an agent and
+its zero-based service index. Methods missing from metadata must be specified;
+GET inputs become query parameters and POST inputs become JSON bodies.
+Discovery pages scan agent IDs; follow `pagination.nextOffset` even for empty
+search results. Invalid/missing metadata appears in `unavailable`.
+
+Quote sends an unsigned request and checks the actual x402 offer; registration
+alone does not prove service availability. Only sponsored exact testnet USDC
+offers at public HTTPS endpoints are accepted. Private DNS/IP destinations,
+redirects, binary/compressed responses and oversized bodies are rejected. The
+connector pins validated public IPv4 addresses; IPv6-only providers are unsupported.
+
+`pay run` sends an external payment at most once per saved job. External
+`pay status` reads the local response only: there is no assumed remote polling,
+media refresh or automatic retry. A lost response, invalid receipt or async 202
+requires reconciliation with the provider. Algoria jobs retain their existing
+remote recovery. See [external-services.md](plugins/algoria/skills/algoria-pay/references/external-services.md).
 
 Top-up start now reconciles remote history before creating a deposit, refreshes
 stale statuses and persists recovered records. Multiple pending deposits stop

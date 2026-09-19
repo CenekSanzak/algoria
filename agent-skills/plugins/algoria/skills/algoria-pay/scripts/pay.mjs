@@ -14,6 +14,9 @@ const USAGE = `algoria pay — execute services with local x402 testnet USDC pay
   list                                                local jobs (no secrets)
 
 Options: --json; quote --id <UUID-v4> reuses a known identity and identical input.
+External: quote stellar8004:<agent>:<service-index> --method GET|POST ...
+Use the method from service documentation. GET input is scalar query parameters.
+External status is local only; a lost paid response must never be auto-retried.
 Testnet only. Recovery tokens and signed authorizations stay in ~/.algoria.
 After an interruption use the saved job ID, not another quote.`;
 
@@ -43,7 +46,7 @@ export function main(argv) {
       if (command === 'quote') {
         const data = await readFile(value(flags, 'input'), 'utf8');
         if (Buffer.byteLength(data) > 32768) throw new Error('input file exceeds 32768 bytes');
-        result = await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined);
+        result = await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined, typeof flags.method === 'string' ? flags.method : undefined);
       } else if (command === 'run') result = await runJob(target, { approve: flags.approve === true });
       else if (command === 'status') result = await statusJob(target, { wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
       else throw new Error('expected budget, quote, run, status or list');

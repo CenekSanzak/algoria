@@ -2,6 +2,17 @@
 
 # Algoria
 
+**Algoria's plugin is a personal memory and execution layer above agent/service
+discovery: it keeps context, chosen services and job history across sessions,
+then executes work within approved budgets.** Stellar8004 and Bazaar are
+potential infrastructure sources, rather than marketplaces this layer needs to
+replace. The plugin currently executes Algoria x402 services and Stellar8004
+testnet registrations exposing x402 or remote MCP tools;
+its local memory can bookmark other sources, but a live Bazaar adapter and a
+recurring-work scheduler are not implemented. See [Agent Skills](agent-skills/README.md).
+
+The web proof of concept below is a separate interface:
+
 **Algoria is a chat that reads a request in plain language, tells you which agent on Stellar can do it and exactly what it will cost, and delivers the result once you have approved the work and the payment separately.**
 
 What exists today is a proof of concept, and the phrase is meant precisely rather than modestly. The full paid loop settles on-chain, is covered by tests, and reruns weekly in CI against a live deployment. On mainnet the whole loop has closed once: an agent discovered through the 8004 registry, paid in native USDC over x402, and given a reputation entry written on-chain **by the account that paid rather than by us**. Both transactions are linked below, and we claim no volume: that buyer was us.

@@ -20,7 +20,108 @@ Then pick a section:
 
 # Test it as a user (5 minutes)
 
+## Stellar8004 MCP (0.7.0+)
+
+Discover current testnet entries and route by `transport`, not by assuming every
+`supported: true` service requires x402. For an explicitly requested public MCP
+read, no USDC funding or wallet creation should occur. `algoria mcp tools <id>`
+must connect and expose current schemas. A-Identity was observed at
+`stellar8004:25:0`: initialize + tools/list and one `get_chain_status` call with
+`{}` were successfully tested without wallet/payment, using isolated local state.
+This is an observation, not a permanent provider availability guarantee.
+
+CLI tests cover session negotiation, stateless metadata, JSON/SSE framing,
+draft-07 schema validation, pagination, origin-bound auth, metadata changes,
+pre-dispatch persistence and no second dispatch after a lost response. Test
+that malformed/tool-error responses are not reported as success; 401/403/402
+must not sign payments or initiate a top-up. Session IDs and bearer tokens must
+not appear in the ledger or memory. MCP history must not invent a USDC charge.
+
+Never live-test hiring, escrow, transfers or policy changes as a connectivity
+probe. The testnet registry can advertise tools operating on other networks.
+
+## Memory and media delivery (0.6.0+)
+
+In a fresh session, ask to remember a visual preference for a named project and
+save a service. In another session, ask for the same style: balance comes first
+for paid work, then local recall, then current discovery/price checks. Verify
+`memory recall --scope project:<name> --json` includes that context and job
+history without raw input, signed output URLs or recovery/payment credentials.
+Forgetting a preference or bookmark must not alter budgets or payment records.
+A Bazaar bookmark must not be presented as a working Bazaar payment adapter.
+
+For an image request, verify generation is followed by a loaded host preview.
+The final response should contain the visible artifact and charge, not a raw
+signed URL. Reopening an older result must use the same job ID and refresh its
+URL without another payment. If the host cannot display it, the agent must say
+so and offer a descriptive link instead of claiming a broken embed is visible.
+An active run process must finish before status starts; do not run both in
+parallel or remove an active lock.
+
 Two ways in, and neither needs this repo checked out. Do either or both.
+
+## One-command plugin install (0.5.1+)
+
+After npm publication, from any normal terminal:
+
+```bash
+npx algoria@latest install --agent codex
+# Or:
+npx algoria@latest install --agent claude
+```
+
+Use `--ref codex/stellar8004-testnet-services` to test that branch. `--dry-run --json`
+must show the selected source, ref and host argv without invoking the host. Open
+a new task/session after a real install. This bootstrap never onboards a wallet.
+
+Before publication, pack the plugin and run the same command through the tarball:
+`npx --package=/absolute/path/algoria-0.7.0.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
+The installer tests use a fake executable in a temporary path containing spaces;
+they check Codex/Claude argument handling, missing/old CLIs, ref validation,
+streamed host errors, clean JSON output and stopping before plugin installation
+if marketplace registration fails. They do not mutate real host settings.
+
+Codex 0.5.3+ installer regression: repeat installation with an existing older
+marketplace snapshot. The installer must refresh `algoria-skills` before adding
+the plugin. If refresh fails, installation must stop without reporting success.
+Confirm the installed version with `codex plugin list`, then start a fresh
+session and verify its skill paths reference the updated version. A new chat
+alone does not update an old installed plugin. The installer tests model both
+stale-snapshot replacement and refresh failures.
+
+## Balance-first agent acceptance checks (0.5.2+)
+
+Use an isolated test wallet and a fresh agent session with the updated plugin.
+`ALGORIA_HOME` must be set in the agent host's environment, not only a separate
+terminal. Do not delete the user's wallet to create a zero-balance scenario.
+These are manual behavior checks; CLI unit tests do not prove skill adherence.
+
+1. With a new/empty wallet, ask: "Create an image for me using up to 0.02 test
+   USDC." The first service-related command must check wallet balance. A missing
+   wallet is onboarded, then an unpaid top-up is opened/reused. Before any
+   discovery, creative planning, input file or quote, the agent must show the
+   payment link, amount, IBAN and reference. No extra "shall I top up?" question,
+   skill quotations, simulation tutorial or generated image yet.
+2. Say "ok" without funding. It must check the same deposit and keep the same
+   link; no second deposit, payment attempt or success claim.
+3. Complete the funding page yourself, then say "tamam". It must verify that
+   deposit and actual USDC balance, resume the original image request under the
+   0.02 cap, and deliver the image with its charge in that turn. No repeated
+   brief or spending approval. A still-processing deposit gets bounded checks.
+4. With sufficient USDC, repeat the image request. Balance still comes first,
+   but no top-up opens. Compare cost with balance, not with the maximum cap.
+5. With positive but insufficient USDC for a selected multi-step task, show a
+   funding link before preparing inputs or paying for the first stage. The
+   approved cap covers the full plan and does not grow after top-up.
+6. Ask only "What image services exist?" No wallet setup/deposit is needed.
+   Ask to recover a saved paid image with an empty wallet: retrieve that job's
+   output without requiring funding or generating another image.
+7. Make the balance endpoint unavailable. The agent must report/retry a
+   balance-check failure, not claim zero balance or open a deposit as a remedy.
+
+The only sandbox notice in the normal funding handoff should be a brief
+test-environment label telling the user not to send real money. Actual funding
+controls stay on the provider page.
 
 ## As a CLI, with `npx`
 
@@ -354,3 +455,26 @@ needs an explicitly authorized budget and consumes backend generation capacity.
 Use the saved job ID for every retry. For package verification, `npm pack` the
 plugin and extract it into a temporary directory with no `node_modules`, then
 run every command group's help and load both bundled SDKs.
+
+## Stellar8004 regression checks (0.5.0)
+
+The suite additionally covers on-chain testnet discovery, pagination across
+unreadable agent metadata, stable service indexes, public DNS address pinning,
+private IP/URL and redirect rejection, bounded response bodies, explicit GET/POST
+inputs, compatible offer selection, price/registration changes, receipt checks,
+shared spending limits, and no automatic external payment retry after dispatch.
+
+Read-only live checks (no wallet or payment needed):
+
+```bash
+algoria discover list --json
+algoria discover search render --source stellar8004 --limit 20 --offset 0 --json
+algoria discover show stellar8004:0:0 --json
+```
+
+To check an external offer, use `pay quote` with a temporary ALGORIA_HOME,
+temporary budget and the documented input/method. This sends the service input
+without a payment signature. Never run `pay run --approve` as a smoke test without
+authorization. Recheck both sources from an unpacked npm package without
+node_modules. External `status --wait` is deliberately local-only, including for
+HTTP 202 or an interrupted paid call; it must not request or sign another payment.

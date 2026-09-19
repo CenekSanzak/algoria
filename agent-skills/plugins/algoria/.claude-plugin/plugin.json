@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "description": "Algoria services on Stellar: local wallets, mock top-ups, service discovery, and budgeted x402 payments with job recovery.",
-  "version": "0.4.0",
+  "description": "Check balance first for paid tasks, then use local memory and discovery. Execute Algoria/Stellar8004 x402 services or registered MCP tools; MCP access does not require USDC funding.",
+  "version": "0.7.0",
   "author": {
     "name": "Algoria"
   },
