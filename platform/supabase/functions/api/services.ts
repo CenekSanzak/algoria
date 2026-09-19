@@ -310,6 +310,8 @@ export function serviceDocument(config: Config, requirements: unknown, service: 
         preparation: {
           planning:
             'Discuss the brief, ordered scenes, exact English narration, voice, reference roles and estimated total price before obtaining approval. Submit only the approved plan; the backend executes it without rewriting it.',
+          scene_prompts:
+            'Write each scenes entry as a self-contained request for one still image. Repeat necessary visual context and identify applicable reference numbers. The campaign brief is not sent to the image model. Keep narration, voice, duration, video editing and subtitle instructions out of scenes; use the dedicated fields. Mention branding as visible image content only when requested, and do not invent logos or silently remove requested branding.',
           reference_upload: {
             method: 'POST',
             url_template: `${config.baseUrl}/v1/references/{uuid_v4}`,

@@ -3,13 +3,26 @@ export const SOCIAL_INPUT_SCHEMA = {
   additionalProperties: false,
   required: ['brief', 'scenes', 'narration'],
   properties: {
-    brief: { type: 'string', minLength: 1, maxLength: 2000 },
+    brief: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 2000,
+      description:
+        'Campaign context for the approved plan. Not forwarded to the image model; repeat necessary visual details in each scene.',
+    },
     scenes: {
       type: 'array',
       minItems: 1,
       maxItems: 5,
-      description: 'Approved ordered scene prompts. Default to five in conversation.',
-      items: { type: 'string', minLength: 1, maxLength: 2000 },
+      description:
+        'Approved ordered prompts, each for one still image. Default to five in conversation. Each scene must stand alone without the brief.',
+      items: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 2000,
+        description:
+          'Describe the visible subject, applicable reference numbers, setting, framing, lighting and style. Exclude video, audio, voice, duration, transitions and subtitle instructions. Include exact lettering only when approved as visible image content.',
+      },
     },
     narration: {
       type: 'string',

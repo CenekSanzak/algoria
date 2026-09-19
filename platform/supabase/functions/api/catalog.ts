@@ -222,11 +222,11 @@ export const SOCIAL_SERVICE: Service = {
   exampleInput: {
     brief: 'Introduce my reusable bottle',
     scenes: [
-      'Hero product on a sunlit desk',
-      'Bottle in an everyday lifestyle setting',
-      'Close-up of the bottle texture',
-      'Product beside a packed bag',
-      'Clean final hero shot',
+      'Photorealistic vertical product photograph of a matte sage-green reusable bottle with a silver screw cap on a sunlit oak desk. Warm natural light, cream backdrop, no lettering.',
+      'Photorealistic vertical photograph of a matte sage-green reusable bottle with a silver screw cap beside a notebook in a bright cafe. Warm natural light, cream and oak palette, no lettering.',
+      'Photorealistic vertical close-up of the matte sage-green surface and silver screw cap of a reusable bottle. Warm natural light, cream backdrop, no lettering.',
+      'Photorealistic vertical product photograph of a matte sage-green reusable bottle with a silver screw cap beside a beige packed bag on an oak bench. Warm natural light, no lettering.',
+      'Photorealistic vertical hero photograph of a matte sage-green reusable bottle with a silver screw cap centered against a clean cream backdrop. Warm natural light, generous negative space, no lettering.',
     ],
     narration:
       'Meet your new everyday companion. From slow mornings to busy afternoons, bring your favorite bottle along. Make it part of your day.',

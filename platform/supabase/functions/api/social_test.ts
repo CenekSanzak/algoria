@@ -19,7 +19,7 @@ function png(width = 576, height = 1024) {
   return bytes;
 }
 const id = '00000000-0000-4000-8000-000000000001';
-async function harness() {
+async function harness(input = normalizeSocial(SOCIAL_SERVICE.exampleInput)) {
   const db = new PGlite();
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
     create schema storage; create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);`);
@@ -107,7 +107,6 @@ async function harness() {
     downloadVideo: () =>
       Promise.resolve({ bytes: new Uint8Array(64), contentType: 'video/mp4', duration: mediaDuration }),
   });
-  const input = normalizeSocial(SOCIAL_SERVICE.exampleInput);
   await rpc('platform_create_job', [{
     id,
     service_id: 'video.social',
@@ -180,6 +179,66 @@ Deno.test('social workflow: five images plus speech parallel, one reservation, t
     await assert.rejects(h.db.exec('set role anon; select * from public.social_steps'), /permission denied/);
   } finally {
     await h.db.close();
+  }
+});
+Deno.test('social sends independent still-image scenes to fal and keeps campaign/audio instructions separate', async () => {
+  for (const useReferences of [false, true]) {
+    const input = normalizeSocial({
+      ...SOCIAL_SERVICE.exampleInput,
+      brief:
+        'Make a 20-second sponsored Veyro Reel, five scenes, English Olivia voiceover, timed transitions and subtitles.',
+      scenes: [
+        'One photorealistic portrait of the woman from reference 1 wearing the lime-green woven fedora from reference 2, black-and-white chevron band, soft rooftop daylight.',
+        'One still life of the lime-green woven fedora from reference 2 on a cream surface, black-and-white chevron band, soft daylight. No people.',
+        'One photograph of the lime-green woven fedora against a cream backdrop, with the exact visible lettering "Veyro — Wear Your Color".',
+      ],
+      narration: 'Paid partnership with Veyro. Find your shade and wear your color.',
+      references: useReferences
+        ? [
+          {
+            url: `https://storage.example/storage/v1/object/sign/outputs/references/${id}/${
+              'a'.repeat(64)
+            }.jpg?token=test`,
+            role: 'person',
+          },
+          {
+            url: `https://storage.example/storage/v1/object/sign/outputs/references/${id}/${
+              'b'.repeat(64)
+            }.png?token=test`,
+            role: 'product',
+          },
+        ]
+        : [],
+    });
+    const h = await harness(input);
+    try {
+      await h.pay();
+      await h.workflow.start(await h.get());
+      const images = h.calls.filter((c) => c.target.output === 'images');
+      assert.equal(images.length, 3);
+      for (const [i, call] of images.entries()) {
+        const prompt = String(call.input.prompt);
+        assert.ok(prompt.includes(input.scenes[i]));
+        for (const other of input.scenes.filter((_, n) => n !== i)) assert.ok(!prompt.includes(other));
+        assert.ok(!prompt.includes(input.brief));
+        assert.ok(!prompt.includes(input.narration));
+        assert.doesNotMatch(prompt, /20-second|Reel|voiceover|Olivia|transitions|subtitles/);
+        assert.doesNotMatch(prompt, /no added text|any referenced person's identity/i);
+        assert.equal(call.input.aspect_ratio, '9:16');
+        assert.equal(call.input.num_images, 1);
+        assert.equal(
+          call.target.model,
+          useReferences ? 'fal-ai/nano-banana-2/edit' : 'google/nano-banana-2-lite',
+        );
+        assert.equal((call.input.image_urls as string[] | undefined)?.length ?? 0, useReferences ? 2 : 0);
+      }
+      const speech = h.calls.find((c) => c.target.output === 'audio')!;
+      assert.equal(speech.input.text, input.narration);
+      assert.equal(speech.input.voice, input.voice);
+      assert.equal((await h.get()).input.brief, input.brief); // Keep the approved plan for recovery.
+    } finally {
+      await h.db.close();
+    }
   }
 });
 Deno.test('social uncertain submissions retain capacity and never regenerate or settle again', async () => {

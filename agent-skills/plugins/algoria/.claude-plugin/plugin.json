@@ -1,7 +1,7 @@
 {
   "name": "algoria",
   "description": "Check balance first for paid tasks, then use local memory and discovery. Execute Algoria/Stellar8004 x402 services or registered MCP tools; MCP access does not require USDC funding.",
-  "version": "0.8.0",
+  "version": "0.8.3",
   "author": {
     "name": "Algoria"
   },

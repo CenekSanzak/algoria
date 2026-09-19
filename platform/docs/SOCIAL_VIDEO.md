@@ -16,6 +16,15 @@ plan; it does not invent new narration after approval. No server-side LLM key is
 required. A generic natural-language-only HTTP request is not the service contract;
 the conversational client compiles the plan for a nontechnical user.
 
+`brief` retains campaign context but is not prepended to image requests. Each
+`scenes` entry must independently describe one still image, including the relevant
+reference numbers, subject/product details, setting and visual style. Narration,
+voice, timing and captions remain separate from image prompts. Reference-role
+guidance applies only to elements present in a scene; a supplied portrait does
+not require a person in a product still life. Explicitly requested lettering is
+preserved, without a contradictory blanket ban on text. Campaign names need not
+be repeated as image instructions unless they are intended to be visible.
+
 Defaults: five scenes in conversation, Olivia's English female voice, captions,
 vertical 9:16 output. The schema permits 1–5 scenes, 0–4 references and four preset
 English voices. Reference roles are product, person or style. A product-only ad
