@@ -1,0 +1,204 @@
+/* Tokens follow algoria.chat: slate monochrome, Prompt + Geist Mono. */
+:root {
+  --bg: #04060a;
+  --raised: #12161f;
+  --elevated: #181d28;
+  --well: #070a0f;
+  --border: #96a2b214;
+  --border-strong: #96a2b229;
+  --accent: #b8bfc9;
+  --active-bg: #a0aab91f;
+  --stellar: #96a3b3;
+  --stellar-bg: #96a3b312;
+  --stellar-border: #96a3b333;
+  --txt: #eef1f6;
+  --txt-sec: #c6ccd6;
+  --txt-muted: #838b99;
+  --online: #8da89a;
+  --card-bg: #161b238c;
+  --card-top: #b8bfc914;
+  --spec: #ffffff08;
+  --shadow: #00000066;
+  --glow: #18202d;
+  --header-bg: #04060ab3;
+  --silver: linear-gradient(180deg, #eef1f6 0%, #b8bfc9 55%, #8a93a1 100%);
+  --sans: 'Prompt', system-ui, -apple-system, sans-serif;
+  --mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --ease: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Dark by default, like algoria.chat; ThemeToggle sets data-theme. */
+:root[data-theme='light'] {
+  --bg: #dee2ea;
+  --raised: #eceef2;
+  --elevated: #fafbfc;
+  --well: #f3f5f8;
+  --border: #3c465514;
+  --border-strong: #3c46552e;
+  --accent: #57616e;
+  --active-bg: #3c46551c;
+  --stellar: #4a5a6e;
+  --stellar-bg: #4a5a6e0f;
+  --stellar-border: #4a5a6e38;
+  --txt: #0c1016;
+  --txt-sec: #454c58;
+  --txt-muted: #6f7682;
+  --online: #5a806b;
+  --card-bg: #fafbfcb3;
+  --card-top: #ffffff80;
+  --spec: #ffffff8c;
+  --shadow: #3c465529;
+  --glow: #eef1f5;
+  --header-bg: #dee2eab3;
+  --silver: linear-gradient(180deg, #454c58 0%, #2a3039 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--txt);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 45% at 22% 18%, var(--glow), transparent 70%),
+    radial-gradient(ellipse 45% 40% at 85% 55%, color-mix(in srgb, var(--glow) 60%, transparent), transparent 70%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+h1,
+h2,
+h3,
+p,
+ol,
+ul {
+  margin: 0;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+::selection {
+  background: var(--active-bg);
+}
+
+/* Shared helpers */
+.wrap {
+  width: min(1080px, calc(100% - 48px));
+  margin-inline: auto;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-top-color: var(--card-top);
+  border-radius: 16px;
+  background: var(--card-bg);
+  -webkit-backdrop-filter: blur(12px) saturate(110%);
+  backdrop-filter: blur(12px) saturate(110%);
+  box-shadow:
+    inset 0 1px 0 var(--spec),
+    0 1px 2px #0003,
+    0 24px 48px -24px var(--shadow);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--txt-muted);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--online);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--online) 18%, transparent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: fixed;
+  top: -60px;
+  left: 16px;
+  z-index: 50;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--txt);
+  color: var(--bg);
+}
+
+.skip-link:focus {
+  top: 10px;
+}
+
+.rise {
+  animation: rise 0.6s var(--ease) backwards;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (max-width: 560px) {
+  .wrap {
+    width: calc(100% - 32px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
