@@ -11,7 +11,6 @@
     <a href={links.listService} target="_blank" rel="noopener noreferrer">List a service</a>
   </nav>
   <div class="end">
-    <span>Testnet · not real money</span>
     <ThemeToggle />
   </div>
 </footer>

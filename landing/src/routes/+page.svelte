@@ -48,7 +48,7 @@
 
     <div class="actions">
       <a class="btn primary" href="/how-to-use">Get started</a>
-      <a class="btn" href="/how-to-use#use">See all commands</a>
+      <a class="btn" href="/how-to-use#use">Example prompts</a>
     </div>
   </div>
 
