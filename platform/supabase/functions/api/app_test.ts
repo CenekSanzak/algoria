@@ -998,3 +998,74 @@ Deno.test('a disabled service recovers existing paid and finished jobs but rejec
   equal(h.calls.settle, 0);
   equal(h.store.jobs.size, 1);
 });
+
+Deno.test('social HTTP service quotes and settles once, delegates composite work, and protects scheduler', async () => {
+  const h = harness(true);
+  h.dependencies.config.servicePayments!['video.social'] = { payTo: RECIPIENT, priceAtomic: '1100000' };
+  let starts = 0;
+  let ticks = 0;
+  h.dependencies.workflowSecret = 'z'.repeat(43);
+  h.dependencies.social = {
+    validateReferences: () => Promise.resolve([]),
+    start: async (job) => {
+      starts++;
+      await h.store.claimSubmission(job.id);
+      return await h.store.setSubmitted(job.id, `social-${job.id}`);
+    },
+    advance: async (job) => {
+      const lease = await h.store.claimCompletion(job.id);
+      return lease.claimed
+        ? await h.store.complete(job.id, lease.leaseToken!, {
+          path: `${job.id}/compose.mp4`,
+          content_type: 'video/mp4',
+          width: 576,
+          height: 1024,
+          duration: 12,
+        })
+        : lease.job;
+    },
+    progress: () => Promise.resolve({ completed: 9, total: 9, steps: [], needs_reconciliation: false }),
+    parent: () => Promise.resolve(null),
+    sweep: () => {
+      ticks++;
+      return Promise.resolve([]);
+    },
+  };
+  const app = createApp(h.dependencies);
+  const id = crypto.randomUUID();
+  const request = (payment = false) =>
+    app.request('/v1/services/video.social?mode=async', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Idempotency-Key': id,
+        'X-Recovery-Token': TOKEN,
+        ...(payment ? { 'PAYMENT-SIGNATURE': 'social-payment' } : {}),
+      },
+      body: JSON.stringify(getService('video.social')!.exampleInput),
+    });
+  const quote = await request();
+  equal(quote.status, 402);
+  equal((await quote.json()).accepts[0].amount, '1100000');
+  equal(starts, 0);
+  equal(h.calls.settle, 0);
+  equal((await request(true)).status, 202);
+  equal(starts, 1);
+  equal(h.calls.submit, 0);
+  equal(h.calls.settle, 1);
+  const done = await app.request(`/v1/jobs/${id}`, { headers: { authorization: `Bearer ${TOKEN}` } });
+  equal((await done.json()).status, 'succeeded');
+  equal((await request()).status, 200);
+  equal(starts, 1);
+  equal(h.calls.settle, 1);
+  equal((await app.request('/internal/social/tick', { method: 'POST' })).status, 401);
+  equal(ticks, 0);
+  equal(
+    (await app.request('/internal/social/tick', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${'z'.repeat(43)}` },
+    })).status,
+    200,
+  );
+  equal(ticks, 1);
+});

@@ -31,6 +31,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NPM_CONFIG_REGISTRY: https://registry.npmjs.org
     permissions:
       contents: read
       id-token: write # the OIDC token npm trusted publishing exchanges
@@ -45,14 +47,16 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          package_json_file: agent-skills/package.json
 
+      # OIDC publish does not need setup-node's NODE_AUTH_TOKEN .npmrc.
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: agent-skills/pnpm-lock.yaml
-          registry-url: https://registry.npmjs.org
 
       # Trusted publishing needs npm 11.5.1 or newer; Node 22 ships npm 10.
       - name: Upgrade npm
@@ -81,12 +85,12 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      # The bundle is committed and byte-reproducible. Rebuilding it and finding
-      # a diff means the SDK changed without `pnpm bundle:sdk` being rerun, and
-      # the package would ship code that does not match its lockfile.
-      - name: Committed SDK bundle matches the lockfile
+      # Both bundles are committed and byte-reproducible. A diff means the
+      # package would ship SDK code that does not match its lockfile.
+      - name: Committed SDK bundles match the lockfile
         run: |
           pnpm bundle:sdk
+          pnpm bundle:services
           git diff --exit-code -- plugins/algoria/lib/vendor/
 
       - name: Pack dry run

@@ -1,3 +1,7 @@
+import type { SocialWorkflow } from './social.ts';
+import type { SocialInput } from './social-input.ts';
+import type { SocialStore } from './social-store.ts';
+import { uploadReference } from './references.ts';
 import { Hono } from 'npm:hono@4.13.8';
 import type { Config } from './config.ts';
 import { PaymentGateway, type PaymentRequirements, receiptHeader } from './payments.ts';
@@ -42,6 +46,9 @@ type JobStore = Pick<
 >;
 export interface Dependencies {
   config: Config;
+  social?: Pick<SocialWorkflow, 'start' | 'advance' | 'progress' | 'parent' | 'sweep' | 'validateReferences'>;
+  references?: Pick<SocialStore, 'reserveReference'>;
+  workflowSecret?: string;
   store: JobStore;
   payments: Pick<
     PaymentGateway,
@@ -126,7 +133,10 @@ export function createApp(d: Dependencies) {
     }
     const staleSettlement = job.status === 'settling' && Date.now() - Date.parse(job.updated_at) > 90000;
     const staleSubmission = job.status === 'submitting' && Date.now() - Date.parse(job.updated_at) > 30000;
-    const status = job.status === 'payment_uncertain' || staleSettlement
+    const progress = job.service_id === 'video.social' && d.social ? await d.social.progress(job) : undefined;
+    const status = progress?.needs_reconciliation
+      ? 'submission-uncertain'
+      : job.status === 'payment_uncertain' || staleSettlement
       ? 'payment-uncertain'
       : staleSubmission
       ? 'submission-uncertain'
@@ -139,6 +149,7 @@ export function createApp(d: Dependencies) {
         status: deliveryPending ? 'result-ready' : status,
         status_url: `${config.baseUrl}/v1/jobs/${job.id}`,
         poll_after_ms: inProgress(job) ? 3000 : undefined,
+        ...(progress ? { progress } : {}),
         payment: job.payment_receipt,
         output,
         error: job.error,
@@ -166,6 +177,10 @@ export function createApp(d: Dependencies) {
   }
 
   async function refresh(job: Job, signal?: AbortSignal): Promise<Job> {
+    if (job.service_id === 'video.social') {
+      if (!d.social) throw new Error('Social workflow unavailable');
+      return d.social.advance(job, signal);
+    }
     if (!job.provider_request_id || !['queued', 'running', 'saving'].includes(job.status)) return job;
     let result;
     const service = getService(job.service_id, job.service_version);
@@ -257,6 +272,10 @@ export function createApp(d: Dependencies) {
   }
 
   async function submit(job: Job): Promise<Job> {
+    if (job.service_id === 'video.social') {
+      if (!d.social) throw new Error('Social workflow unavailable');
+      return d.social.start(job);
+    }
     const service = getService(job.service_id, job.service_version);
     if (!service) throw new Error('Unknown persisted service');
     // Source signing is retryable preparation, not a provider submission attempt.
@@ -391,6 +410,10 @@ export function createApp(d: Dependencies) {
       if (job.input_hash !== inputHash) throw new HttpError(409, 'request-conflict');
     } else {
       if (!(await store.capacity()).available) throw new HttpError(429, 'demo-capacity-exhausted');
+      if (service.id === 'video.social') {
+        if (!d.social) throw new HttpError(503, 'social-unavailable');
+        await d.social.validateReferences(input as SocialInput, true);
+      }
       await resolveSources(service, input, { supabaseUrl: config.supabaseUrl, store, artifacts }, true);
       const payment = servicePayment(config, service.id)!;
       const requirements = await payments.requirements(payment.payTo, payment.priceAtomic);
@@ -494,11 +517,25 @@ export function createApp(d: Dependencies) {
     return response(job, true);
   });
 
+  app.post('/v1/references/:id', async (c) => {
+    if (!d.references) throw new HttpError(503, 'reference-upload-unavailable');
+    return json(await uploadReference(c.req.raw, c.req.param('id'), d.references, artifacts));
+  });
+  app.post('/internal/social/tick', async (c) => {
+    const token = c.req.header('Authorization')?.replace(/^Bearer /i, '') ?? '';
+    if (!d.workflowSecret || !(await tokenMatches(token, await hash(d.workflowSecret)))) {
+      throw new HttpError(401, 'unauthorized');
+    }
+    if (!d.social) throw new HttpError(503, 'social-unavailable');
+    await d.social.sweep();
+    return json({ ok: true });
+  });
+
   app.post('/webhooks/fal', async (c) => {
     const body = await readBytes(c.req.raw, 1024 * 1024);
     if (!(await fal.verifyWebhook(body, c.req.raw.headers))) throw new HttpError(401, 'invalid-webhook');
     const event = parseWebhook(body);
-    const job = await store.getByProviderId(event.requestId);
+    const job = await store.getByProviderId(event.requestId) ?? await d.social?.parent(event.requestId);
     if (!job) return json({ code: 'provider-job-not-linked' }, 503);
     await store.recordWebhook(await hash(body), event.requestId);
     const updated = await refresh(job, AbortSignal.timeout(45000));

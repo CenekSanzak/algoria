@@ -24,6 +24,7 @@ export function readConfig(): Config {
   const recipients = new Set([imagePayTo]);
   for (
     const [id, prefix, defaultPrice] of [
+      ['video.social', 'VIDEO_SOCIAL', '1100000'],
       ['speech.generate', 'SPEECH_GENERATE', '200000'],
       ['video.slideshow', 'VIDEO_SLIDESHOW', '100000'],
       ['video.compose', 'VIDEO_COMPOSE', '100000'],

@@ -18,8 +18,12 @@ x402 signing, sync/async execution, persistent recovery, and acceptance tests.
 - `POST /v1/services/{service_id}?mode=sync`: pay for and execute the selected service.
 - `GET /v1/jobs/{job_id}`: recover status, payment receipt and output.
 
-The five implemented services share the same payment and job contract. Discovery lists only enabled services:
+The six implemented services share the same payment and job contract. Discovery lists only enabled services:
 
+- `video.social`: one approved plan, optional reference photos, 1–5 vertical scenes,
+  English narration (female by default), automatic timing, composition and optional captions.
+  **0.11 test USDC**, one payment/job. See [social video service](docs/SOCIAL_VIDEO.md) for
+  uploads, planning, durable execution and deployment.
 - `image.generate`: `{ "prompt": "A red sailboat, watercolor illustration" }`, 1–4000 characters;
   one square 1K PNG. **0.01 test USDC** (`100000` atomic units).
 - `speech.generate`: `{ "text": "Meet Tide, your everyday bottle.", "voice": "Craig (en)" }`;
@@ -39,7 +43,8 @@ The five implemented services share the same payment and job contract. Discovery
   **0.02 test USDC** (`200000` atomic units).
 
 No provider/model/quality selection is exposed. Video inputs accept current signed URLs of Algoria's
-bounded, completed outputs; external uploads are not accepted. Sources are validated before a quote
+bounded, completed outputs; external uploads are not accepted by these standalone video primitives.
+`video.social` separately accepts photos uploaded through its private reference endpoint. Sources are validated before a quote
 and their links refreshed internally at provider submission. For a new downstream job, retrieve fresh
 source URLs through authenticated job GETs before saving its input. Once a job exists, preserve that
 exact original input on retries, including its saved URLs.
@@ -66,7 +71,8 @@ Different input under an existing ID returns `409`. Lost recovery tokens cannot 
 wallet address; there are no hosted user accounts.
 
 Outputs live in a private Supabase Storage bucket. Response URLs expire after one hour; authenticated
-job polling issues a fresh URL. No payment or generation occurs on status reads.
+job polling issues a fresh URL. No payment occurs on status reads. For `video.social`, a status read can advance
+internal generation/render steps already authorized by its paid plan.
 Disabling a service prevents new POST jobs; existing jobs can still be recovered and resumed.
 
 The API publishes Bazaar metadata locally. Payment verification/settlement sends only payment fields
@@ -144,7 +150,7 @@ Only the service-role backend accesses records and private storage.
 
 The deployed database atomically limits the demo to **30 paid production attempts total** across all
 services and **2 active jobs**. The original migration default is 10 total attempts; the operator raised
-the deployed total to 30 for repeated demos. A complete product-ad demo consumes seven attempts.
+the deployed total to 30 for repeated demos. The legacy product-ad demo consumes seven attempts; `video.social` consumes one.
 `deno run --allow-net --allow-env --env-file=.env.local scripts/status.ts` shows capacity and job states
 without prompts, wallet keys or recovery tokens, and checks anonymous DB access is denied.
 Successful jobs and provider failures consume the total allowance. A definite settlement rejection
@@ -163,5 +169,5 @@ input, ID, and recovery token, without `PAYMENT-SIGNATURE`; GET does not submit 
 An accepted fal request whose ID was lost must be matched by an operator before attachment;
 there is no automatic resubmission or refund path.
 
-The project is Stellar testnet only. MCP, skill/plugin, wallet management product, image editing and
-marketing website remain separate later work.
+The project is Stellar testnet only. The composite social service supports reference-guided image
+editing internally. The skill/plugin client remains a separate package in `agent-skills/`.

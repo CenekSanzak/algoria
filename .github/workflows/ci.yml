@@ -14,6 +14,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  agent-skills:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: agent-skills
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          package_json_file: agent-skills/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: agent-skills/pnpm-lock.yaml
+
+      # Match release verification before a change reaches the publish job.
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Committed SDK bundles match the lockfile
+        run: |
+          pnpm bundle:sdk
+          pnpm bundle:services
+          git diff --exit-code -- plugins/algoria/lib/vendor/
+
+      - name: Pack dry run
+        working-directory: agent-skills/plugins/algoria
+        run: npm pack --dry-run
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
