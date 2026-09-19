@@ -60,7 +60,36 @@ function mediaSchema(kind: Service['outputKind']) {
     },
   };
 }
+const CALL_OUTPUT_SCHEMA = {
+  type: 'object',
+  required: ['call'],
+  additionalProperties: false,
+  properties: {
+    call: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['contact', 'status', 'summary', 'goal_achieved', 'transcript'],
+      properties: {
+        contact: { type: 'string' },
+        status: { type: 'string', description: 'Final Twilio call status, normally completed.' },
+        duration_seconds: { type: 'integer', minimum: 0 },
+        summary: { type: 'string' },
+        goal_achieved: { type: 'boolean' },
+        transcript: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['speaker', 'text'],
+            properties: { speaker: { enum: ['agent', 'contact'] }, text: { type: 'string' } },
+          },
+        },
+      },
+    },
+  },
+};
 function outputSchema(kind: Service['outputKind']) {
+  if (kind === 'call') return CALL_OUTPUT_SCHEMA;
   const media = mediaSchema(kind);
   return {
     type: 'object',
@@ -158,6 +187,21 @@ export const jobSchemaFor = (service: Service) => jobSchema([service]);
 
 const exampleId = '00000000-0000-4000-8000-000000000001';
 function exampleOutput(service: Service) {
+  if (service.outputKind === 'call') {
+    return {
+      call: {
+        contact: 'berkin',
+        status: 'completed',
+        duration_seconds: 48,
+        summary: 'Berkin confirmed he is ready for the 3pm demo.',
+        goal_achieved: true,
+        transcript: [
+          { speaker: 'agent', text: 'Hi Berkin, this is an AI assistant calling on behalf of Dogukan.' },
+          { speaker: 'contact', text: 'Hi, sure.' },
+        ],
+      },
+    };
+  }
   const media = service.outputKind === 'images'
     ? {
       url: 'https://storage.example.com/image.png?token=example',
@@ -278,6 +322,16 @@ export function serviceDocument(config: Config, requirements: unknown, service: 
           },
           output:
             'Vertical 9:16 MP4, English preset voice (female by default), up to 30 seconds. Generated still-image scenes; optional animated captions.',
+        },
+      }
+      : service.id === 'phone.call'
+      ? {
+        preparation: {
+          planning:
+            'Confirm the contact and the exact goal with the user before paying. The call is real, in English, and ends after about 90 seconds at most.',
+          contacts: Object.keys(config.phone?.contacts ?? {}),
+          output:
+            'Transcript, summary and goal_achieved after the call ends. Poll the job; a call usually takes 1–2 minutes.',
         },
       }
       : {}),

@@ -116,3 +116,5 @@ Reservations for uncertain/failed attempts remain conservative until reconciled;
 there is no automatic refund or budget reset command.
 
 For multi-service media workflows, read [workflows.md](references/workflows.md).
+For `phone.call` (real AI phone calls), read [phone-calls.md](references/phone-calls.md)
+before quoting; its result is a call summary and transcript, not media.

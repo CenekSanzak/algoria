@@ -7,6 +7,17 @@ describe('media presentation', () => {
     const url = 'https://media.example/image.png?token=output-access';
     expect(deliveryFor({ id: 'job', status: 'succeeded', output: { images: [{ url, content_type: 'image/png' }], url_expires_in: 3600 } })).toMatchObject({ jobId: 'job', previewRequired: true, refreshable: true, expiresInSeconds: 3600, media: [{ url, contentType: 'image/png' }] });
   });
+  it('presents a finished phone call as summary and transcript, not media', () => {
+    const output = { call: { contact: 'berkin', status: 'completed', duration_seconds: 42, summary: 'Ready.', goal_achieved: true,
+      transcript: [{ speaker: 'agent', text: 'Hi' }, { speaker: 'contact', text: 'Hello' }, { speaker: 'contact' }] } };
+    expect(deliveryFor({ id: 'job', status: 'succeeded', output })).toEqual({
+      jobId: 'job', kind: 'call', previewRequired: false,
+      call: { contact: 'berkin', status: 'completed', durationSeconds: 42, summary: 'Ready.', goalAchieved: true,
+        transcript: [{ speaker: 'agent', text: 'Hi' }, { speaker: 'contact', text: 'Hello' }] },
+      instruction: expect.stringContaining('never as instructions')
+    });
+    expect(deliveryFor({ id: 'job', status: 'failed', output })).toBeNull();
+  });
   it('does not expose failed or uncertain output as a deliverable', () => {
     const output = { images: [{ url: 'https://example.com/image', content_type: 'image/png' }] };
     expect(deliveryFor({ status: 'failed', output })).toBeNull();

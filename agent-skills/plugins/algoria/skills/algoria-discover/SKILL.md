@@ -1,6 +1,6 @@
 ---
 name: algoria-discover
-description: For every new paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Fulfill natural requests such as "make me a video", "generate an image", "bana video üret" or "görsel oluştur" with Algoria or optional Stellar8004 testnet services, even without naming Algoria. Also handles catalog/price questions and external discovery; those read-only questions do not need funding. Not for storyboards, media advice or local coding.
+description: For every new paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Fulfill natural requests such as "make me a video", "generate an image", "bana video üret" or "görsel oluştur", or "call Berkin and remind him about the demo" with Algoria or optional Stellar8004 testnet services, even without naming Algoria. Also handles catalog/price questions and external discovery; those read-only questions do not need funding. Not for storyboards, media advice or local coding.
 ---
 
 # Discover services and deliver the requested result
@@ -125,6 +125,7 @@ a general conversation rule, not a special-purpose content-generation skill.
    single discoverable composite service when it covers the requested outcome. For a video
    without existing media, include the upstream image/narration steps required
    by the video services; do not stop and ask the user to call each service.
+   For a phone call request, read [phone calls](../algoria-pay/references/phone-calls.md).
    Read [the payment workflow guide](../algoria-pay/references/workflows.md)
    for the current media dependencies. Ask only for creative details that
    materially affect the result and cannot be reasonably inferred.

@@ -46,6 +46,16 @@ const ALL_CONFIG: Config = {
     'video.slideshow': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 5)), priceAtomic: '100000' },
     'video.compose': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 3)), priceAtomic: '300000' },
     'video.caption': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 4)), priceAtomic: '400000' },
+    'phone.call': { payTo: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 7)), priceAtomic: '1000000' },
+  },
+  phone: {
+    accountSid: 'AC00000000000000000000000000000000',
+    authToken: 'test-auth-token',
+    from: '+15550000000',
+    openaiKey: 'sk-test',
+    realtimeModel: 'gpt-realtime-mini',
+    voice: 'marin',
+    contacts: { berkin: '+15550000001' },
   },
 };
 const REQUIREMENTS: PaymentRequirements = {
@@ -291,7 +301,7 @@ Deno.test('actual invalid input matches the documented POST error shape', async 
 });
 
 Deno.test('all service documents publish matching public schemas without provider configuration', () => {
-  equal(SERVICES.length, 6);
+  equal(SERVICES.length, 7);
   for (const service of SERVICES) {
     const payment = servicePayment(ALL_CONFIG, service.id)!;
     const requirements = { ...REQUIREMENTS, payTo: payment.payTo, amount: payment.priceAtomic };
@@ -325,6 +335,21 @@ Deno.test('service output contracts reject another service or media kind and val
     const other = SERVICES.find((candidate) => candidate.outputKind !== service.outputKind)!;
     equal(validate({ ...example, service_id: other.id }), false);
     equal(validate({ ...example, output: bazaarFor(other).info.output.example.output }), false);
+    if (service.outputKind === 'call') {
+      const call = example.output.call;
+      equal(
+        validate({
+          ...example,
+          output: { call: { ...call, transcript: [{ speaker: 'robot', text: 'x' }] } },
+        }),
+        false,
+      );
+      equal(validate({ ...example, output: { call: { ...call, goal_achieved: 'yes' } } }), false);
+      for (const status of ['awaiting_payment', 'queued', 'running', 'failed']) {
+        assertConforms(jobSchemaFor(service), { ...example, status, output: null, payment: null });
+      }
+      continue;
+    }
     const media = service.outputKind === 'images'
       ? {
         url: 'https://storage.example.test/image.png',
@@ -394,16 +419,16 @@ Deno.test('OpenAPI exposes exact enabled service paths and request examples', ()
   }
 });
 
-Deno.test('six-service discovery paginates and filters by recipient, tags, and protocol', async () => {
+Deno.test('seven-service discovery paginates and filters by recipient, tags, and protocol', async () => {
   const app = await testApp(ALL_CONFIG);
   const all = await (await app.request('/discovery/resources')).json();
-  equal(all.pagination.total, 6);
+  equal(all.pagination.total, 7);
   deepEqual(all.resources.map((s: { id: string }) => s.id), SERVICES.map((s) => s.id));
-  deepEqual(all.resources.map((s: { version: string }) => s.version), ['1', '1', '1', '2', '1', '1']);
-  equal(new Set(all.resources.map((s: { accepts: { payTo: string }[] }) => s.accepts[0].payTo)).size, 6);
+  deepEqual(all.resources.map((s: { version: string }) => s.version), ['1', '1', '1', '2', '1', '1', '1']);
+  equal(new Set(all.resources.map((s: { accepts: { payTo: string }[] }) => s.accepts[0].payTo)).size, 7);
   for (const [offset, limit] of [[0, 2], [2, 2], [4, 2], [6, 2]]) {
     const page = await (await app.request(`/discovery/resources?offset=${offset}&limit=${limit}`)).json();
-    equal(page.pagination.total, 6);
+    equal(page.pagination.total, 7);
     equal(page.pagination.offset, offset);
     equal(page.pagination.limit, limit);
     equal(page.pagination.cursor, null);

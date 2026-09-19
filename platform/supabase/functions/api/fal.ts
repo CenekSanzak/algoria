@@ -13,7 +13,7 @@ const encoder = new TextEncoder();
 export type FalTarget = {
   model: string;
   queuePath: string;
-  output: 'images' | 'audio' | 'video' | 'video_url';
+  output: 'images' | 'audio' | 'video' | 'video_url' | 'call';
 };
 
 export interface FalMediaFile {
