@@ -335,3 +335,22 @@ snapshot, not a live link to the checkout:
 ```bash
 codex plugin remove algoria@algoria-skills && codex plugin add algoria@algoria-skills
 ```
+# Regression checks for discovery, payments and recovery (0.4.0)
+
+From `agent-skills/`, run `pnpm test`, `pnpm check`, `pnpm bundle:sdk`, and
+`pnpm bundle:services`. No CI workflow is required for this local verification.
+The tests redirect ALGORIA_HOME to temporary directories and mock all payment
+and anchor traffic. They do not send a real payment or invoke a paid provider.
+
+The regression suite covers installed script paths containing spaces, Unicode,
+and `#`; both direct skill scripts and CLI dispatch; remote top-up recovery and
+stale-status reconciliation; discovery schemas; quote identity persistence;
+header/body and offer validation; per-call and concurrent total budget limits;
+one signature per dispatched job; timeout recovery; unsigned paid-job resume;
+and withholding tokens/authorizations from normal output.
+
+Use `algoria discover list` for a live read-only smoke test. A live `pay run`
+needs an explicitly authorized budget and consumes backend generation capacity.
+Use the saved job ID for every retry. For package verification, `npm pack` the
+plugin and extract it into a temporary directory with no `node_modules`, then
+run every command group's help and load both bundled SDKs.

@@ -14,6 +14,14 @@
 import { readFile } from 'node:fs/promises';
 
 const GROUPS = {
+  discover: {
+    script: '../skills/algoria-discover/scripts/discover.mjs',
+    blurb: 'find agents/services, read schemas and current testnet prices'
+  },
+  pay: {
+    script: '../skills/algoria-pay/scripts/pay.mjs',
+    blurb: 'quote, pay with x402 within a budget, and recover saved results'
+  },
   wallet: {
     script: '../skills/algoria-wallet/scripts/wallet.mjs',
     blurb: 'create a wallet, fund it, check balances, add the USDC trustline'
@@ -41,6 +49,8 @@ async function usage() {
     '  algoria wallet onboard --network testnet',
     '  algoria wallet balance --json',
     '  algoria topup start --try 200',
+    '  algoria discover search image',
+    '  algoria pay',
     '',
     `Run \`algoria <group>\` on its own for that group's commands.`,
     '',

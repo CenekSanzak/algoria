@@ -46,7 +46,7 @@ not contain a supported manifest*, which rules out installing from git.
 **Everything inside `plugins/algoria/` ships; everything outside it does not.**
 Both hosts install a plugin by copying its directory wholesale, and neither
 consults `.gitignore` — with the harness and `node_modules` still inside, a Codex
-install measured 104MB. Hoisted out, the same install is 444KB. So `package.json`,
+install measured 104MB. The harness remains outside the installed plugin; only the bundled runtime ships. So `package.json`,
 `tests/`, `build/` and `node_modules` live at the marketplace root, and the tests
 reach into `plugins/algoria/lib/` from there.
 
@@ -92,6 +92,8 @@ Same code either way — see [Two channels](#two-channels-one-source) below.
 | --- | --- |
 | [`algoria-wallet`](plugins/algoria/skills/algoria-wallet/SKILL.md) | A Stellar wallet on the user's own machine. `onboard` creates it, funds it on testnet, and adds the USDC trustline in one command; `balance`, `accounts`, `fund`, `trustline`, `import`, `export`, `forget` cover the rest. |
 | [`algoria-topup`](plugins/algoria/skills/algoria-topup/SKILL.md) | Mock Turkish lira into testnet USDC, through the TR mock anchor over SEP-6. `start` opens a deposit and hands the user an IBAN, an amount and a reference; the user pays; `status --wait` confirms the USDC landed. |
+| [`algoria-discover`](plugins/algoria/skills/algoria-discover/SKILL.md) | Search the live Algoria service catalog and read current prices, recipients, and schemas. |
+| [`algoria-pay`](plugins/algoria/skills/algoria-pay/SKILL.md) | Quote a service, pay with local x402 signing within an approved named budget, and recover the saved job and media. |
 
 The command surface is modelled on AgentCash's wallet flow — auto-created wallet,
 one entry point with subcommands, `--json` everywhere — adapted to Stellar. See
@@ -106,12 +108,12 @@ ignores the manifests. Nothing is generated, and there is no second copy of
 `lib/` that could drift from the first.
 
 This works only because the SDK is bundled: the package declares **no
-dependencies**, so `npx algoria` is a 111KB download with nothing behind it. A
+dependencies**, so `npx algoria` is a self-contained download with nothing behind it. A
 test asserts that `dependencies` stays absent, because adding one would quietly
 undo it.
 
 Each skill's script exports `main(argv)` and keeps a
-`import.meta.url === file://${process.argv[1]}` guard, so the same file runs both
+`isMain(import.meta.url)` guard from `lib/cli.mjs`, so the same file runs both
 as `node skills/…/wallet.mjs onboard` (how the agent calls it) and through
 `bin/algoria.mjs` (how `npx` calls it). `bin/algoria.mjs` is a dispatcher only —
 if a flag ever works in one channel and not the other, that file has grown
@@ -171,6 +173,39 @@ development checkout works either way.
 Rebuild and commit the bundle when the SDK version changes or a new symbol is
 needed; a symbol not listed in the entry point does not exist at runtime.
 
+The payment client uses pinned `@x402/core` / `@x402/stellar` 2.22.0 and the
+same Stellar SDK 16.2.0 as the platform. `build/services-sdk-entry.mjs` bundles
+local signing, header codecs and AJV schema validation into a second runtime
+bundle. Neither installed plugins nor the npm package need `node_modules`.
+
+## Service discovery and payment
+
+```bash
+node plugins/algoria/bin/algoria.mjs discover search image
+node plugins/algoria/bin/algoria.mjs discover show image.generate --json
+node plugins/algoria/bin/algoria.mjs pay budget --name demo --total 0.03 --per-call 0.02
+node plugins/algoria/bin/algoria.mjs pay quote image.generate --input input.json --budget demo --json
+node plugins/algoria/bin/algoria.mjs pay run SAVED_JOB_ID --approve --json
+node plugins/algoria/bin/algoria.mjs pay status SAVED_JOB_ID --wait --json
+```
+
+Use `{"prompt":"A small red sailboat"}` as the image input. Budgets use decimal
+test USDC, calculated as integer atomic units. Configure only limits authorized
+by the user. `quote` persists the identity and exact input before an unpaid
+POST; `run` reserves budget before signing. A timed-out payment is recovered
+with GET for the saved job, never a new UUID/signature. Already-paid jobs resume
+with an unsigned POST. `status` refreshes completed media URLs without paying.
+
+The local `services.json` holds recovery tokens and signatures (0600), while
+`pay list/status` expose only public fields. Process locks guard jobs and budget
+updates. An interrupted lock is recovered only after checking its owner PID;
+uncertain payments keep their reservations. The client supports Algoria's own
+HTTP service catalog on testnet, not arbitrary third-party endpoints.
+
+Top-up start now reconciles remote history before creating a deposit, refreshes
+stale statuses and persists recovered records. Multiple pending deposits stop
+creation unless the user explicitly requests `--new`.
+
 ## Development
 
 Everything below runs in `agent-skills/`, the marketplace root — not in the
@@ -180,7 +215,8 @@ plugin directory.
 pnpm install --ignore-workspace   # this package is not in the root workspace
 pnpm test
 pnpm check                        # tsc --noEmit over JSDoc-typed .mjs
-pnpm bundle:sdk                   # regenerate the plugin's lib/vendor/ bundle
+pnpm bundle:sdk                   # wallet/SEP-10 SDK bundle
+pnpm bundle:services              # x402 signing and JSON Schema validation bundle
 ```
 
 `--ignore-workspace` keeps this package out of the root app's dependency graph,
