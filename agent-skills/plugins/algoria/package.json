@@ -1,6 +1,6 @@
 {
   "name": "algoria",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A Stellar wallet your agent can spend from: local wallets, USDC trustlines, and x402 payments.",
   "type": "module",
   "bin": {

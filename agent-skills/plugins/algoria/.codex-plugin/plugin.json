@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.3.0",
-  "description": "Algoria skills for the agent economy on Stellar: local wallets, x402 payments, and agent discovery.",
+  "version": "0.4.0",
+  "description": "Algoria services on Stellar: local wallets, mock top-ups, service discovery, and budgeted x402 payments with job recovery.",
   "author": {
     "name": "Algoria",
     "url": "https://algoria-agent-economy.berkingurcan.chatgpt.site"
@@ -18,8 +18,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Algoria",
-    "shortDescription": "A Stellar wallet your agent can spend from",
-    "longDescription": "Gives the agent a Stellar wallet held on this machine, funds it on testnet, and adds the USDC trustline so it can pay for services over x402. Top up with mock Turkish lira through a sandbox anchor over SEP-6. The secret seed never leaves the machine.",
+    "shortDescription": "Create media using paid Algoria services",
+    "longDescription": "Ask for an image, voiceover or video in natural language. The agent discovers suitable Algoria services, plans the needed steps, uses a local Stellar testnet wallet within your approved USDC budget, and returns the finished media. Saved jobs support recovery without another payment.",
     "developerName": "Algoria",
     "category": "Developer Tools",
     "capabilities": [
@@ -28,9 +28,9 @@
     ],
     "websiteURL": "https://algoria-agent-economy.berkingurcan.chatgpt.site/",
     "defaultPrompt": [
-      "Create a Stellar wallet and fund it on testnet",
-      "Check my USDC and XLM balance",
-      "Top up my wallet with 200 test lira"
+      "Create a narrated product video for me",
+      "Generate an image for my product",
+      "Find a service that can handle my task"
     ],
     "brandColor": "#0B1C3D",
     "logo": "./assets/algoria.svg",

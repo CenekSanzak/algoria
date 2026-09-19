@@ -19,7 +19,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { writeFile } from 'node:fs/promises';
-import { commandName, emit, parseArgs, resolvePassphrase, run } from '../../../lib/cli.mjs';
+import { commandName, emit, isMain, parseArgs, resolvePassphrase, run } from '../../../lib/cli.mjs';
 import { loadAccount, fundWithFriendbot } from '../../../lib/stellar/horizon.mjs';
 import { deleteWallet, ensureWallet, importWallet, listWallets, unlockWallet, walletPath } from '../../../lib/stellar/keystore.mjs';
 import { resolveNetwork } from '../../../lib/stellar/network.mjs';
@@ -375,5 +375,5 @@ export function main(argv) {
 // Runnable on its own, which is how the skills invoke it, and importable by
 // `bin/algoria.mjs`, which is how `npx algoria` invokes it. The guard keeps the
 // import side-effect-free so the dispatcher can pass its own argv.
-if (import.meta.url === `file://${process.argv[1]}`) main(process.argv.slice(2));
+if (isMain(import.meta.url)) main(process.argv.slice(2));
 

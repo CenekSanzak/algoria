@@ -12,6 +12,21 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/** Direct execution, including symlinked bins and paths with spaces/Unicode.
+ * @param {string} moduleUrl
+ * @param {string | undefined} [entryPath]
+ */
+export function isMain(moduleUrl, entryPath = process.argv[1]) {
+  if (!entryPath) return false;
+  try {
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(entryPath);
+  } catch {
+    return false;
+  }
+}
 
 const ETX = ''; // ctrl-c
 const DEL = '';

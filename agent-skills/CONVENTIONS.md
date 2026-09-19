@@ -74,7 +74,7 @@ WALLET="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-wallet/scripts/wallet.mjs"
   whole surface then fits in one table in SKILL.md. Exactly one subcommand may
   reveal a secret, and it is named for that.
 - **That entry point exports `main(argv)`** and keeps its
-  `import.meta.url === file://${process.argv[1]}` guard, so the file runs both
+  `isMain(import.meta.url)` guard from `lib/cli.mjs`, so the file runs both
   directly (the agent's path) and through `bin/algoria.mjs` (the `npx` path).
   Never read `process.argv` anywhere but that guard: a script that reaches for it
   directly works in one channel and silently ignores the other's arguments.
@@ -157,7 +157,7 @@ build step and no second copy of `lib/`, and it stays that way.
 
 **`package.json` must declare no `dependencies`.** The Stellar SDK is bundled
 into `lib/vendor/` so that an installed plugin needs no `npm install` and `npx
-algoria` is a ~111KB download. One dependency undoes both. A test enforces it.
+algoria` is a self-contained download. One dependency undoes both. A test enforces it.
 
 Before publishing, check what npm would ship — `npm pack --dry-run` — and install
 the tarball somewhere clean. `added 1 package` is the pass; more than that means

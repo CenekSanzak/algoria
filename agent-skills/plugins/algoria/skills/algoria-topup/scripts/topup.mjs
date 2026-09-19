@@ -13,11 +13,13 @@
  * would be.
  */
 
-import { commandName, emit, parseArgs, run } from '../../../lib/cli.mjs';
+import { commandName, emit, isMain, parseArgs, run } from '../../../lib/cli.mjs';
+import { withLock } from '../../../lib/lock.mjs';
+import { reconcileDeposits, rememberDeposit } from '../../../lib/anchor/reconcile.mjs';
 import { ANCHOR, assertAnchorNetwork, estimateUsdc, normaliseTryAmount, verifyAnchor } from '../../../lib/anchor/anchor.mjs';
 import { authenticate } from '../../../lib/anchor/sep10.mjs';
 import { createDeposit, getDeposit, isSuccess, isTerminal, listDeposits } from '../../../lib/anchor/sep6.mjs';
-import { findDeposit, latestDeposit, recordDeposit, updateDeposit } from '../../../lib/anchor/state.mjs';
+import { findDeposit, latestDeposit, recordDeposit } from '../../../lib/anchor/state.mjs';
 import { loadAccount } from '../../../lib/stellar/horizon.mjs';
 import { getWallet, unlockWallet } from '../../../lib/stellar/keystore.mjs';
 import { resolveNetwork } from '../../../lib/stellar/network.mjs';
@@ -119,7 +121,12 @@ const COMMANDS = {
 
     // An open deposit is an unpaid bill. Opening a second one is how a user
     // ends up paying twice, so it takes an explicit --new.
-    const open = await latestDeposit(publicKey);
+    const jwt = await login(network);
+    const pending = await reconcileDeposits({ jwt, publicKey });
+    if (pending.length > 1 && flags.new !== true) {
+      throw new Error(`multiple open deposits: ${pending.map((entry) => entry.id).join(', ')}. Check status --id <id>; use --new only for an intentional additional deposit.`);
+    }
+    const open = pending[0];
     if (open && !isTerminal(open.status) && flags.new !== true) {
       emit(
         flags,
@@ -137,7 +144,6 @@ const COMMANDS = {
       return;
     }
 
-    const jwt = await login(network);
     const order = await createDeposit({ jwt, publicKey, amountTry });
     const record = await recordDeposit({
       id: order.id,
@@ -185,11 +191,7 @@ const COMMANDS = {
       await sleep(POLL_INTERVAL_MS);
       deposit = await getDeposit({ jwt, id });
     }
-    await updateDeposit(id, {
-      status: deposit.status,
-      amountOut: deposit.amountOut,
-      stellarTransactionId: deposit.stellarTransactionId
-    });
+    await rememberDeposit(deposit, publicKey);
 
     // The anchor saying "completed" and the wallet holding the USDC are two
     // different claims. Report the second one.
@@ -291,12 +293,11 @@ export function main(argv) {
     }
     const handler = COMMANDS[command];
     if (!handler) throw new Error(`unknown command ${JSON.stringify(command)}\n\n${USAGE}`);
-    await handler(flags);
+    await withLock('topup', () => handler(flags));
   });
 }
 
 // Runnable on its own, which is how the skills invoke it, and importable by
 // `bin/algoria.mjs`, which is how `npx algoria` invokes it. The guard keeps the
 // import side-effect-free so the dispatcher can pass its own argv.
-if (import.meta.url === `file://${process.argv[1]}`) main(process.argv.slice(2));
-
+if (isMain(import.meta.url)) main(process.argv.slice(2));

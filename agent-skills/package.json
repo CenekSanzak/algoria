@@ -1,6 +1,6 @@
 {
   "name": "@algoria/agent-skills",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Algoria's shipped Agent Skills, and the harness that tests and builds them. The plugin itself is plugins/algoria.",
@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit",
-    "bundle:sdk": "esbuild build/stellar-sdk-entry.mjs --bundle --format=esm --platform=node --target=node22 --tsconfig-raw={} --legal-comments=none --minify --banner:js=\"// @ts-nocheck -- generated file, do not edit; see build/stellar-sdk-entry.mjs\" --outfile=plugins/algoria/lib/vendor/stellar-sdk.mjs"
+    "bundle:sdk": "esbuild build/stellar-sdk-entry.mjs --bundle --format=esm --platform=node --target=node22 --tsconfig-raw={} --legal-comments=none --minify --banner:js=\"// @ts-nocheck -- generated file, do not edit; see build/stellar-sdk-entry.mjs\" --outfile=plugins/algoria/lib/vendor/stellar-sdk.mjs",
+    "bundle:services": "esbuild build/services-sdk-entry.mjs --bundle --format=esm --platform=node --target=node22 --tsconfig-raw={} --legal-comments=eof --minify --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=plugins/algoria/lib/vendor/services-sdk.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
@@ -20,6 +21,10 @@
     "vitest": "4.1.5"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "16.2.0"
+    "@stellar/stellar-sdk": "16.2.0",
+    "@x402/core": "2.22.0",
+    "@x402/stellar": "2.22.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
   }
 }

@@ -84,6 +84,8 @@ export async function createDeposit({ jwt, publicKey, amountTry }) {
  * @property {string | null} fee
  * @property {string | null} stellarTransactionId
  * @property {string | null} claimableBalanceId set when the account had no trustline
+ * @property {string} [iban]
+ * @property {string} [reference]
  */
 
 /**
@@ -96,6 +98,7 @@ export async function getDeposit({ jwt, id }) {
   const body = await anchorFetch(`/sep6/transaction?id=${encodeURIComponent(id)}`, { jwt });
   const tx = body?.transaction ?? body;
   if (!tx?.id) throw new Error(`the anchor knows no deposit ${id}`);
+  if (String(tx.id) !== id) throw new Error('anchor returned a different deposit identity');
   return {
     id: String(tx.id),
     status: String(tx.status ?? 'unknown'),
@@ -103,7 +106,9 @@ export async function getDeposit({ jwt, id }) {
     amountOut: tx.amount_out ?? null,
     fee: tx.amount_fee ?? null,
     stellarTransactionId: tx.stellar_transaction_id ?? null,
-    claimableBalanceId: tx.claimable_balance_id ?? null
+    claimableBalanceId: tx.claimable_balance_id ?? null,
+    iban: tx.instructions?.bank_account_number?.value,
+    reference: tx.instructions?.external_transfer_memo?.value
   };
 }
 
@@ -118,7 +123,10 @@ export async function getDeposit({ jwt, id }) {
  */
 export async function listDeposits({ jwt }) {
   const body = await anchorFetch('/sep6/transactions?asset_code=USDC&kind=deposit', { jwt });
-  const transactions = Array.isArray(body?.transactions) ? body.transactions : [];
+  if (!Array.isArray(body?.transactions) || body.transactions.some((/** @type {any} */ tx) => !tx?.id || typeof tx.status !== 'string')) {
+    throw new Error('invalid anchor history; refusing to assume there are no pending deposits');
+  }
+  const transactions = body.transactions;
   return transactions.map((/** @type {any} */ tx) => ({
     id: String(tx.id),
     status: String(tx.status ?? 'unknown'),
@@ -126,6 +134,8 @@ export async function listDeposits({ jwt }) {
     amountOut: tx.amount_out ?? null,
     fee: tx.amount_fee ?? null,
     stellarTransactionId: tx.stellar_transaction_id ?? null,
-    claimableBalanceId: tx.claimable_balance_id ?? null
+    claimableBalanceId: tx.claimable_balance_id ?? null,
+    iban: tx.instructions?.bank_account_number?.value,
+    reference: tx.instructions?.external_transfer_memo?.value
   }));
 }

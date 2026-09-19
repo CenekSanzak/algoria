@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "description": "Algoria skills for the agent economy on Stellar: local wallets, x402 payments, and agent discovery.",
-  "version": "0.3.0",
+  "description": "Algoria services on Stellar: local wallets, mock top-ups, service discovery, and budgeted x402 payments with job recovery.",
+  "version": "0.4.0",
   "author": {
     "name": "Algoria"
   },
