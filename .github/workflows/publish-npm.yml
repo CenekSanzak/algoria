@@ -1,0 +1,116 @@
+name: Publish npm
+
+# Publishes agent-skills/plugins/algoria to npm as `algoria` whenever main
+# carries a version that npm does not have yet. A push that does not bump the
+# version is checked and then skipped, so releasing means bumping `version` in
+# the three manifests (package.json, .claude-plugin, .codex-plugin) — the
+# manifests test fails if they disagree.
+#
+# No npm token is stored anywhere. This uses npm trusted publishing: npm trusts
+# this one workflow file in this one repository, and the job proves who it is
+# with a short-lived GitHub OIDC token. Set up once on npmjs.com under
+# algoria -> Settings -> Trusted publishing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agent-skills/**'
+      - '.github/workflows/publish-npm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel a publish halfway; queue the next one behind it instead.
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm trusted publishing exchanges
+    defaults:
+      run:
+        working-directory: agent-skills
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: agent-skills/pnpm-lock.yaml
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or newer; Node 22 ships npm 10.
+      - name: Upgrade npm
+        run: npm install -g npm@^11.5.1
+
+      - name: Decide whether this version is new
+        id: version
+        run: |
+          version=$(node -p "require('./plugins/algoria/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if npm view "algoria@$version" version >/dev/null 2>&1; then
+            echo "algoria@$version is already on npm; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "algoria@$version is new; publishing."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The harness is not in the root workspace, so it installs on its own.
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Unit tests
+        run: pnpm test
+
+      # The bundle is committed and byte-reproducible. Rebuilding it and finding
+      # a diff means the SDK changed without `pnpm bundle:sdk` being rerun, and
+      # the package would ship code that does not match its lockfile.
+      - name: Committed SDK bundle matches the lockfile
+        run: |
+          pnpm bundle:sdk
+          git diff --exit-code -- plugins/algoria/lib/vendor/
+
+      - name: Pack dry run
+        working-directory: agent-skills/plugins/algoria
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        if: steps.version.outputs.publish == 'true'
+        working-directory: agent-skills/plugins/algoria
+        run: npm publish --provenance --access public
+
+      # Registry reads can lag a publish by a few seconds.
+      - name: Smoke test the published package
+        if: steps.version.outputs.publish == 'true'
+        working-directory: ${{ runner.temp }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if [ "$(npx -y "algoria@$VERSION" --version)" = "$VERSION" ]; then
+              echo "npx algoria@$VERSION works."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "algoria@$VERSION did not become installable." >&2
+          exit 1

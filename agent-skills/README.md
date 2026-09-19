@@ -219,6 +219,19 @@ One cosmetic note — esbuild warns that it cannot find the root app's
 repository root's tsconfig on the way past; nothing in this package depends on
 it, and the warning disappears once the root app has been built.
 
+## Releasing
+
+Bump `version` in `plugins/algoria/package.json`, `.claude-plugin/plugin.json`
+and `.codex-plugin/plugin.json`, and merge to `main`. That is the release.
+
+- **npm:** [`publish-npm.yml`](../.github/workflows/publish-npm.yml) runs the
+  type check, the tests and a bundle-reproducibility check, then publishes if
+  npm does not have that version yet. A push without a bump is checked and
+  skipped. No token is stored — npm trusts that workflow file directly
+  (trusted publishing), and every release carries a provenance attestation.
+- **Plugins:** both hosts install from GitHub, so merging is the release. Users
+  pick it up when they reinstall.
+
 ## Security posture
 
 - A secret seed never leaves the user's machine, and no command prints one
