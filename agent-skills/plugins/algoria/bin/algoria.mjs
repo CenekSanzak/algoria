@@ -14,6 +14,10 @@
 import { readFile } from 'node:fs/promises';
 
 const GROUPS = {
+  install: {
+    script: '../lib/install.mjs',
+    blurb: 'install the plugin for Codex or Claude Code in one command'
+  },
   discover: {
     script: '../skills/algoria-discover/scripts/discover.mjs',
     blurb: 'find agents/services, read schemas and current testnet prices'
@@ -46,6 +50,7 @@ async function usage() {
   lines.push(
     '',
     'Examples',
+    '  algoria install --agent codex',
     '  algoria wallet onboard --network testnet',
     '  algoria wallet balance --json',
     '  algoria topup start --try 200',

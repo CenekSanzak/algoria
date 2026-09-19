@@ -70,6 +70,9 @@ WALLET="${CLAUDE_PLUGIN_ROOT:-.}/skills/algoria-wallet/scripts/wallet.mjs"
   Verify by hiding `node_modules` and running the command.
 - **Shared code lives in `lib/`**, imported by relative path. Two skills needing
   the same logic is the signal to move it there, not to copy it.
+- `install` is the CLI bootstrap exception: it delegates to `lib/install.mjs`
+  because it installs the plugin before skills are available. It has no wallet
+  or payment side effects and needs no installed skill to run.
 - **One entry point per skill**, with subcommands named for what they do — the
   whole surface then fits in one table in SKILL.md. Exactly one subcommand may
   reveal a secret, and it is named for that.

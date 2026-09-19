@@ -84,6 +84,24 @@ npx algoria wallet onboard --network testnet
 npx algoria topup start --try 200
 ```
 
+Starting with npm version **0.5.1**, the CLI can also install the agent plugin:
+
+```bash
+npx algoria@latest install --agent codex
+npx algoria@latest install --agent claude
+```
+
+This delegates to the host's plugin marketplace commands with the GitHub source,
+so users do not need a checkout. `--ref` selects a branch/tag (default `main`),
+`--cli /absolute/path` selects a host binary, and `--dry-run --json` previews the
+commands without running them. Codex's macOS app-bundled CLI is detected if it
+is absent from PATH. Installation uses the existing application; it does not
+install the application, create a wallet or authorize payments. Open a new task
+or Claude Code session after installation.
+
+`@latest` is usable only after npm publishes this version. To test before release,
+pack `plugins/algoria` and run `npx --package=/absolute/path/algoria-0.5.1.tgz algoria install --agent codex --ref <branch>`.
+
 Same code either way — see [Two channels](#two-channels-one-source) below.
 
 ## Skills

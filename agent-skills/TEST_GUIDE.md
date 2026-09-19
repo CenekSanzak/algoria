@@ -22,6 +22,27 @@ Then pick a section:
 
 Two ways in, and neither needs this repo checked out. Do either or both.
 
+## One-command plugin install (0.5.1+)
+
+After npm publication, from any normal terminal:
+
+```bash
+npx algoria@latest install --agent codex
+# Or:
+npx algoria@latest install --agent claude
+```
+
+Use `--ref codex/stellar8004-testnet-services` to test that branch. `--dry-run --json`
+must show the selected source, ref and host argv without invoking the host. Open
+a new task/session after a real install. This bootstrap never onboards a wallet.
+
+Before publication, pack the plugin and run the same command through the tarball:
+`npx --package=/absolute/path/algoria-0.5.1.tgz algoria install --agent codex --ref codex/stellar8004-testnet-services`.
+The installer tests use a fake executable in a temporary path containing spaces;
+they check Codex/Claude argument handling, missing/old CLIs, ref validation,
+streamed host errors, clean JSON output and stopping before plugin installation
+if marketplace registration fails. They do not mutate real host settings.
+
 ## As a CLI, with `npx`
 
 ```bash

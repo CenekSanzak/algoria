@@ -1,6 +1,6 @@
 {
   "name": "algoria",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Algoria and optional Stellar8004 testnet services: local wallets, mock top-ups, discovery and budgeted x402 payments.",
   "author": {
     "name": "Algoria",

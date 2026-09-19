@@ -1,6 +1,6 @@
 {
   "name": "@algoria/agent-skills",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "Algoria's shipped Agent Skills, and the harness that tests and builds them. The plugin itself is plugins/algoria.",

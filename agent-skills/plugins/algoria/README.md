@@ -13,8 +13,37 @@ No install, no API key, no account:
 npx algoria wallet onboard --network testnet
 ```
 
-That one command creates the wallet, funds it from Friendbot, and adds the
-trustline. Run it again and it reports what was already done.
+That command creates the wallet, funds it from Friendbot, and adds the trustline.
+Run it again and it reports what was already done.
+
+For natural-language use in your coding agent, **version 0.5.1 and later** also
+provide a one-command plugin installer:
+
+```bash
+npx algoria@latest install --agent codex
+# Or:
+npx algoria@latest install --agent claude
+```
+
+Run this in a normal terminal, from any directory, then open a new task/session.
+Node 22+ and the chosen application with plugin support must already be installed.
+The installer adds the GitHub marketplace and installs Algoria using the host's
+own CLI. It can find Codex inside Codex.app/ChatGPT.app on macOS without PATH
+setup. It does not create wallets or authorize spending.
+
+`--ref <branch-or-tag>` selects a GitHub version (default `main`), `--cli` accepts
+an absolute host executable path, and `--dry-run` previews commands without
+running them. `--json` emits a machine-readable summary. For example:
+
+```bash
+npx algoria@latest install --agent codex --ref codex/stellar8004-testnet-services
+```
+
+Before this version is published, `@latest` still downloads the previous npm
+release. An unpacked checkout or a supplied `algoria-0.5.1.tgz` can exercise the
+same installer: `npx --package=/absolute/path/algoria-0.5.1.tgz algoria install --agent codex --ref <branch>`.
+If a host rejects an existing marketplace with a different source, the installer
+reports its error and stops; it does not remove existing marketplaces or plugins.
 
 ## Commands
 
