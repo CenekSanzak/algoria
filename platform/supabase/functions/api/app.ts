@@ -49,7 +49,7 @@ export interface Dependencies {
   config: Config;
   social?: Pick<SocialWorkflow, 'start' | 'advance' | 'progress' | 'parent' | 'sweep' | 'validateReferences'>;
   references?: Pick<SocialStore, 'reserveReference'>;
-  phone?: Pick<PhoneCalls, 'validate' | 'start' | 'advance' | 'statusCallback' | 'stream'>;
+  phone?: Pick<PhoneCalls, 'validate' | 'start' | 'advance' | 'twiml' | 'statusCallback' | 'stream'>;
   workflowSecret?: string;
   store: JobStore;
   payments: Pick<
@@ -554,6 +554,13 @@ export function createApp(d: Dependencies) {
       throw new HttpError(426, 'websocket-required');
     }
     return d.phone.stream(c.req.raw);
+  });
+  app.on(['GET', 'POST'], '/phone/twiml/:id', async (c) => {
+    if (!d.phone) throw new HttpError(503, 'phone-unavailable');
+    const id = c.req.param('id');
+    if (!validId(id)) throw new HttpError(404, 'job-not-found');
+    const twiml = await d.phone.twiml(id, c.req.query('token') ?? '');
+    return new Response(twiml, { headers: { 'content-type': 'text/xml' } });
   });
   app.post('/webhooks/twilio/:id', async (c) => {
     if (!d.phone) throw new HttpError(503, 'phone-unavailable');

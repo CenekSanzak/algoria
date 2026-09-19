@@ -3,8 +3,8 @@ import type { PhoneConfig } from './config.ts';
 import { HttpError } from './security.ts';
 import type { Job, Store } from './store.ts';
 
-/** Twilio's time limit; our bridge wraps up earlier. Free-plan Edge wall clock is 150s. */
-export const CALL_TIME_LIMIT_SECONDS = 100;
+// Trial accounts reject TimeLimit/Twiml, so the bridge enforces duration itself and hangs up.
+// Free-plan Edge wall clock is 150s.
 const WRAP_UP_AFTER_MS = 75_000;
 const HARD_STOP_AFTER_MS = 95_000;
 const NOT_CONNECTED = ['busy', 'no-answer', 'failed', 'canceled'];
@@ -26,6 +26,7 @@ export type CallPatch = Partial<
 >;
 
 export interface CallRepository {
+  note(text: string): Promise<void>;
   get(jobId: string): Promise<CallRow | null>;
   create(jobId: string): Promise<void>;
   update(jobId: string, patch: CallPatch): Promise<void>;
@@ -37,6 +38,9 @@ export class SupabaseCallRepository implements CallRepository {
     this.client = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
+  }
+  async note(text: string) {
+    await this.client.from('phone_debug').insert({ note: text.slice(0, 500) });
   }
   async get(jobId: string) {
     const { data, error } = await this.client.from('phone_calls').select('*').eq('job_id', jobId)
@@ -96,15 +100,15 @@ export class Twilio {
     return body as { sid: string };
   }
 
-  async placeCall(options: { to: string; twiml: string; statusCallback: string }) {
+  /** TimeLimit/Timeout need a full (non-trial) account; the bridge also stops itself. */
+  async placeCall(options: { to: string; url: string; statusCallback: string }) {
     const form = new URLSearchParams({
       To: options.to,
       From: this.config.from,
-      Twiml: options.twiml,
-      TimeLimit: String(CALL_TIME_LIMIT_SECONDS),
-      Timeout: '30',
+      Url: options.url,
       StatusCallback: options.statusCallback,
-      StatusCallbackMethod: 'POST',
+      TimeLimit: '110',
+      Timeout: '45',
     });
     for (const event of ['initiated', 'ringing', 'answered', 'completed']) {
       form.append('StatusCallbackEvent', event);
@@ -228,14 +232,10 @@ export class PhoneCalls {
     const claim = await store.claimSubmission(job.id);
     if (!claim.claimed) return claim.job;
     const token = await signJob(config.authToken, job.id);
-    const twiml =
-      `<Response><Connect><Stream url="${xml(`${baseUrl.replace(/^http/, 'ws')}/phone/stream`)}">` +
-      `<Parameter name="job" value="${job.id}"/><Parameter name="token" value="${token}"/>` +
-      `</Stream></Connect></Response>`;
     try {
       const sid = await twilio.placeCall({
         to,
-        twiml,
+        url: `${baseUrl}/phone/twiml/${job.id}?token=${token}`,
         statusCallback: `${baseUrl}/webhooks/twilio/${job.id}?token=${token}`,
       });
       await calls.update(job.id, { call_sid: sid, call_status: 'initiated' });
@@ -288,6 +288,17 @@ export class PhoneCalls {
     }
   }
 
+  /** TwiML Twilio fetches when the call is answered: connect its audio to our WebSocket bridge. */
+  async twiml(jobId: string, token: string): Promise<string> {
+    if (!(await tokenValid(this.d.config.authToken, jobId, token))) {
+      throw new HttpError(401, 'invalid-webhook');
+    }
+    return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect>` +
+      `<Stream url="${xml(`${this.d.baseUrl.replace(/^http/, 'ws')}/phone/stream`)}">` +
+      `<Parameter name="job" value="${jobId}"/><Parameter name="token" value="${token}"/>` +
+      `</Stream></Connect></Response>`;
+  }
+
   /** Twilio status callback. Authenticated by the per-job token we put in its URL. */
   async statusCallback(jobId: string, token: string, params: URLSearchParams): Promise<Job | null> {
     if (!(await tokenValid(this.d.config.authToken, jobId, token))) {
@@ -307,6 +318,7 @@ export class PhoneCalls {
   /** Twilio Media Stream <-> OpenAI Realtime. Both speak 8 kHz mu-law, so audio passes through. */
   stream(request: Request): Response {
     const { socket, response } = Deno.upgradeWebSocket(request);
+    console.log('phone stream upgrade');
     const session = new CallSession(socket, this.d);
     // Keep the Edge worker alive until the call ends and its transcript is saved.
     (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(
@@ -325,8 +337,10 @@ function instructions(input: PhoneInput) {
     `${input.on_behalf_of}, then state the reason for the call.`,
     'Be warm, natural and brief: one or two short sentences per turn. Listen and respond to what they say.',
     'Do not invent facts, promises or details beyond the goal. If asked something you do not know, say you will pass it on.',
-    'When the goal is done, or the person declines or wants to stop, say a short goodbye and then call the end_call tool.',
-    'The call is limited to about 90 seconds.',
+    'As soon as the goal is answered, or the person declines or wants to stop, confirm in one short sentence, ' +
+    'say goodbye and immediately call the end_call tool. Do not ask extra questions once you have your answer.',
+    'Never read a tool or function name out loud. Say only what a person would say on a phone call.',
+    'The call is limited to about 90 seconds, so get to the point in your first sentence.',
   ].join('\n');
 }
 
@@ -372,14 +386,18 @@ export class CallSession {
 
   // deno-lint-ignore no-explicit-any -- untyped socket JSON
   private async onTwilio(message: Record<string, any>) {
+    if (message.event !== 'media') console.log('phone stream event', message.event);
     if (message.event === 'start') {
       const params = message.start?.customParameters ?? {};
       const jobId = String(params.job ?? '');
       if (!(await tokenValid(this.d.config.authToken, jobId, String(params.token ?? '')))) {
+        console.log('phone stream refused: token');
         return this.twilio.close();
       }
       const job = await this.d.store.get(jobId);
       if (!job || job.service_id !== 'phone.call' || !['queued', 'running'].includes(job.status)) {
+        console.log('phone stream refused: job', jobId, job?.status);
+        this.d.calls.note(`stream refused job ${jobId} ${job?.status}`).catch(() => {});
         return this.twilio.close();
       }
       this.jobId = jobId;
@@ -387,6 +405,7 @@ export class CallSession {
       this.callSid = message.start.callSid;
       await this.d.calls.update(jobId, { call_status: 'in-progress' });
       await this.d.store.markRunning(jobId);
+      await this.d.calls.note(`stream started ${jobId}`).catch(() => {});
       this.connectOpenAi(job.input as PhoneInput);
       this.timers.push(
         setTimeout(() => {
@@ -433,7 +452,7 @@ export class CallSession {
             input: {
               format: { type: 'audio/pcmu' },
               transcription: { model: 'gpt-4o-mini-transcribe', language: 'en' },
-              turn_detection: { type: 'server_vad', silence_duration_ms: 600 },
+              turn_detection: { type: 'server_vad', threshold: 0.6, silence_duration_ms: 900 },
             },
             output: { format: { type: 'audio/pcmu' }, voice: this.d.config.voice },
           },
@@ -470,7 +489,11 @@ export class CallSession {
       this.onOpenAi(message);
     };
     openai.onerror = () => console.error('openai realtime socket error');
-    openai.onclose = () => this.finish();
+    openai.onclose = (event) => {
+      console.log('openai realtime closed', event?.code, event?.reason);
+      this.d.calls.note(`openai closed ${event?.code ?? ''} ${event?.reason ?? ''}`).catch(() => {});
+      this.finish();
+    };
   }
 
   // deno-lint-ignore no-explicit-any -- untyped socket JSON
@@ -489,17 +512,28 @@ export class CallSession {
         this.lines.push({ speaker: 'contact', text: '', id: message.item_id });
         break;
       case 'conversation.item.input_audio_transcription.completed': {
+        // Transcribers invent foreign-script noise from the first "hello"; keep real speech only.
+        const heard = String(message.transcript ?? '').trim();
+        const text = /[a-z]/i.test(heard) ? heard : '';
         const line = this.lines.find((item) => item.id === message.item_id);
-        if (line) line.text = String(message.transcript ?? '').trim();
-        else this.lines.push({ speaker: 'contact', text: String(message.transcript ?? '').trim() });
+        if (line) line.text = text;
+        else this.lines.push({ speaker: 'contact', text });
         this.save();
         break;
       }
       case 'response.output_audio_transcript.done':
-      case 'response.audio_transcript.done':
-        this.lines.push({ speaker: 'agent', text: String(message.transcript ?? '').trim() });
+      case 'response.audio_transcript.done': {
+        const spoken = String(message.transcript ?? '').replace(
+          /\(?\bfunctions?\.?\s*end[_ ]?call\b\)?/gi,
+          '',
+        )
+          .replace(/\s+/g, ' ').trim();
+        this.lines.push({ speaker: 'agent', text: spoken });
+        // The model sometimes says goodbye (or names the tool) instead of calling it.
+        if (/\bgood ?bye\b|\bend[_ ]call\b/i.test(String(message.transcript ?? ''))) this.ending = true;
         this.save();
         break;
+      }
       case 'response.function_call_arguments.done':
         if (message.name === 'end_call') this.ending = true;
         break;
@@ -510,8 +544,17 @@ export class CallSession {
           this.timers.push(setTimeout(() => this.finish(), 8000));
         }
         break;
+      case 'session.created':
+      case 'session.updated':
+        console.log('openai', message.type);
+        break;
       case 'error':
-        console.error('openai realtime error', message.error?.code ?? message.error?.type);
+        console.error(
+          'openai realtime error',
+          message.error?.code ?? message.error?.type,
+          message.error?.message,
+        );
+        this.d.calls.note(`openai error ${message.error?.code ?? message.error?.type}`).catch(() => {});
         break;
     }
   }
@@ -535,6 +578,7 @@ export class CallSession {
   private finish(hangup = true) {
     if (this.finished) return;
     this.finished = true;
+    console.log('phone session finish', this.jobId || '(no job)', { hangup, lines: this.lines.length });
     for (const timer of this.timers) clearTimeout(timer);
     if (hangup && this.callSid) this.d.twilio.hangup(this.callSid).catch(() => {});
     try {

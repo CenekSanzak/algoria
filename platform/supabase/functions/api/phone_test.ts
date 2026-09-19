@@ -37,6 +37,7 @@ async function harness() {
       '202609180002_speech_service',
       '202609190001_social_video',
       '202609200001_phone_call',
+      '202609200002_phone_debug',
     ]
   ) await db.exec(await Deno.readTextFile(new URL(`../../migrations/${migration}.sql`, import.meta.url)));
   async function rpc<T>(name: string, args: unknown[] = []): Promise<T> {
@@ -58,6 +59,9 @@ async function harness() {
     releaseCompletion: (id, lease) => rpc<Job>('platform_release_completion', [id, lease]),
   };
   const calls: PhoneDependencies['calls'] = {
+    note: async (text) => {
+      await db.query('insert into public.phone_debug(note) values ($1)', [text]);
+    },
     get: async (jobId) =>
       (await db.query<CallRow>('select * from public.phone_calls where job_id=$1', [jobId])).rows[0] ?? null,
     create: async (jobId) => {
@@ -73,7 +77,7 @@ async function harness() {
       );
     },
   };
-  const placed: { to: string; twiml: string; statusCallback: string }[] = [];
+  const placed: { to: string; url: string; statusCallback: string }[] = [];
   const hungUp: string[] = [];
   let twilioMode: 'ok' | 'reject' | 'down' = 'ok';
   const summaries: unknown[] = [];
@@ -158,8 +162,11 @@ Deno.test('phone call: unpaid never dials; paid dials once; callbacks finish wit
     assert.equal(h.placed.length, 1);
     const token = await signJob(CONFIG.authToken, id);
     assert.equal(h.placed[0].to, '+15550000001');
-    assert.match(h.placed[0].twiml, /<Stream url="wss:\/\/api\.example\/functions\/v1\/api\/phone\/stream">/);
-    assert.ok(h.placed[0].twiml.includes(`<Parameter name="token" value="${token}"/>`));
+    assert.equal(h.placed[0].url, `https://api.example/functions/v1/api/phone/twiml/${id}?token=${token}`);
+    const twiml = await h.phone.twiml(id, token);
+    assert.match(twiml, /<Stream url="wss:\/\/api\.example\/functions\/v1\/api\/phone\/stream">/);
+    assert.ok(twiml.includes(`<Parameter name="token" value="${token}"/>`));
+    await assert.rejects(h.phone.twiml(id, 'forged'));
     assert.equal(
       h.placed[0].statusCallback,
       `https://api.example/functions/v1/api/webhooks/twilio/${id}?token=${token}`,
@@ -263,7 +270,7 @@ Deno.test('phone call: unanswered, rejected and unreachable Twilio outcomes', as
   }
 });
 
-Deno.test('Twilio client redacts numbers from rejection messages and sends a time limit', async () => {
+Deno.test('Twilio client redacts numbers from rejection messages and bounds call duration', async () => {
   const requests: { url: string; body: URLSearchParams }[] = [];
   const twilio = new Twilio(CONFIG, (url, init) => {
     requests.push({ url: String(url), body: init!.body as URLSearchParams });
@@ -272,10 +279,18 @@ Deno.test('Twilio client redacts numbers from rejection messages and sends a tim
     );
   });
   await assert.rejects(
-    twilio.placeCall({ to: '+905551112233', twiml: '<Response/>', statusCallback: 'https://x' }),
+    twilio.placeCall({ to: '+905551112233', url: 'https://t', statusCallback: 'https://x' }),
     (e: TwilioError) => e.rejected && e.message === 'The number [number] is unverified.',
   );
-  assert.equal(requests[0].body.get('TimeLimit'), '100');
+  assert.deepEqual([...new Set(requests[0].body.keys())], [
+    'To',
+    'From',
+    'Url',
+    'StatusCallback',
+    'TimeLimit',
+    'Timeout',
+    'StatusCallbackEvent',
+  ]);
   assert.deepEqual(requests[0].body.getAll('StatusCallbackEvent'), [
     'initiated',
     'ringing',
@@ -379,6 +394,62 @@ Deno.test('voice bridge relays mu-law audio, keeps transcript order, and hangs u
       { speaker: 'agent', text: 'Hi, AI assistant here.' },
       { speaker: 'contact', text: 'Yes, ready.' },
       { speaker: 'agent', text: 'Great, see you at 3.' },
+    ]);
+  } finally {
+    await h.db.close();
+  }
+});
+
+Deno.test('a spoken goodbye ends the call even when the model only names the tool', async () => {
+  const h = await harness();
+  try {
+    await h.pay();
+    await h.phone.start(await h.get());
+    const twilio = new FakeSocket();
+    let openai!: FakeSocket;
+    class Realtime extends FakeSocket {
+      constructor() {
+        super();
+        openai = this;
+      }
+    }
+    const session = new CallSession(twilio as unknown as WebSocket, {
+      config: CONFIG,
+      store: h.store,
+      calls: h.calls,
+      twilio: {
+        placeCall: () => Promise.resolve(''),
+        hangup: (sid) => (h.hungUp.push(sid), Promise.resolve()),
+      },
+      baseUrl: 'https://api.example',
+      summarize: () => Promise.reject(new Error('unused')),
+      realtime: Realtime as unknown as PhoneDependencies['realtime'],
+    });
+    session.listen();
+    const token = await signJob(CONFIG.authToken, id);
+    twilio.receive({
+      event: 'start',
+      start: { streamSid: 'MZ1', callSid: 'CA123', customParameters: { job: id, token } },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    openai.receive({ type: 'input_audio_buffer.committed', item_id: 'item_1' });
+    // Foreign-script noise invented from the first hello is dropped, real speech is kept.
+    openai.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'item_1',
+      transcript: '\u4f60\u7684\u5417?',
+    });
+    openai.receive({
+      type: 'response.output_audio_transcript.done',
+      transcript: 'Thanks for confirming. Goodbye! (functions.end_call)',
+    });
+    openai.receive({ type: 'response.done' });
+    assert.deepEqual(twilio.sent.at(-1), { event: 'mark', mark: { name: 'goodbye' }, streamSid: 'MZ1' });
+    twilio.receive({ event: 'mark', mark: { name: 'goodbye' } });
+    await session.done;
+    assert.deepEqual(h.hungUp, ['CA123']);
+    assert.deepEqual((await h.calls.get(id))!.transcript, [
+      { speaker: 'agent', text: 'Thanks for confirming. Goodbye!' },
     ]);
   } finally {
     await h.db.close();
