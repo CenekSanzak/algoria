@@ -24,37 +24,27 @@ Two ways in, and neither needs this repo checked out. Do either or both.
 
 ## As a CLI, with `npx`
 
-**`algoria` is not on npm yet, so plain `npx algoria` returns a 404.** Point `npx`
-at the package directory instead — it takes a path, and this runs the identical
-code:
-
 ```bash
 cd $(mktemp -d)
-ALG=<repo>/agent-skills/plugins/algoria
-
-npx "$ALG" wallet onboard --network testnet
+npx algoria wallet onboard --network testnet
 ```
 
 That is the whole test. You should get an address, a funded balance, and
 `Ready to receive and spend USDC on testnet.` Then:
 
 ```bash
-npx "$ALG"                                 # what else can it do
-npx "$ALG" wallet balance --network testnet
-npx "$ALG" topup start --try 200           # 200 mock lira, about 4 USDC
+npx algoria                                 # what else can it do
+npx algoria wallet balance --network testnet
+npx algoria topup start --try 200           # 200 mock lira, about 4 USDC
 ```
 
-**Once it is published**, drop the path and the commands become what users
-actually type:
+**These are terminal commands, not plugin names.** Asking Claude to "install
+`npx algoria …`" confuses it — it tries to read the line as `name@marketplace`.
+Either run it yourself (`! npx algoria …` inside Claude Code), or install the
+plugin below and ask in plain words.
 
-```bash
-npx algoria wallet onboard --network testnet
-npx algoria topup start --try 200
-```
-
-Publishing needs an npm account with a passkey on it — npm no longer accepts
-TOTP, and tokens that bypass 2FA are being restricted. See
-`IMPLEMENTATION_PLAN.md` for the steps.
+To test unreleased changes, point `npx` at the package directory instead:
+`npx <repo>/agent-skills/plugins/algoria wallet onboard --network testnet`.
 
 ## As an agent skill, from GitHub
 
@@ -63,7 +53,7 @@ itself.
 
 ```bash
 cd $(mktemp -d)
-codex plugin marketplace add CenekSanzak/algoria --ref feat-add-skill-infra
+codex plugin marketplace add CenekSanzak/algoria
 codex plugin add algoria@algoria-skills
 ```
 
@@ -85,8 +75,6 @@ To see the same thing in Claude Code:
 /plugin marketplace add CenekSanzak/algoria
 /plugin install algoria@algoria-skills
 ```
-
-Drop `--ref feat-add-skill-infra` once this is merged to `main`.
 
 **Done with it?**
 
