@@ -72,6 +72,17 @@ Its skills support automatic selection, but selection is made by the host's
 agent. The current catalog supports images, speech and slideshow-based video
 workflows; it cannot perform every arbitrary task.
 
+To update later:
+
+```bash
+# Claude (restart Claude Code afterwards)
+claude plugin marketplace update algoria-skills
+claude plugin update algoria@algoria-skills
+
+# Codex
+codex plugin marketplace upgrade algoria-skills
+```
+
 ## Things worth knowing
 
 - **`testnet` is the default, and testnet balances are not money.** Real funds

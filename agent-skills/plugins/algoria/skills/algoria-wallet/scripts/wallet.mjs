@@ -30,7 +30,7 @@ const USAGE = `algoria wallet
   onboard      create the wallet, fund it, and add the USDC trustline
   balance      USDC and XLM for one network
   accounts     every wallet held locally, with funding links
-  fund         Friendbot on testnet; deposit instructions on pubnet
+  fund         XLM from Friendbot on testnet (never USDC — use \`topup\`)
   trustline    opt the account in to holding USDC
   import       adopt an existing secret seed
   export       reveal the secret seed
@@ -78,6 +78,19 @@ async function describeAccount(network, publicKey) {
 const formatUsdc = (value) => (value === null ? 'none (no trustline yet)' : `${value} USDC`);
 
 const SELF = commandName('wallet', 'wallet.mjs');
+const TOPUP = commandName('topup', 'topup.mjs');
+
+/**
+ * The step after a wallet exists is getting USDC into it. Friendbot only ever
+ * sends XLM, so without this pointer an agent asked for USDC reaches for `fund`.
+ * The anchor is testnet-only, so pubnet gets no suggestion.
+ * @param {{ id: string }} network
+ * @param {boolean} ready
+ * @returns {string | null}
+ */
+function topupHint(network, ready) {
+  return network.id === 'testnet' && ready ? `${TOPUP} start --try 200` : null;
+}
 
 /** @type {Record<string, (flags: Flags) => Promise<void>>} */
 const COMMANDS = {
@@ -115,6 +128,7 @@ const COMMANDS = {
     }
 
     const ready = account.exists && account.trustline;
+    const next = topupHint(network, ready);
 
     emit(
       flags,
@@ -129,7 +143,8 @@ const COMMANDS = {
         trustline: account.trustline,
         ready,
         steps,
-        trustlineTx: trustline?.hash ?? null
+        trustlineTx: trustline?.hash ?? null,
+        next
       },
       [
         created ? `Created a new ${network.id} wallet.` : `Using the existing ${network.id} wallet.`,
@@ -146,7 +161,8 @@ const COMMANDS = {
         ready
           ? `Ready to receive and spend USDC on ${network.id}.`
           : `Not ready yet: ${account.exists ? 'add the USDC trustline' : `send XLM to ${entry.publicKey}`}.`,
-        created && !entry.encrypted ? `The seed is stored unencrypted. Fine for testnet; never reuse it on pubnet.` : ``
+        created && !entry.encrypted ? `The seed is stored unencrypted. Fine for testnet; never reuse it on pubnet.` : ``,
+        next ? `\nNext: add test USDC with mock Turkish lira:  ${next}` : ``
       ].filter(Boolean)
     );
   },
@@ -243,10 +259,14 @@ const COMMANDS = {
 
     const funding = await fundWithFriendbot(network, entry.publicKey);
     const account = await describeAccount(network, entry.publicKey);
-    emit(flags, { network: network.id, publicKey: entry.publicKey, created, funding, ...account }, [
+    const next = topupHint(network, account.exists && account.trustline);
+    emit(flags, { network: network.id, publicKey: entry.publicKey, created, funding, ...account, next }, [
       `${funding.detail} — ${entry.publicKey}`,
       `  XLM   ${account.xlm ?? '0'}`,
-      `  USDC  ${formatUsdc(account.usdc)}`
+      `  USDC  ${formatUsdc(account.usdc)}`,
+      ``,
+      `Friendbot sends XLM only, never USDC.`,
+      next ? `For USDC:  ${next}` : `For USDC, add the trustline first:  ${SELF} trustline`
     ]);
   },
 

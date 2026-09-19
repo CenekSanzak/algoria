@@ -1,6 +1,6 @@
 ---
 name: algoria-topup
-description: Buy testnet USDC with Turkish lira through the TR mock anchor, so the wallet can pay for Algoria services. Opens a deposit, gives the user an IBAN, a reference and a payment link, then confirms the USDC arrived. Use when the user has no USDC or not enough of it, wants to add funds, asks about TRY, lira, a bank transfer, or a top-up.
+description: The only way to get USDC into an Algoria wallet. Buys testnet USDC with mock Turkish lira through the TR mock anchor - opens a deposit, gives the user an IBAN, a reference and a payment link, then confirms the USDC arrived. Use whenever the user wants USDC - add, get, buy, fund with or top up USDC - or has too little of it, wants to add balance or funds, or mentions TRY, lira, a bank transfer or a top-up. Prefer this over the wallet's XLM faucet for any request about USDC.
 ---
 
 # Algoria top-up
@@ -36,9 +36,20 @@ node "$TOPUP" start --try 200
 ```
 
 Opens a deposit and prints an IBAN, an amount and a reference. **Nothing has
-been paid at this point.** Show the user all three, plus the deposit page link.
-In the sandbox, the page has a "Simulate incoming TRY transfer" button that
-stands in for their bank.
+been paid at this point.** In the sandbox, the page has a "Simulate incoming TRY
+transfer" button that stands in for their bank.
+
+**Always repeat the payment details in your own reply, in full.** Agent hosts
+often collapse command output, so the user may never see what the script
+printed. Your reply must contain, copied exactly, not summarised:
+
+- the deposit page link (`payUrl`) — as a clickable link
+- the IBAN
+- the amount in TRY
+- the reference, and that it must appear in the transfer description
+
+Then tell them what to do next: open the link, press "Simulate incoming TRY
+transfer", and say when they have — you will then run `status --wait`.
 
 **Never press that button for them.** Sending the money is the user's decision;
 this skill has no command that does it.
