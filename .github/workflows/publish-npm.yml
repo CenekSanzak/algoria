@@ -115,18 +115,29 @@ jobs:
         run: npm publish --provenance --access public --loglevel verbose
 
       # Registry reads can lag a publish by a few seconds.
+      #
+      # `npm view` above cached this package's metadata from before the publish,
+      # and npm serves that copy until it expires. Without forcing a revalidated
+      # read, npx resolves against the stale list and reports ETARGET for the
+      # whole retry window even though the version is live.
       - name: Smoke test the published package
         if: steps.version.outputs.publish == 'true'
         working-directory: ${{ runner.temp }}
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          NPM_CONFIG_PREFER_ONLINE: 'true'
         run: |
-          for attempt in 1 2 3 4 5 6; do
-            if [ "$(npx -y "algoria@$VERSION" --version)" = "$VERSION" ]; then
+          npm cache clean --force
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            installed=$(npx -y "algoria@$VERSION" --version 2>&1) && status=0 || status=$?
+            if [ "$status" -eq 0 ] && [ "$installed" = "$VERSION" ]; then
               echo "npx algoria@$VERSION works."
               exit 0
             fi
+            echo "attempt $attempt: not installable yet."
+            printf '%s\n' "$installed" | tail -5
             sleep 10
           done
           echo "algoria@$VERSION did not become installable." >&2
+          npm view algoria versions --json >&2 || true
           exit 1
