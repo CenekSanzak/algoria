@@ -1,7 +1,7 @@
 # Algoria - Scaling Track
 
 Github Repository: https://github.com/CenekSanzak/algoria
-Readme: 
+Readme: https://github.com/CenekSanzak/algoria/blob/main/agent-skills/README.md
 Landing Page: https://algoria-x.vercel.app/
 NPM Package: https://www.npmjs.com/package/algoria
 Working live demo: https://algoria-x.vercel.app/how-to-use
