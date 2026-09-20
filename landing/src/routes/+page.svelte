@@ -3,7 +3,11 @@
   import HeroDemo from '$lib/components/HeroDemo.svelte';
   import StellarMark from '$lib/components/StellarMark.svelte';
 
-  const facts = ['Images, voice & video', 'Pay in TRY via Stellar', 'Key stays on your machine'];
+  const facts = [
+    'Bazaar & Stellar 8004 Agent Discovery',
+    'Pay in TRY via Stellar',
+    'Key stays on your machine'
+  ];
 
   const steps = [
     { title: 'Install', body: 'Your assistant creates a Stellar wallet on your machine. The key never leaves it.' },
@@ -34,7 +38,7 @@
       <span class="stellar-chip"><StellarMark />Stellar</span>
     </p>
     <p class="lead">
-      One plugin, and your assistant can pay for image generation, paid APIs and more. No API keys, no crypto wallets to
+      One plugin, and your assistant can pay for AI services, paid APIs and more. No API keys, no crypto wallets to
       manage, no new accounts.
     </p>
     <ul class="facts" aria-label="Key facts">
@@ -77,7 +81,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
     gap: 64px;
     align-items: center;
-    padding-block: 112px 120px;
+    padding-block: 56px 104px;
   }
 
   h1 {
@@ -237,7 +241,7 @@
     .hero {
       grid-template-columns: 1fr;
       gap: 48px;
-      padding-block: 64px 80px;
+      padding-block: 36px 80px;
     }
 
     .lead {
@@ -271,7 +275,7 @@
       white-space: normal;
     }
     .hero {
-      padding-block: 44px 64px;
+      padding-block: 24px 64px;
     }
 
     .pay-line {
