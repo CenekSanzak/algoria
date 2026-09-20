@@ -2,18 +2,11 @@
 
 Github Repository: https://github.com/CenekSanzak/algoria
 Readme: 
-Landing Page: 
+Landing Page: https://algoria-x.vercel.app/
 NPM Package: https://www.npmjs.com/package/algoria
-Working live demo: 
+Working live demo: https://algoria-x.vercel.app/how-to-use
 
-Technical Documentation: 
-"""
-Overall architecture
-Main components and their responsibilities
-Stellar integrations and protocols used
-Key design decisions and trade-offs
-Technical challenges and how you solved them
-"""
+Technical Documentation: https://github.com/CenekSanzak/algoria/blob/main/agent-skills/TECHNICAL_DOCUMENTATION.md
 
 Pitch Presentation
 
