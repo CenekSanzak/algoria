@@ -12,7 +12,10 @@
   const steps = [
     { title: 'Install', body: 'Your assistant creates a Stellar wallet on your machine. The key never leaves it.' },
     { title: 'Top up in lira', body: 'You get an IBAN and a reference. Send a TRY transfer and it arrives as USDC.' },
-    { title: 'Ask', body: 'Ask for an image, a voiceover or a video. It shows the price and pays within your budget.' }
+    {
+      title: 'Ask',
+      body: "Ask for anything your agent can't do on its own, like vlog generation or phone calls. It finds available AI services and pays within your budget."
+    }
   ];
 </script>
 
