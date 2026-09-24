@@ -102,7 +102,9 @@ export function readConfig(): Config {
   }
   return {
     supabaseUrl,
-    serviceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
+    // Injected SUPABASE_SERVICE_ROLE_KEY can carry a future `iat` after platform key changes, which
+    // PostgREST rejects ("JWT issued at future"); an explicitly deployed copy takes precedence.
+    serviceRoleKey: Deno.env.get('ALGORIA_SERVICE_ROLE_KEY') || required('SUPABASE_SERVICE_ROLE_KEY'),
     falKey: required('FAL_KEY'),
     imagePayTo,
     baseUrl: (Deno.env.get('ALGORIA_API_BASE_URL') || `${supabaseUrl}/functions/v1/api`).replace(/\/$/, ''),
