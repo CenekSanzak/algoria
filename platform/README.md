@@ -24,10 +24,10 @@ The six implemented services share the same payment and job contract. Discovery 
   English narration (female by default), automatic timing, composition and optional captions.
   **0.11 test USDC**, one payment/job. See [social video service](docs/SOCIAL_VIDEO.md) for
   uploads, planning, durable execution and deployment.
-- `phone.call`: `{ "contact": "berkin", "goal": "Remind him about the 3pm demo", "on_behalf_of": "Dogukan" }`.
+- `phone.call`: `{ "contact": "berkin", "goal": "Remind him about the 3pm demo", "on_behalf_of": "Dogukan", "language": "en" }`.
   Places one real Twilio call to an operator-approved contact (`PHONE_CALL_CONTACTS`; raw numbers are
   never accepted). Twilio streams the call audio over a WebSocket (`/phone/stream`) to OpenAI Realtime
-  (`gpt-realtime-mini`, 8 kHz mu-law passed through untouched), so the AI talks live in English. It hangs up
+  (`gpt-realtime-mini`, 8 kHz mu-law passed through untouched), so the AI talks live in English (default) or Turkish (`"language": "tr"`). It hangs up
   after the goal or about 95 seconds, within the free-plan Edge wall clock. The job returns
   `{ call: { contact, status, duration_seconds, summary, goal_achieved, transcript } }`.
   **0.1 test USDC** (`1000000` atomic units). Listed only when Twilio, OpenAI, contacts and its recipient are set.

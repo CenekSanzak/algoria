@@ -330,7 +330,7 @@ export function serviceDocument(config: Config, requirements: unknown, service: 
       ? {
         preparation: {
           planning:
-            'Confirm the contact and the exact goal with the user before paying. The call is real, in English, and ends after about 90 seconds at most.',
+            'Confirm the contact and the exact goal with the user before paying. The call is real, in English by default or Turkish with language "tr", and ends after about 90 seconds at most.',
           contacts: Object.keys(config.phone?.contacts ?? {}),
           output:
             'Transcript, summary and goal_achieved after the call ends. Poll the job; a call usually takes 1–2 minutes.',

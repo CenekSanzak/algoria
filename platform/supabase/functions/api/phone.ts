@@ -9,7 +9,8 @@ const WRAP_UP_AFTER_MS = 75_000;
 const HARD_STOP_AFTER_MS = 95_000;
 const NOT_CONNECTED = ['busy', 'no-answer', 'failed', 'canceled'];
 
-export type PhoneInput = { contact: string; goal: string; on_behalf_of: string };
+export type PhoneLanguage = 'en' | 'tr';
+export type PhoneInput = { contact: string; goal: string; on_behalf_of: string; language?: PhoneLanguage };
 export type TranscriptLine = { speaker: 'agent' | 'contact'; text: string };
 export type CallRow = {
   job_id: string;
@@ -161,7 +162,7 @@ export function openAiSummarizer(apiKey: string, fetcher: typeof fetch = fetch):
           {
             role: 'system',
             content:
-              'You summarize a phone call made by an AI assistant. Reply with JSON: {"summary": string (1-3 sentences, what the contact said/agreed), "goal_achieved": boolean}.',
+              'You summarize a phone call made by an AI assistant. The call may be in English or Turkish; always write the summary in English. Reply with JSON: {"summary": string (1-3 sentences, what the contact said/agreed), "goal_achieved": boolean}.',
           },
           {
             role: 'user',
@@ -329,11 +330,18 @@ export class PhoneCalls {
   }
 }
 
+const LANGUAGE_RULES: Record<PhoneLanguage, string> = {
+  en: 'Speak English only.',
+  tr:
+    'Speak Turkish only (natural, polite Türkçe using "siz"), even though these instructions and the goal are in English.',
+};
+
 function instructions(input: PhoneInput) {
+  const language = LANGUAGE_RULES[input.language ?? 'en'];
   return [
     `You are Algoria's AI phone assistant, speaking on a real phone call on behalf of ${input.on_behalf_of}.`,
     `You are calling ${input.contact}. Your goal: ${input.goal}`,
-    'Speak English only. At the start, say you are an AI assistant calling on behalf of ' +
+    `${language} At the start, say you are an AI assistant calling on behalf of ` +
     `${input.on_behalf_of}, then state the reason for the call.`,
     'Be warm, natural and brief: one or two short sentences per turn. Listen and respond to what they say.',
     'Do not invent facts, promises or details beyond the goal. If asked something you do not know, say you will pass it on.',
@@ -451,7 +459,7 @@ export class CallSession {
           audio: {
             input: {
               format: { type: 'audio/pcmu' },
-              transcription: { model: 'gpt-4o-mini-transcribe', language: 'en' },
+              transcription: { model: 'gpt-4o-mini-transcribe', language: input.language ?? 'en' },
               turn_detection: { type: 'server_vad', threshold: 0.6, silence_duration_ms: 900 },
             },
             output: { format: { type: 'audio/pcmu' }, voice: this.d.config.voice },
@@ -514,7 +522,7 @@ export class CallSession {
       case 'conversation.item.input_audio_transcription.completed': {
         // Transcribers invent foreign-script noise from the first "hello"; keep real speech only.
         const heard = String(message.transcript ?? '').trim();
-        const text = /[a-z]/i.test(heard) ? heard : '';
+        const text = /[a-zçğıöşü]/i.test(heard) ? heard : '';
         const line = this.lines.find((item) => item.id === message.item_id);
         if (line) line.text = text;
         else this.lines.push({ speaker: 'contact', text });
@@ -530,7 +538,9 @@ export class CallSession {
           .replace(/\s+/g, ' ').trim();
         this.lines.push({ speaker: 'agent', text: spoken });
         // The model sometimes says goodbye (or names the tool) instead of calling it.
-        if (/\bgood ?bye\b|\bend[_ ]call\b/i.test(String(message.transcript ?? ''))) this.ending = true;
+        if (
+          /\bgood ?bye\b|\bend[_ ]call\b|hoşça ?kal|görüşmek üzere/i.test(String(message.transcript ?? ''))
+        ) this.ending = true;
         this.save();
         break;
       }
