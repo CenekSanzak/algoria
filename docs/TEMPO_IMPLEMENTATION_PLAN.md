@@ -4,6 +4,8 @@ Date: 2026-10-05 · Repository: `algoria-x` · Branch: `colloseum-intro`
 
 Status: proposed implementation sequence, not completed work. Builds on [architecture](./COLOSSEUM_TEMPO_PLAN.md) and [UX proposal](./PLUGIN_UX_PROPOSAL.md).
 
+Progress, 2026-10-05: the isolated [native signing proof](../native/tempo-signing-proof/README.md) now builds and has completed a user-approved Secure Enclave/Touch ID signing flow with confirmed Tempo testnet settlement. See [verification evidence and remaining phase-1 checks](../native/tempo-signing-proof/VERIFICATION.md). Installed-host integration, baseline dependency repair, and full policy-contract feasibility are not yet complete.
+
 ## Outcome
 
 Keep Algoria as a Claude/Codex plugin for buying AI services. Add Tempo/MPP, a lightweight local wallet with Touch ID, and policy-based spending permissions. Reuse the existing services, memory, planning, budgets, and paid-job recovery. No replacement chatbot or separate marketplace.
