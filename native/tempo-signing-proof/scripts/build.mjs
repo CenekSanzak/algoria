@@ -26,7 +26,7 @@ await writeFile(resolve(app, 'Contents/Info.plist'), `<?xml version="1.0" encodi
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 </dict></plist>
 `);
-execFileSync('swiftc', ['Sources/main.swift', '-o', resolve(app, 'Contents/MacOS/AlgoriaSigningProof'),
+execFileSync('swiftc', ['Sources/main.swift', 'Sources/WalletReview.swift', '-o', resolve(app, 'Contents/MacOS/AlgoriaSigningProof'),
   '-framework', 'AppKit', '-framework', 'Security', '-framework', 'LocalAuthentication',
   '-framework', 'JavaScriptCore', '-module-cache-path', resolve(root, '.build/module-cache')],
 { cwd: root, stdio: 'inherit' });

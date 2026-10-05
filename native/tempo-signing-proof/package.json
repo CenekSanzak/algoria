@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build.mjs",
+    "test:ui": "node scripts/check-wallet-ui.mjs",
     "package": "node scripts/package.mjs",
     "proof": "node scripts/proof.mjs"
   },

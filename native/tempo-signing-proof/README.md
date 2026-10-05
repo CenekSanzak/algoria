@@ -4,7 +4,7 @@ An isolated macOS development companion for the [implementation plan](../../docs
 
 ## What it proves
 
-A local AppKit purchase review has Purchase, Wallet, Permissions and Activity tabs. It discloses the disposable Secure Enclave P-256 key, signed local budget, exact request and fee bounds in one review before Touch ID. Touch ID protects the key's actual signing operation. The runner verifies the signature, sends the transaction once, and checks both the successful receipt and expected token transfer event.
+A dedicated AppKit wallet window has Review, Wallet, Permission and Activity sections. Its price-first layout, light/dark themes, scrollable detail cards and fixed approval bar disclose the disposable Secure Enclave P-256 key, signed local budget, exact request and fee bounds before Touch ID. Budget approval uses the same design, with Overview, Scope and Limits & safety sections. Touch ID protects the key's actual signing operation. The runner verifies the signature, sends the transaction once, and checks both the successful receipt and expected token transfer event.
 
 In version-1 proof mode, the allowed transaction is fixed: **Moderato testnet (42431), one micro-unit of test PathUSD transferred to the signing account itself**. Gas is capped at 1,000,000 and max fee per gas at 30,000,000,000 protocol units. The request expires within five minutes. Version-2 MPP image purchases are described below and use the same fee and expiry caps.
 
@@ -56,7 +56,8 @@ Recovery records are ignored by Git. They contain public transaction identity an
 
 ## Files
 
-- `Sources/main.swift`: native windows, Secure Enclave key access, signing, bounded input, offline self-test.
+- `Sources/main.swift`: Secure Enclave key access, signing, bounded input, offline self-test and preview routing.
+- `Sources/WalletReview.swift`: native wallet presentation, expiry feedback, cancellation and isolated design fixtures.
 - `src/transaction.mjs`: strict request validation and SDK-based transaction construction/verification.
 - `src/runtime.mjs`: UTF-8 compatibility for JavaScriptCore.
 - `scripts/build.mjs`: bundled runtime, native compilation, local ad-hoc signing.
@@ -112,3 +113,30 @@ After `npm run build`, `npm run package` makes a versioned ZIP and SHA-256
 checksum. This is an ad-hoc-signed **development archive**, not a notarized or
 production-ready installer. Developer ID credentials, hardened runtime,
 authenticated IPC and clean-machine acceptance remain unverified.
+
+## Wallet design preview
+
+After building, inspect either screen without keys, Touch ID, wallet state,
+funding, RPC calls or purchases:
+
+```sh
+".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview purchase
+".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview budget
+npm run test:ui
+```
+
+Previews use clearly marked synthetic data and **Close preview**, never an
+approval action. All fixture branches exit before the SDK and key-creation
+paths. `--render-ui /absolute/existing/temp-directory` renders all seven pages
+in both light and dark appearances for visual review.
+
+Live windows keep Cancel and Touch ID approval fixed below scrollable details.
+Escape and the close control cancel; Return is not a spending shortcut. The
+purchase countdown disables approval at expiry, and signing still independently
+revalidates expiry before and after Touch ID. Long prompts scroll within their
+own panel so destination details remain easy to reach. Full addresses and URLs
+are selectable, not shortened. Screen height adjusts to the available display.
+
+The UI check exercises preview isolation, page selection, explicit approval,
+Cancel, close, expired approval rejection and keyboard defaults without signing.
+It does not replace live biometric, keyboard-routing or VoiceOver acceptance.
