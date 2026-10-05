@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
+import { signedPermission } from './helpers/permission.mjs';
 
 const home = await mkdtemp(join(tmpdir(), 'algoria-tempo-'));
 process.env.ALGORIA_HOME = home;
@@ -10,9 +11,12 @@ const { API_BASE } = await import('../plugins/algoria/lib/services/api.mjs');
 const { loadTempoSdk } = await import('../plugins/algoria/lib/services/tempo-sdk.mjs');
 const sdk = await loadTempoSdk();
 const signer = await import('../plugins/algoria/lib/services/tempo-signer.mjs');
+const approval = await import('../plugins/algoria/lib/services/permission-approval.mjs');
+const readiness = await import('../plugins/algoria/lib/services/tempo-readiness.mjs');
+const { imageTask } = await import('../plugins/algoria/lib/services/task.mjs');
 const { quoteTempo, validateMppQuote } = await import('../plugins/algoria/lib/services/tempo-client.mjs');
 const { runJob, statusJob } = await import('../plugins/algoria/lib/services/client.mjs');
-const { setBudget, getBudget, readJob, readLedger, ledgerPath } = await import('../plugins/algoria/lib/services/state.mjs');
+const { setBudget, getBudget, readJob, readLedger, ledgerPath, revokeBudget } = await import('../plugins/algoria/lib/services/state.mjs');
 const fixture = JSON.parse(await readFile(new URL('../../platform/docs/skill-integration/image.generate.json', import.meta.url), 'utf8'));
 const recipient = '0x1111111111111111111111111111111111111111';
 const payer = '0x2222222222222222222222222222222222222222';
@@ -36,6 +40,8 @@ beforeEach(async () => {
   await rm(ledgerPath(), { force: true });
   remote = new Map(); signatures = 0; paidPosts = 0; loseResponse = false; loseBroadcast = false; mutate = () => {};
   contract = structuredClone(fixture);
+  vi.spyOn(readiness, 'tempoReadiness').mockReturnValue({ ready: true, reason: 'ready', nextAction: 'Review purchase', fundingRequired: true,
+    protocol: 'mpp', network: 'eip155:42431', unit: 'test PathUSD', walletMode: 'disposable', realFundsSupported: false, permissionsEnabled: true, permissionEnforcement: 'local-only', delegatedSigningEnabled: false });
   contract.mpp = { protocol: 'mpp', chain: 'eip155:42431', token: '0x20c0000000000000000000000000000000000000',
     decimals: 6, recipient, amount: '10000' };
   // Real backend publishes a schema accepting both supported networks.
@@ -85,12 +91,82 @@ beforeEach(async () => {
     return Response.json({ protocol: 'mpp', challenge, job_id: id, expires_at: challenge.expires },
       { status: 402, headers: { 'WWW-Authenticate': sdk.Challenge.serialize(challenge) } });
   }));
-  await setBudget('tempo', '0.10', '0.02', 'mpp');
+  vi.spyOn(approval, 'approvePermission').mockImplementation(async policy => signedPermission(policy));
+  await setBudget('tempo', '0.10', '0.02', 'mpp', { agent: 'codex', recipient, expires: new Date(Date.now() + 3600000).toISOString() });
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 afterAll(async () => { await rm(home, { recursive: true, force: true }); });
 
 describe('Tempo plugin payments', () => {
+  it('blocks new purchases after revoke but recovers a saved payment without signing again', async () => {
+    const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' });
+    loseBroadcast = true;
+    await imageTask({ id: q.id, approve: true, fundTestnet: true });
+    expect(signatures).toBe(1);
+    await revokeBudget('tempo');
+    const recovered = await runJob(q.id, { approve: true });
+    expect(recovered.status).toBe('succeeded');
+    expect(signatures).toBe(1);
+    const next = await imageTask({ input: { prompt: 'Dog' }, budget: 'tempo', approve: true, fundTestnet: true });
+    expect('paymentAttempted' in next && next.paymentAttempted).toBe(false); expect(next.nextAction).toBe('review-spending-permission'); expect(signatures).toBe(1);
+  });
+  it('serializes burst ledger updates across separate tasks without losing reservations', async () => {
+    const tasks = await Promise.all([
+      imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' }),
+      imageTask({ input: { prompt: 'Dog' }, budget: 'tempo' })
+    ]);
+    const results = await Promise.all(tasks.map(q => imageTask({ id: q.id, approve: true, fundTestnet: true })));
+    expect(results.every(r => r.status === 'succeeded')).toBe(true);
+    expect((await getBudget('tempo')).spent).toBe('0.0200000');
+    expect(remote.size).toBe(2);
+  });
+  it('coordinates quote, approval and reopen around one saved task', async () => {
+    const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' });
+    expect(q.journey.stage).toBe('awaiting-approval'); expect(signatures).toBe(0);
+    const done = await imageTask({ id: q.id, approve: true, fundTestnet: true });
+    expect(done.journey.stage).toBe('ready'); expect(done.delivery?.previewRequired).toBe(true);
+    const reopen = await imageTask({ id: q.id });
+    expect(reopen.payment.transaction).toBe(transaction);
+    expect(remote.size).toBe(1); expect(signatures).toBe(1); expect(paidPosts).toBe(1);
+  });
+  it('keeps the task when setup or faucet consent is missing', async () => {
+    const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo', approve: true });
+    expect(q.nextAction).toContain('Confirm disposable'); expect(signatures).toBe(0);
+    vi.spyOn(readiness, 'tempoReadiness').mockReturnValue({ ready: false, reason: 'companion-missing', nextAction: 'Build companion',
+      protocol: 'mpp', network: 'eip155:42431', unit: 'test PathUSD', walletMode: 'disposable', realFundsSupported: false, permissionsEnabled: true, permissionEnforcement: 'local-only', delegatedSigningEnabled: false });
+    expect((await imageTask({ id: q.id, approve: true, fundTestnet: true })).nextAction).toBe('Build companion');
+    expect(signatures).toBe(0); expect(remote.size).toBe(1);
+  });
+  it('returns a recoverable task card on a lost paid response', async () => {
+    const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' });
+    loseResponse = true;
+    const failed = await imageTask({ id: q.id, approve: true, fundTestnet: true });
+    expect(failed.interrupted).toBe(true); expect(failed.journey.stage).toBe('needs-attention');
+    expect((await imageTask({ id: q.id })).status).toBe('succeeded');
+    expect(signatures).toBe(1);
+    expect(JSON.stringify(failed)).not.toContain((await readJob(q.id)).token);
+    expect(JSON.stringify(failed)).not.toContain((await readJob(q.id)).credential);
+  });
+  it('does not treat saved input edits or failed validation as a new task', async () => {
+    const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' });
+    await expect(imageTask({ id: q.id, input: { prompt: 'Dog' }, approve: true })).rejects.toThrow('changed');
+    await expect(imageTask({ id: q.id, input: { prompt: 'Cat', hidden: 'extra' } })).rejects.toThrow('one prompt');
+    await expect(imageTask({ input: { prompt: 'Cat' }, budget: 'missing' })).rejects.toThrow('unknown budget');
+    expect(signatures).toBe(0);
+  });
+  it('preserves the task identity when the initial quote response is lost', async () => {
+    const original = globalThis.fetch;
+    let lost = false;
+    vi.stubGlobal('fetch', async (/** @type {Parameters<typeof fetch>[0]} */ url, /** @type {RequestInit} */ options) => {
+      const response = await original(url, options);
+      if (options?.method === 'POST' && !lost) { lost = true; throw new Error('lost initial response'); }
+      return response;
+    });
+    const task = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' });
+    expect(task.interrupted).toBe(true); expect(task.phase).toBe('prepared');
+    const recovered = await imageTask({ id: task.id });
+    expect(recovered.phase).toBe('quoted'); expect(remote.size).toBe(1); expect(signatures).toBe(0);
+  });
   it('quotes, reserves six-decimal token spend, pays once and returns an image', async () => {
     const q = await quoteTempo('image.generate', { prompt: '  An orange cat  ' }, 'tempo');
     expect(q.unit).toBe('test PathUSD'); expect(q.amount).toBe('0.0100000');

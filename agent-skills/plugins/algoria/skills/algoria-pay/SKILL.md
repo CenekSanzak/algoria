@@ -10,6 +10,12 @@ For an explicitly selected **Tempo/MPP image task**, first read
 Touch ID review, test PathUSD funding and separate budget. The Stellar balance
 and top-up steps below apply to Stellar tasks only. `run` and `status` detect the
 saved job's protocol; never switch a saved job to another chain.
+Prefer the Tempo `task` coordinator over separate quote/run/status calls. Keep
+its saved ID across interruptions and delivery retries; the six skill entry
+points and Stellar helpers remain available.
+Tempo budget grants/changes require a native Touch ID review with explicit scope
+and expiry; `revoke` stops future local dispatches. These are local permissions,
+not autonomous signing authority or ERC-8196 compliance.
 
 **First action for a new Stellar paid task: check wallet balance, before discovery,
 quotes or payment attempts.** Use the wallet helper from this plugin at

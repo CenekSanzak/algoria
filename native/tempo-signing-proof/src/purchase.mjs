@@ -4,6 +4,7 @@ import * as AbiFunction from 'ox/AbiFunction';
 import { TxEnvelopeTempo } from 'ox/tempo';
 import * as Attribution from '../node_modules/mppx/dist/tempo/Attribution.js';
 import { CHAIN_ID, TOKEN, prepare, completePrepared } from './transaction.mjs';
+import { checkPurchasePermission } from './permissions.mjs';
 
 const resource = 'https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate';
 const transfer = AbiFunction.from('function transferWithMemo(address to, uint256 amount, bytes32 memo) returns (bool)');
@@ -11,6 +12,7 @@ const transfer = AbiFunction.from('function transferWithMemo(address to, uint256
 /** @param {any} request @param {any} publicKey @param {number} [now] */
 export function preparePurchase(request, publicKey, now = Math.floor(Date.now() / 1000)) {
   const fields = ['version', 'chainId', 'nonce', 'maxFeePerGas', 'validBefore', 'challenge', 'input'];
+  if (Object.hasOwn(request ?? {}, 'permission')) fields.push('permission');
   if (!request || Object.keys(request).length !== fields.length || Object.keys(request).some(k => !fields.includes(k))) throw new Error('Unexpected purchase fields');
   const { challenge: c, input } = request;
   const offer = c?.request;
@@ -36,6 +38,8 @@ export function preparePurchase(request, publicKey, now = Math.floor(Date.now() 
   }
   const base = prepare({ version: 1, chainId: request.chainId, nonce: request.nonce,
     maxFeePerGas: request.maxFeePerGas, validBefore: request.validBefore }, publicKey, now);
+  const permission = request.permission ? checkPurchasePermission(request.permission, offer, now) : null;
+  if (permission && request.validBefore > request.permission.policy.validUntil) throw new Error('Purchase exceeds permission expiry');
   const memo = Attribution.encode({ challengeId: c.id, serverId: c.realm });
   const transaction = TxEnvelopeTempo.from({ ...base.transaction,
     calls: [{ to: TOKEN, value: 0n, data: AbiFunction.encodeData(transfer, [offer.recipient, BigInt(offer.amount), memo]) }] });
@@ -43,7 +47,7 @@ export function preparePurchase(request, publicKey, now = Math.floor(Date.now() 
     summary: { ...base.summary, title: 'Algoria image purchase — TESTNET',
       action: `Generate one image for ${(Number(offer.amount) / 1e6).toFixed(6)} test PathUSD`,
       recipient: offer.recipient, prompt: input.prompt, jobId: meta.job_id,
-      amount: offer.amount, challengeId: c.id } };
+      amount: offer.amount, challengeId: c.id, ...(permission ? { permission } : {}) } };
 }
 
 /** @param {string} json @param {any} publicKey @param {number} now */

@@ -2,7 +2,7 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { withLock } from '../lock.mjs';
 import { API_BASE, apiFetch, apiError, serviceUrl, jobUrl } from './api.mjs';
-import { getBudget, readLedger, editLedger, updateJob, readJob, publicJob, reserveBudget } from './state.mjs';
+import { getBudget, readLedger, editLedger, updateJob, readJob, publicJob, reserveBudget, saveTempoDispatch } from './state.mjs';
 import { loadTempoSdk } from './tempo-sdk.mjs';
 import { signAndPayTempo } from './tempo-signer.mjs';
 import { loadServicesSdk } from './sdk.mjs';
@@ -103,7 +103,7 @@ async function accept(job, response, body) {
     const { validateInput } = await loadServicesSdk();
     validateInput(job.outputSchema, body);
   }
-  return updateJob(job.id, { payment, status: body.status, output: body.output ?? null,
+  return updateJob(job.id, { payment, status: body.status, uxStage: null, output: body.output ?? null,
     error: body.error?.code ? { code: String(body.error.code).slice(0, 100) } : null,
     phase: body.status.endsWith('-uncertain') || (body.status === 'awaiting_payment' && job.dispatchedAt) ? 'uncertain' : body.status === 'succeeded' ? 'complete' : body.status === 'failed' ? 'failed' : payment ? 'settled' : job.phase });
 }
@@ -129,15 +129,15 @@ export async function runTempo(id, options = {}) {
       job = await requestQuote(job);
       await reserveBudget(id, String(BigInt(job.offer.amount) * 10n));
       try {
-        await signAndPayTempo(job, options, async record => {
-          job = await updateJob(id, { ...record, dispatchedAt: new Date().toISOString(), phase: 'dispatched' });
+        await signAndPayTempo(job, { ...options, onStage: async uxStage => { await updateJob(id, { uxStage }); } }, async record => {
+          job = await saveTempoDispatch(id, record);
         });
       } catch {
         if (job.dispatchedAt) {
           await updateJob(id, { phase: 'uncertain', status: 'payment-uncertain' });
           throw new Error(`Job ${id}: Tempo submission uncertain. Recover this ID; its budget remains reserved.`);
         }
-        await editLedger(state => { delete state.budgets[job.budget].reservations[id]; });
+        await editLedger(state => { delete state.budgets[job.budget].reservations[id]; state.jobs[id].uxStage = null; delete state.jobs[id].permissionId; });
         throw new Error(`Job ${id}: native purchase approval cancelled or unavailable; no payment dispatched.`);
       }
     }

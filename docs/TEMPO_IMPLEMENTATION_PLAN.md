@@ -39,6 +39,13 @@ are still pending; the companion currently uses disposable testnet keys.
 
 ## 3. Connect a smooth end-to-end user journey
 
+Progress, 2026-10-05: [the local UX phase](./TEMPO_UX_IMPLEMENTATION.md)
+adds one durable image-task coordinator, readiness checks, stage/result cards,
+bounded cross-process wallet queuing and a single native review with Purchase,
+Wallet and Activity tabs. Automated recovery and cancellation checks pass.
+Persistent wallets, full native activity/permissions management, packaged
+installation and live both-host usability checks remain pending.
+
 - Add a durable task coordinator around the existing discovery, planning, payment, status, and delivery modules.
 - Keep the six skill entry points, but simplify their coordination and present useful outcomes instead of internal steps.
 - Build three compact companion views: wallet/readiness, purchase review, and permissions/activity.
@@ -51,6 +58,13 @@ are still pending; the companion currently uses disposable testnet keys.
 
 ## 4. Add bounded spending permissions
 
+Progress, 2026-10-05: [signed local permissions](./TEMPO_PERMISSIONS_AND_PACKAGING.md)
+now require native Touch ID for grants/changes and enforce exact image endpoint,
+recipient/token/network, total/per-purchase caps, expiry and local revocation.
+Reservations survive changes and recovery after revocation. Each purchase still
+requires Touch ID; delegated signing and on-chain policy enforcement are not
+implemented. ERC-8196 conformance is explicitly not claimed.
+
 - Define the permission model: agent, token, allowed destination/service, per-purchase limit, total allowance, expiry, and policy identifier.
 - Require Touch ID to grant or expand authority. Covered purchases use a restricted delegated signer, not an unrestricted owner-signing endpoint.
 - Implement policy-bound actions, nonce/replay protection, expiry, audit links, and revocation. Distinguish local service rules from limits actually enforced on-chain.
@@ -61,6 +75,13 @@ are still pending; the companion currently uses disposable testnet keys.
 **Exit:** one biometric grant permits an in-scope purchase; overspend, replay, wrong destination, expired permission, and confirmed revocation are rejected at the intended enforcement boundary.
 
 ## 5. Harden installation, security, and recovery
+
+Progress, 2026-10-05: clean 0.11.0 npm packaging and actual Claude/Codex CLI
+installation in isolated profiles pass; installed-copy commands and bundled SDK
+load without development dependencies. Cancellation, concurrency, expiry,
+revocation races, uncertain recovery and duplicate dispatch have regression
+coverage. The native archive remains ad-hoc signed; live desktop conversations,
+new biometric UI checks, notarization and authenticated IPC remain pending.
 
 - Use a narrow authenticated local communication protocol. The companion validates and constructs signed payloads; the agent never receives owner keys or arbitrary signing authority.
 - Package a signed, versioned native companion and validate notarization/entitlements and clean-machine installation. Keep development tooling outside the distributable plugin.

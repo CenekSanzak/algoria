@@ -4,7 +4,7 @@ An isolated macOS development companion for the [implementation plan](../../docs
 
 ## What it proves
 
-A local AppKit window creates a disposable Secure Enclave P-256 key. A second native review shows a constrained Tempo test transaction. Touch ID protects the key's actual signing operation. The runner verifies the signature, sends the transaction once, and checks both the successful receipt and expected token transfer event.
+A local AppKit purchase review has Purchase, Wallet, Permissions and Activity tabs. It discloses the disposable Secure Enclave P-256 key, signed local budget, exact request and fee bounds in one review before Touch ID. Touch ID protects the key's actual signing operation. The runner verifies the signature, sends the transaction once, and checks both the successful receipt and expected token transfer event.
 
 In version-1 proof mode, the allowed transaction is fixed: **Moderato testnet (42431), one micro-unit of test PathUSD transferred to the signing account itself**. Gas is capped at 1,000,000 and max fee per gas at 30,000,000,000 protocol units. The request expires within five minutes. Version-2 MPP image purchases are described below and use the same fee and expiry caps.
 
@@ -31,9 +31,9 @@ With a person present to review and authenticate:
 npm run proof -- --live --fund-testnet
 ```
 
-1. Confirm creation of a disposable test key in the native window.
-2. The runner obtains faucet tokens from the fixed Moderato RPC.
-3. Review the fixed self-transfer and approve with Touch ID, or cancel.
+1. The companion creates a temporary key (no signing authority is granted).
+2. Explicit `--fund-testnet` consent lets the runner obtain test faucet tokens from the fixed Moderato RPC.
+3. Review the fixed self-transfer and disposable-wallet disclosure together, then approve with Touch ID or cancel.
 4. The runner writes a public recovery record before its only broadcast attempt, then reports settlement.
 
 If the response is lost, inspect the same transaction without signing or broadcasting again:
@@ -80,7 +80,8 @@ Pinned versions are recorded in `package.json` and `package-lock.json`. Both cha
 
 ## MPP purchase extension
 
-The companion now also accepts a structured version-2 MPP image purchase. It
+The companion now also accepts a structured version-2 MPP image purchase with a
+signed permission receipt (required in live mode). It
 constructs the challenge-bound `transferWithMemo`, reviews the actual prompt,
 recipient and price, then requires Touch ID to sign. See
 [payment implementation and setup](../../docs/TEMPO_MPP_IMPLEMENTATION.md).
@@ -90,3 +91,24 @@ the real JavaScriptCore runtime with an explicit offline software test key.
 `--self-test-request` is exclusively that offline test mode; it never broadcasts
 or returns a signed transaction. Live mode still requires Secure Enclave key
 access and has no software fallback.
+
+## Local permission approval and packaging (0.11.0)
+
+`--approve-permission` accepts only the fixed permission schema via stdin. The
+bundled builder validates scope/limits/expiry and builds the native review; Secure
+Enclave key use with Touch ID signs its SHA-256 canonical-policy digest. The
+ephemeral approval key is discarded; its public signature receipt contains no
+spending key. The plugin independently verifies the receipt and exact policy.
+`--self-test-permission` is explicit offline software-fixture mode, returns a
+different status and cannot be mistaken for a successful live bridge response.
+
+The native purchase builder checks the receipt's signature, destination, token,
+per-purchase limit and expiry. Total consumption and revocation are enforced by
+the plugin's local ledger, not an on-chain contract. Every purchase still uses
+Touch ID. Host labels are not authenticated agent identities, and receipts do
+not attest Secure Enclave provenance against malicious same-user software.
+
+After `npm run build`, `npm run package` makes a versioned ZIP and SHA-256
+checksum. This is an ad-hoc-signed **development archive**, not a notarized or
+production-ready installer. Developer ID credentials, hardened runtime,
+authenticated IPC and clean-machine acceptance remain unverified.

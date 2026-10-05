@@ -20,7 +20,8 @@ await writeFile(resolve(app, 'Contents/Info.plist'), `<?xml version="1.0" encodi
 <key>CFBundleIdentifier</key><string>dev.algoria.tempo-signing-proof</string>
 <key>CFBundleName</key><string>Algoria Signing Proof</string>
 <key>CFBundleExecutable</key><string>AlgoriaSigningProof</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleVersion</key><string>11</string>
+<key>CFBundleShortVersionString</key><string>0.11.0</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 </dict></plist>

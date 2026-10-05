@@ -116,10 +116,81 @@ func biometricStatus() -> Bool {
     return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) && context.biometryType == .touchID
 }
 
+// Compact local wallet surfaces. Details are scrollable/read-only and never
+// taken from agent-authored UI strings; the bundled builder supplies the summary.
+func walletReview(_ summary: [String: Any]) -> NSAlert {
+    let alert = NSAlert()
+    alert.messageText = summary["title"] as? String ?? "Algoria — TESTNET purchase"
+    alert.informativeText = "Review the exact request below. Touch ID protects signing. Testnet tokens have no monetary value."
+    let tabs = NSTabView(frame: NSRect(x: 0, y: 0, width: 520, height: 300))
+    func page(_ title: String, _ text: String) {
+        let item = NSTabViewItem(identifier: title)
+        item.label = title
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 500, height: 270))
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .noBorder
+        let content = NSTextView(frame: scroll.bounds)
+        content.isEditable = false
+        content.isSelectable = true
+        content.font = NSFont.systemFont(ofSize: 14)
+        content.textContainerInset = NSSize(width: 12, height: 12)
+        content.isVerticallyResizable = true
+        content.isHorizontallyResizable = false
+        content.autoresizingMask = [.width]
+        content.textContainer?.widthTracksTextView = true
+        content.string = text
+        scroll.documentView = content
+        item.view = scroll
+        tabs.addTabViewItem(item)
+    }
+    let provider = summary["prompt"] == nil ? "Self-transfer (signing proof)" : "Algoria image service"
+    page("Purchase", "\(summary["action"] ?? "")\n\nRequest\n\(summary["prompt"] ?? "Test transfer")\n\nProvider: \(provider)\nNetwork: \(summary["network"] ?? "")\nExpires: \(summary["expires"] ?? "")\n\nApproval returns this exact signed transaction to the plugin or proof runner, which may submit it. Cancel now: no signed payment is returned. After submission, cancellation does not undo a payment.")
+    page("Wallet", "DISPOSABLE TESTNET WALLET\n\nAccount: \(summary["address"] ?? "")\nToken: \(summary["token"] ?? "")\n\nThis purchase uses a temporary Secure Enclave key and explicitly requested faucet tokens. The key is discarded when this process exits. It does not open your existing wallet. No real funds.\n\nGas limit: \(summary["gasLimit"] ?? "")\nMaximum fee per gas (protocol units): \(summary["maxFeePerGas"] ?? "")\nNetwork fee is separate from the service price; these are upper bounds, not a final fee quote.")
+    let permission = summary["permission"] as? [String: Any]
+    let policyText = permission.map { "LOCAL SPENDING PERMISSION\nID: \($0["id"] ?? "")\nBudget: \($0["budget"] ?? "")\nHost label: \($0["agent"] ?? "")\nTotal cap: \($0["total"] ?? "") test PathUSD\nPer purchase: \($0["perCall"] ?? "") test PathUSD\nExpires: \($0["expires"] ?? "")\n\nThe native builder checks signed scope, per-purchase limit and expiry. The plugin enforces cumulative spending and revocation locally. Not on-chain ERC-8196 enforcement. Each purchase still requires Touch ID." } ?? "Approval covers only this exact request. No reusable permission is attached."
+    page("Permissions", policyText)
+    page("Activity", "CURRENT PURCHASE\n\nJob: \(summary["jobId"] ?? "Signing proof")\nRecipient: \(summary["recipient"] ?? summary["address"] ?? "")\n\nThe plugin keeps payment receipts and recovery status locally. Resume this same job after interruption; never pay again to fix a missing preview.")
+    tabs.selectTabViewItem(at: 0)
+    alert.accessoryView = tabs
+    alert.addButton(withTitle: "Approve with Touch ID")
+    alert.addButton(withTitle: "Cancel")
+    return alert
+}
+
 do {
     let arguments = Array(CommandLine.arguments.dropFirst())
     if arguments == ["--status"] {
-        emit(["status": "readiness", "touchIDAvailable": biometricStatus(), "keyCreated": false])
+        emit(["status": "readiness", "touchIDAvailable": biometricStatus(), "keyCreated": false, "permissionVersion": 1])
+        exit(0)
+    }
+    if arguments == ["--approve-permission"] || arguments == ["--self-test-permission"] {
+        let permissionTest = arguments == ["--self-test-permission"]
+        guard permissionTest || biometricStatus() else { throw fail("TOUCH_ID_UNAVAILABLE") }
+        let builder = try TransactionBuilder()
+        let request = try readRequest()
+        let preparedJSON = try builder.call("preparePermissionJSON", [request, Int(Date().timeIntervalSince1970)])
+        guard let prepared = try JSONSerialization.jsonObject(with: Data(preparedJSON.utf8)) as? [String: Any],
+              let digest = prepared["digest"] as? String,
+              let summary = prepared["summary"] as? [String: Any] else { throw fail("INVALID_PERMISSION") }
+        if !permissionTest {
+            NSApplication.shared.setActivationPolicy(.regular)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+        let alert = NSAlert()
+        alert.messageText = "Approve local Tempo spending budget"
+        alert.informativeText = "Budget: \(summary["budget"] ?? "")\nHost label: \(summary["agent"] ?? "") (not a verified agent identity)\nService: \(summary["service"] ?? "")\nEndpoint: \(summary["resource"] ?? "")\nNetwork: \(summary["network"] ?? "")\nToken: \(summary["token"] ?? "")\nRecipient: \(summary["recipient"] ?? "")\nTotal lifetime cap: \(summary["total"] ?? "") test PathUSD\nPer purchase: \(summary["perCall"] ?? "") test PathUSD\nExpires: \(summary["expires"] ?? "")\nPolicy: \(summary["policyId"] ?? "")\n\nChanges preserve spent and uncertain reservations. Local limits only; no autonomous signer, on-chain policy or ERC-8196 compliance. Every purchase still requires Touch ID. Gas is separate. Revocation stops future local dispatches but cannot undo submitted payments. No payment or funding now."
+        alert.addButton(withTitle: "Approve with Touch ID")
+        alert.addButton(withTitle: "Cancel")
+        if !permissionTest {
+            guard alert.runModal() == .alertFirstButtonReturn else { throw fail("USER_CANCELLED") }
+        }
+        let key = try makeKey(softwareTestOnly: permissionTest)
+        let signature = try sign(key, digest: digest)
+        let rechecked = try builder.call("preparePermissionJSON", [request, Int(Date().timeIntervalSince1970)])
+        guard rechecked == preparedJSON else { throw fail("PERMISSION_CHANGED") }
+        let policy = try JSONSerialization.jsonObject(with: Data(request.utf8))
+        emit(["status": permissionTest ? "self-test-permission" : "permission-approved", "provesTouchID": !permissionTest, "receipt": ["policy": policy, "digest": digest,
+            "publicKey": try publicHex(key), "signature": signature]])
         exit(0)
     }
     let selfTestRequest = arguments == ["--self-test-request"]
@@ -130,12 +201,8 @@ do {
     if !selfTest {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
-        let setup = NSAlert()
-        setup.messageText = "Create a disposable testnet signing key?"
-        setup.informativeText = "This proof creates a temporary Secure Enclave key. It does not open your existing wallet. Only testnet faucet tokens may be used. The key is discarded when this process exits."
-        setup.addButton(withTitle: "Create test key")
-        setup.addButton(withTitle: "Cancel")
-        guard setup.runModal() == .alertFirstButtonReturn else { throw fail("USER_CANCELLED") }
+        // Creating an ephemeral key conveys no signing authority. Disclose its
+        // lifetime in the single purchase review rather than a second alert.
     }
     let key = try makeKey(softwareTestOnly: selfTest)
     let publicKey = try publicHex(key)
@@ -149,17 +216,12 @@ do {
         request = try readRequest()
     }
     let prepared = try builder.prepare(request, publicKey)
+    if !selfTest, let object = try JSONSerialization.jsonObject(with: Data(request.utf8)) as? [String: Any],
+       object["version"] as? Int == 2, object["permission"] == nil { throw fail("PERMISSION_REQUIRED") }
     guard let digest = prepared["digest"] as? String,
           let summary = prepared["summary"] as? [String: Any] else { throw fail("INVALID_SDK_RESULT") }
     if !selfTest {
-        let alert = NSAlert()
-        alert.messageText = summary["title"] as? String ?? "Approve testnet signing with Touch ID"
-        alert.informativeText = "\(summary["action"] ?? "")\n\nNetwork: \(summary["network"] ?? "")\nAccount: \(summary["address"] ?? "")\nToken: \(summary["token"] ?? "")\nGas limit: \(summary["gasLimit"] ?? "")\nMax fee per gas (protocol units): \(summary["maxFeePerGas"] ?? "")\nExpires: \(summary["expires"] ?? "")\n\nApproving returns this signed transaction to the test runner, which may broadcast it. No real funds."
-        alert.addButton(withTitle: "Approve with Touch ID")
-        if let prompt = summary["prompt"] as? String, let recipient = summary["recipient"] as? String {
-            alert.informativeText += "\n\nImage prompt: \(prompt)\nRecipient: \(recipient)\nJob: \(summary["jobId"] ?? "")"
-        }
-        alert.addButton(withTitle: "Cancel")
+        let alert = walletReview(summary)
         guard alert.runModal() == .alertFirstButtonReturn else { throw fail("USER_CANCELLED") }
     }
     // Revalidate expiry before key access and again after the biometric prompt.

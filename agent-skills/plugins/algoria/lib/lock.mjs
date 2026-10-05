@@ -7,18 +7,23 @@ import { algoriaHome } from './stellar/keystore.mjs';
  * @template T
  * @param {string} name
  * @param {() => Promise<T>} action
+ * @param {{waitMs?: number}} [options] Bounded queue; never steal a live/stale lock.
  * @returns {Promise<T>}
  */
-export async function withLock(name, action) {
+export async function withLock(name, action, { waitMs = 0 } = {}) {
   if (!/^[a-zA-Z0-9-]+$/.test(name)) throw new Error('invalid lock name');
+  if (!Number.isFinite(waitMs) || waitMs < 0 || waitMs > 600000) throw new Error('invalid lock wait');
   const root = join(algoriaHome(), 'locks');
   await mkdir(root, { recursive: true, mode: 0o700 });
   const path = join(root, name);
-  try {
-    await mkdir(path, { mode: 0o700 });
-  } catch (error) {
-    if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'EEXIST') throw error;
-    throw new Error(`operation locked at ${path}. Retry after the running command finishes. If it crashed, check owner.json and remove this lock directory only after confirming its process has stopped.`);
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try { await mkdir(path, { mode: 0o700 }); break; }
+    catch (error) {
+      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'EEXIST') throw error;
+      if (Date.now() >= deadline) throw Object.assign(new Error(`operation locked at ${path}. Retry after the running command finishes. If it crashed, check owner.json and remove this lock directory only after confirming its process has stopped.`), { code: 'LOCK_BUSY' });
+      await new Promise(resolve => setTimeout(resolve, Math.min(200, deadline - Date.now())));
+    }
   }
   try {
     await writeFile(join(path, 'owner.json'), JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { mode: 0o600, flag: 'wx' });
