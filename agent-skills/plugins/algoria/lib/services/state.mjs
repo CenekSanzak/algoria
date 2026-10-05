@@ -6,7 +6,7 @@ import { withLock } from '../lock.mjs';
 import { atomicAmount, displayAmount } from './policy.mjs';
 import { deliveryFor } from './delivery.mjs';
 
-/** @typedef {{total: string, perCall: string, reservations: Record<string, string>}} Budget */
+/** @typedef {{total: string, perCall: string, reservations: Record<string, string>, protocol?: string}} Budget */
 /** @typedef {{version: number, budgets: Record<string, Budget>, jobs: Record<string, any>}} Ledger */
 export const ledgerPath = () => join(algoriaHome(), 'services.json');
 
@@ -49,14 +49,17 @@ function committed(budget) {
 }
 
 /** @param {string} name @param {string} total @param {string} perCall */
-export async function setBudget(name, total, perCall) {
+export async function setBudget(name, total, perCall, protocol = 'x402') {
   budgetName(name);
+  if (!['x402', 'mpp'].includes(protocol)) throw new Error('unsupported budget protocol');
+  if (protocol === 'mpp' && (!/^(0|[1-9]\d*)(\.\d{1,6})?$/.test(total) || !/^(0|[1-9]\d*)(\.\d{1,6})?$/.test(perCall))) throw new Error('PathUSD amounts support at most six decimals');
   const totalAtomic = atomicAmount(total), perCallAtomic = atomicAmount(perCall);
   if (BigInt(perCallAtomic) > BigInt(totalAtomic)) throw new Error('per-call limit exceeds total budget');
   await editLedger((state) => {
     const previous = Object.hasOwn(state.budgets, name) ? state.budgets[name] : null;
+    if (previous && (previous.protocol ?? 'x402') !== protocol) throw new Error('use a separate budget for each payment protocol');
     if (previous && committed(previous) > BigInt(totalAtomic)) throw new Error('budget is below already spent/reserved amount');
-    state.budgets[name] = { total: totalAtomic, perCall: perCallAtomic, reservations: previous?.reservations ?? {} };
+    state.budgets[name] = { total: totalAtomic, perCall: perCallAtomic, reservations: previous?.reservations ?? {}, ...(protocol === 'mpp' ? { protocol: 'mpp' } : {}) };
   });
   return getBudget(name);
 }
@@ -68,7 +71,7 @@ export async function getBudget(name) {
   const budget = state.budgets[name];
   const spent = Object.entries(budget.reservations).reduce((sum, [id, amount]) => sum + (state.jobs[id]?.payment?.success === true ? BigInt(amount) : 0n), 0n);
   const used = committed(budget);
-  return { name, total: displayAmount(budget.total), perCall: displayAmount(budget.perCall), spent: displayAmount(String(spent)), reserved: displayAmount(String(used - spent)), remaining: displayAmount(String(BigInt(budget.total) - used)), unit: 'test USDC' };
+  return { name, total: displayAmount(budget.total), perCall: displayAmount(budget.perCall), spent: displayAmount(String(spent)), reserved: displayAmount(String(used - spent)), remaining: displayAmount(String(BigInt(budget.total) - used)), unit: budget.protocol === 'mpp' ? 'test PathUSD' : 'test USDC', ...(budget.protocol === 'mpp' ? { protocol: 'mpp', network: 'eip155:42431', token: '0x20c0000000000000000000000000000000000000', decimals: 6 } : {}) };
 }
 
 /** @param {string} id */
@@ -95,6 +98,7 @@ export async function reserveBudget(id, amount) {
     const job = state.jobs[id];
     const budget = job && Object.hasOwn(state.budgets, job.budget) ? state.budgets[job.budget] : null;
     if (!budget) throw new Error('saved budget is missing');
+    if ((budget.protocol ?? 'x402') !== (job.protocol ?? 'x402')) throw new Error('budget payment protocol mismatch');
     if (budget.reservations[id]) {
       if (budget.reservations[id] !== amount) throw new Error('payment reservation changed');
       return;
@@ -115,7 +119,8 @@ export function publicJob(job) {
     id: job.id, service: job.service, serviceVersion: job.serviceVersion, budget: job.budget,
     source: job.source ?? 'algoria',
     status: job.status, phase: job.phase,
-    amount: offer?.amount ? displayAmount(offer.amount) : null, unit: job.transport === 'mcp' ? null : 'test USDC',
+    amount: offer?.amount ? displayAmount(String(BigInt(offer.amount) * (job.protocol === 'mpp' ? 10n : 1n))) : null, unit: job.transport === 'mcp' ? null : job.protocol === 'mpp' ? 'test PathUSD' : 'test USDC',
+    ...(job.protocol === 'mpp' ? { protocol: 'mpp', network: 'eip155:42431', token: '0x20c0000000000000000000000000000000000000', decimals: 6 } : {}),
     ...(job.transport === 'mcp' ? { transport: 'mcp', tool: job.tool, protocol: job.protocol } : {}),
     payTo: offer?.payTo ?? null, expiresAt: job.expiresAt ?? null,
     payment: job.payment ?? null, output: job.output ?? null, error: job.error ?? null,

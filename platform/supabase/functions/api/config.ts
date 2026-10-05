@@ -1,4 +1,5 @@
 export interface Config {
+  mpp?: { recipient: string; amount: string; secret: string };
   supabaseUrl: string;
   serviceRoleKey: string;
   falKey: string;
@@ -102,6 +103,15 @@ export function readConfig(): Config {
   }
   return {
     supabaseUrl,
+    ...(Deno.env.get('TEMPO_IMAGE_RECIPIENT')
+      ? {
+        mpp: {
+          recipient: required('TEMPO_IMAGE_RECIPIENT'),
+          amount: Deno.env.get('TEMPO_IMAGE_PRICE_ATOMIC') ?? '10000',
+          secret: required('MPP_SECRET_KEY'),
+        },
+      }
+      : {}),
     serviceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
     falKey: required('FAL_KEY'),
     imagePayTo,

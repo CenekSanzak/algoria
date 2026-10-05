@@ -13,17 +13,20 @@ export const MAX_FEE_PER_GAS = 30_000_000_000n;
 const transfer = AbiFunction.from('function transfer(address to, uint256 amount) returns (bool)');
 const fields = ['version', 'chainId', 'nonce', 'maxFeePerGas', 'validBefore'];
 
+/** @param {any} publicKey */
 export function addressFor(publicKey) {
   return Address.fromPublicKey(PublicKey.fromHex(publicKey));
 }
 
 // This exact module is bundled into the native application. Caller-supplied
 // calldata, digests, destinations, amounts, labels and signer code are forbidden.
+/** @param {any} request @param {any} publicKey @param {number} [now] */
 export function prepare(request, publicKey, now = Math.floor(Date.now() / 1000)) {
   if (!request || Object.getPrototypeOf(request) !== Object.prototype ||
       Object.keys(request).length !== fields.length ||
       Object.keys(request).some((key) => !fields.includes(key))) throw new Error('Unexpected request fields.');
   if (request.version !== 1 || request.chainId !== CHAIN_ID) throw new Error('Only Moderato testnet is permitted.');
+  /** @param {any} value @param {string} name @param {bigint} max */
   const integer = (value, name, max) => {
     if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,19})$/.test(value)) throw new Error(`Invalid ${name}.`);
     const result = BigInt(value);
@@ -55,8 +58,14 @@ export function prepare(request, publicKey, now = Math.floor(Date.now() / 1000))
   };
 }
 
+/** @param {any} request @param {any} publicKey @param {any} der @param {number} now */
 export function complete(request, publicKey, der, now) {
   const prepared = prepare(request, publicKey, now);
+  return completePrepared(prepared, publicKey, der);
+}
+
+/** @param {any} prepared @param {any} publicKey @param {any} der */
+export function completePrepared(prepared, publicKey, der) {
   const parsed = Signature.fromDerHex(der);
   // Apple can return either S form. Normalize with the SDK curve order.
   const n = P256.noble.Point.Fn.ORDER;
@@ -75,10 +84,12 @@ export function complete(request, publicKey, der, now) {
 }
 
 // JSON-only boundary for JavaScriptCore. Never evaluate request text as code.
+/** @param {string} requestJSON @param {any} publicKey @param {number} now */
 export function prepareJSON(requestJSON, publicKey, now) {
   const { digest, summary } = prepare(JSON.parse(requestJSON), publicKey, now);
   return JSON.stringify({ digest, summary });
 }
+/** @param {string} requestJSON @param {any} publicKey @param {any} der @param {number} now */
 export function completeJSON(requestJSON, publicKey, der, now) {
   return JSON.stringify(complete(JSON.parse(requestJSON), publicKey, der, now));
 }

@@ -1,11 +1,17 @@
 ---
 name: algoria-pay
-description: For every new paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Execute discovered Algoria or Stellar8004 HTTP services over x402 within an approved budget and deliver the result. Use algoria-discover if no service is selected. Recover saved paid jobs without requiring more funds; external requests must not be automatically repaid.
+description: Pay for Algoria services and recover saved jobs. For an explicitly selected Tempo/MPP image task, use the native Touch ID purchase route and a separate test PathUSD budget. For Stellar tasks, FIRST check testnet USDC balance before discovery, planning or payment; if empty, use the Stellar top-up flow. Execute Algoria or Stellar8004 HTTP services over x402 within the approved scope and deliver the result. Use algoria-discover when no service is selected. Never repay an uncertain saved job.
 ---
 
 # Pay and execute an Algoria service
 
-**First action for a new paid task: check wallet balance, before discovery,
+For an explicitly selected **Tempo/MPP image task**, first read
+[tempo-payments.md](references/tempo-payments.md). Follow that route's native
+Touch ID review, test PathUSD funding and separate budget. The Stellar balance
+and top-up steps below apply to Stellar tasks only. `run` and `status` detect the
+saved job's protocol; never switch a saved job to another chain.
+
+**First action for a new Stellar paid task: check wallet balance, before discovery,
 quotes or payment attempts.** Use the wallet helper from this plugin at
 `skills/algoria-wallet/scripts/wallet.mjs balance --network testnet --json`,
 with its absolute path and `node`. Run it separately and inspect the result.

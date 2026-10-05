@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { emit, isMain, parseArgs, run } from '../../../lib/cli.mjs';
 import { listJobs, quote, runJob, statusJob } from '../../../lib/services/client.mjs';
 import { getBudget, setBudget } from '../../../lib/services/state.mjs';
+import { quoteTempo } from '../../../lib/services/tempo-client.mjs';
 
 const USAGE = `algoria pay — execute services with local x402 testnet USDC payments
 
@@ -16,6 +17,8 @@ const USAGE = `algoria pay — execute services with local x402 testnet USDC pay
   upload-reference <photo-path> [--id <UUID-v4>]         private reference upload; no payment
 
 Options: --json; quote --id <UUID-v4> reuses a known identity and identical input.
+Tempo: budget/quote --protocol mpp; run --approve --fund-testnet.
+Tempo uses test PathUSD, a separate budget, and the native Touch ID companion.
 External: quote stellar8004:<agent>:<service-index> --method GET|POST ...
 Use the method from service documentation. GET input is scalar query parameters.
 External status is local only; a lost paid response must never be auto-retried.
@@ -35,12 +38,14 @@ export function main(argv) {
     const [command, target] = positional;
     if (!command || command === 'help' || flags.help) { process.stdout.write(USAGE + '\n'); return; }
     // Never let a caller believe these services use their pubnet wallet.
-    if (flags.network && !['testnet', 'stellar:testnet'].includes(String(flags.network))) throw new Error('Algoria services currently support testnet only');
+    const protocol = typeof flags.protocol === 'string' ? flags.protocol : 'x402';
+    if (!['x402', 'mpp'].includes(protocol)) throw new Error('expected --protocol x402 or mpp');
+    if (flags.network && !(protocol === 'mpp' ? ['testnet', 'eip155:42431'] : ['testnet', 'stellar:testnet']).includes(String(flags.network))) throw new Error('Algoria services currently support testnet only');
     let result;
     if (command === 'budget') {
       const name = value(flags, 'name');
       result = flags.total || flags['per-call']
-        ? await setBudget(name, value(flags, 'total'), value(flags, 'per-call'))
+        ? await setBudget(name, value(flags, 'total'), value(flags, 'per-call'), protocol)
         : await getBudget(name);
     } else if (command === 'list') result = { jobs: await listJobs() };
     else {
@@ -49,8 +54,10 @@ export function main(argv) {
       else if (command === 'quote') {
         const data = await readFile(value(flags, 'input'), 'utf8');
         if (Buffer.byteLength(data) > 32768) throw new Error('input file exceeds 32768 bytes');
-        result = await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined, typeof flags.method === 'string' ? flags.method : undefined);
-      } else if (command === 'run') result = await runJob(target, { approve: flags.approve === true });
+        result = protocol === 'mpp'
+          ? await quoteTempo(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined)
+          : await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined, typeof flags.method === 'string' ? flags.method : undefined);
+      } else if (command === 'run') result = await runJob(target, { approve: flags.approve === true, fundTestnet: flags['fund-testnet'] === true });
       else if (command === 'status') result = await statusJob(target, { wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
       else throw new Error('expected budget, quote, run, status, list or upload-reference');
     }

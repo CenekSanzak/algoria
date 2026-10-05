@@ -1,18 +1,18 @@
 # Tempo native signing proof
 
-An isolated macOS development prototype for phase 1 of the [implementation plan](../../docs/TEMPO_IMPLEMENTATION_PLAN.md). It does not change or ship with the current Stellar plugin.
+An isolated macOS development companion for the [implementation plan](../../docs/TEMPO_IMPLEMENTATION_PLAN.md). Its original proof mode is preserved; the source plugin can now launch it for structured MPP image purchases. The companion is built separately from the shipped plugin.
 
 ## What it proves
 
 A local AppKit window creates a disposable Secure Enclave P-256 key. A second native review shows a constrained Tempo test transaction. Touch ID protects the key's actual signing operation. The runner verifies the signature, sends the transaction once, and checks both the successful receipt and expected token transfer event.
 
-The allowed transaction is fixed: **Moderato testnet (42431), one micro-unit of test PathUSD transferred to the signing account itself**. Gas is capped at 1,000,000 and max fee per gas at 30,000,000,000 protocol units. The request expires within five minutes. This is a signing proof, not a purchased AI service or MPP payment.
+In version-1 proof mode, the allowed transaction is fixed: **Moderato testnet (42431), one micro-unit of test PathUSD transferred to the signing account itself**. Gas is capped at 1,000,000 and max fee per gas at 30,000,000,000 protocol units. The request expires within five minutes. Version-2 MPP image purchases are described below and use the same fee and expiry caps.
 
 No existing wallet is opened. No private key is exported or saved. The ephemeral key is discarded when the process exits; remaining faucet tokens are deliberately abandoned. Never send real funds to the disposable account.
 
 ## Build and run
 
-Requires macOS 15+, Xcode command-line tooling, Node 22+, and enrolled Touch ID for the live check. Use the same commands from either host's local terminal; installed Claude/Codex plugin integration is not implemented yet.
+Requires macOS 15+, Xcode command-line tooling, Node 22+, and enrolled Touch ID for the live check. Use the same commands from either host's local terminal. The plugin launches a locally built companion through `ALGORIA_TEMPO_SIGNER_APP`; a packaged companion installer is not implemented yet.
 
 ```sh
 cd /Users/berkingurcan/Documents/algoria-x/native/tempo-signing-proof
@@ -77,3 +77,16 @@ Keep ERC-8196-inspired permissions as the accurately labeled baseline until the 
 - [ERC-8196 requirements](https://eips.ethereum.org/EIPS/eip-8196)
 
 Pinned versions are recorded in `package.json` and `package-lock.json`. Both chain wire format and cryptography use the SDK; neither is reimplemented in Swift.
+
+## MPP purchase extension
+
+The companion now also accepts a structured version-2 MPP image purchase. It
+constructs the challenge-bound `transferWithMemo`, reviews the actual prompt,
+recipient and price, then requires Touch ID to sign. See
+[payment implementation and setup](../../docs/TEMPO_MPP_IMPLEMENTATION.md).
+
+After building, `node scripts/check-purchase-runtime.mjs` verifies this path in
+the real JavaScriptCore runtime with an explicit offline software test key.
+`--self-test-request` is exclusively that offline test mode; it never broadcasts
+or returns a signed transaction. Live mode still requires Secure Enclave key
+access and has no software fallback.

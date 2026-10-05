@@ -43,3 +43,16 @@ These are baseline environment/dependency problems, not passing regression resul
 - ERC-8196 wallet-contract conformance and ERC-8126 integration. See the explicit decision in the README.
 
 **Result:** native biometric signing and Tempo testnet acceptance are proven. This is the phase-1 signing milestone, not completion of every architecture, packaging, and policy feasibility gate.
+## Follow-up: MPP implementation, 2026-10-05
+
+The [MPP image-payment implementation](../../docs/TEMPO_MPP_IMPLEMENTATION.md)
+now connects the source plugin to the local companion and existing backend.
+Its structured purchase path passes actual JavaScriptCore construction/signing
+checks with an explicit offline software fixture key, including a Unicode prompt.
+This does not claim a new live Touch ID image purchase.
+
+The earlier plugin dependency blockers have been repaired with the project's
+pinned pnpm version. Current verification passes: 230 plugin tests, 102 backend
+tests, 29 native tests, both type checks, and clean copied-plugin operation without
+development dependencies. Native packaging and live paid-image validation remain
+pending. The earlier live signing transaction remains the phase-1 chain evidence.

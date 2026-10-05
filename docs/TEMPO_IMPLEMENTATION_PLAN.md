@@ -4,7 +4,7 @@ Date: 2026-10-05 · Repository: `algoria-x` · Branch: `colloseum-intro`
 
 Status: proposed implementation sequence, not completed work. Builds on [architecture](./COLOSSEUM_TEMPO_PLAN.md) and [UX proposal](./PLUGIN_UX_PROPOSAL.md).
 
-Progress, 2026-10-05: the isolated [native signing proof](../native/tempo-signing-proof/README.md) now builds and has completed a user-approved Secure Enclave/Touch ID signing flow with confirmed Tempo testnet settlement. See [verification evidence and remaining phase-1 checks](../native/tempo-signing-proof/VERIFICATION.md). Installed-host integration, baseline dependency repair, and full policy-contract feasibility are not yet complete.
+Progress, 2026-10-05: the isolated [native signing proof](../native/tempo-signing-proof/README.md) now builds and has completed a user-approved Secure Enclave/Touch ID signing flow with confirmed Tempo testnet settlement. See [verification evidence and remaining phase-1 checks](../native/tempo-signing-proof/VERIFICATION.md). Plugin/platform baseline tests now pass after dependency repair in phase 2. Packaged native installation, live installed-host purchase validation, and full policy-contract feasibility remain pending.
 
 ## Outcome
 
@@ -22,6 +22,11 @@ Keep Algoria as a Claude/Codex plugin for buying AI services. Add Tempo/MPP, a l
 **Exit:** verified native signing path and a written policy integration decision. Do not build the complete wallet UI around an unproven signing bridge.
 
 ## 2. Implement Tempo/MPP on both sides
+
+Progress, 2026-10-05: [MPP image payments are implemented](./TEMPO_MPP_IMPLEMENTATION.md)
+in the plugin, native purchase signer and existing backend, with offline integration
+and recovery coverage. Live image-provider validation and deployed configuration
+are still pending; the companion currently uses disposable testnet keys.
 
 - Add a Tempo wallet/payment adapter without changing the existing Stellar adapter's behavior.
 - Make amounts and persisted payment records explicit about chain, token, decimals, and payment protocol; preserve old records through versioned migration tests.

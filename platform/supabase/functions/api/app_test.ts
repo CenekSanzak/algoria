@@ -8,6 +8,7 @@ import { type FalPollResult, FalSubmissionError, type FalTarget } from './fal.ts
 import { ASSET, NETWORK, PaymentGateway, type PaymentPayload, type PaymentRequirements } from './payments.ts';
 import { hash } from './security.ts';
 import type { ClaimResult, CompletionClaim, Job, NewJob } from './store.ts';
+import { registerMppTests } from './mpp-test-cases.ts';
 
 const RECIPIENT = 'GCTVT52AAFK7KYO74JAO3QOLNT6BUYTCZYHTRD7C2VZG6C5CJNRVEV6Y';
 const PAYER = 'GDSGS53IUWOSFIW7EWW5NJ4WJLUNVRSH3MYQ3YFGWEJI7VZCVE3C6JDT';
@@ -184,7 +185,7 @@ class MemoryStore implements JobStore {
   }
 }
 
-function harness(allServices = false) {
+export function harness(allServices = false) {
   const store = new MemoryStore();
   const downloadedUrls: string[] = [];
   const submissions: { input: Record<string, unknown>; target?: FalTarget }[] = [];
@@ -368,6 +369,7 @@ function harness(allServices = false) {
     webhook,
   };
 }
+registerMppTests(harness);
 
 /** A durable paid snapshot from a prior request, with no external source or payment I/O. */
 async function paidMediaJob(h: ReturnType<typeof harness>, kind: 'audio' | 'video') {

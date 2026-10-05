@@ -42,7 +42,12 @@ final class TransactionBuilder {
     func call(_ name: String, _ arguments: [Any]) throws -> String {
         context.exception = nil
         let function = context.objectForKeyedSubscript("AlgoriaProof")?.objectForKeyedSubscript(name)
-        guard let result = function?.call(withArguments: arguments), context.exception == nil,
+        let called = function?.call(withArguments: arguments)
+        if CommandLine.arguments.contains("--self-test-request"), let exception = context.exception {
+            // Offline fixture diagnostics only; never enabled for live approval.
+            FileHandle.standardError.write(Data("Offline SDK: \(exception.toString() ?? "unknown")\n".utf8))
+        }
+        guard let result = called, context.exception == nil,
               let value = result.toString(), value != "undefined" else { throw fail("INVALID_REQUEST_OR_SIGNATURE") }
         return value
     }
@@ -99,7 +104,7 @@ func readRequest() throws -> String {
     while let byte = try FileHandle.standardInput.read(upToCount: 1), !byte.isEmpty {
         if byte[0] == 10 { break }
         data.append(byte)
-        if data.count > 4096 { throw fail("REQUEST_TOO_LARGE") }
+        if data.count > 32768 { throw fail("REQUEST_TOO_LARGE") }
     }
     guard let result = String(data: data, encoding: .utf8), !result.isEmpty else { throw fail("MISSING_REQUEST") }
     return result
@@ -117,7 +122,8 @@ do {
         emit(["status": "readiness", "touchIDAvailable": biometricStatus(), "keyCreated": false])
         exit(0)
     }
-    let selfTest = arguments == ["--self-test"]
+    let selfTestRequest = arguments == ["--self-test-request"]
+    let selfTest = arguments == ["--self-test"] || selfTestRequest
     guard selfTest || arguments.isEmpty else { throw fail("UNKNOWN_ARGUMENT") }
     if !selfTest && !biometricStatus() { throw fail("TOUCH_ID_UNAVAILABLE") }
     let builder = try TransactionBuilder()
@@ -134,7 +140,9 @@ do {
     let key = try makeKey(softwareTestOnly: selfTest)
     let publicKey = try publicHex(key)
     let request: String
-    if selfTest {
+    if selfTestRequest {
+        request = try readRequest()
+    } else if selfTest {
         request = "{\"version\":1,\"chainId\":42431,\"nonce\":\"0\",\"maxFeePerGas\":\"20000000000\",\"validBefore\":\(Int(Date().timeIntervalSince1970) + 120)}"
     } else {
         emit(["status": "ready", "publicKey": publicKey, "disposable": true])
@@ -145,9 +153,12 @@ do {
           let summary = prepared["summary"] as? [String: Any] else { throw fail("INVALID_SDK_RESULT") }
     if !selfTest {
         let alert = NSAlert()
-        alert.messageText = "Approve testnet signing with Touch ID"
+        alert.messageText = summary["title"] as? String ?? "Approve testnet signing with Touch ID"
         alert.informativeText = "\(summary["action"] ?? "")\n\nNetwork: \(summary["network"] ?? "")\nAccount: \(summary["address"] ?? "")\nToken: \(summary["token"] ?? "")\nGas limit: \(summary["gasLimit"] ?? "")\nMax fee per gas (protocol units): \(summary["maxFeePerGas"] ?? "")\nExpires: \(summary["expires"] ?? "")\n\nApproving returns this signed transaction to the test runner, which may broadcast it. No real funds."
         alert.addButton(withTitle: "Approve with Touch ID")
+        if let prompt = summary["prompt"] as? String, let recipient = summary["recipient"] as? String {
+            alert.informativeText += "\n\nImage prompt: \(prompt)\nRecipient: \(recipient)\nJob: \(summary["jobId"] ?? "")"
+        }
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { throw fail("USER_CANCELLED") }
     }

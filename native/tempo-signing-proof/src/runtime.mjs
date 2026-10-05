@@ -1,3 +1,10 @@
 // JavaScriptCore has no browser TextEncoder/TextDecoder globals.
-import 'fast-text-encoding';
-export { prepareJSON, completeJSON } from './transaction.mjs';
+import './encoding.mjs';
+import { prepareJSON as prepareProof, completeJSON as completeProof } from './transaction.mjs';
+import { preparePurchaseJSON, completePurchaseJSON } from './purchase.mjs';
+export function prepareJSON(json, publicKey, now) {
+  return JSON.parse(json).version === 2 ? preparePurchaseJSON(json, publicKey, now) : prepareProof(json, publicKey, now);
+}
+export function completeJSON(json, publicKey, der, now) {
+  return JSON.parse(json).version === 2 ? completePurchaseJSON(json, publicKey, der, now) : completeProof(json, publicKey, der, now);
+}

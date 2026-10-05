@@ -1,9 +1,15 @@
 # algoria
 
-For every new paid task, **check the USDC wallet balance first**, before service
+For every new Stellar paid task, **check the USDC wallet balance first**, before service
 discovery, planning, quotes or payment attempts. If empty, provide the funding
 link immediately, verify the deposit, then resume the original task within its
 approved budget. The installed skills state this order in their entrypoints.
+
+Version 0.9.0 adds **Tempo/MPP image payments** with a separate test PathUSD
+budget and a local Touch ID companion. See
+[Tempo payment setup](skills/algoria-pay/references/tempo-payments.md).
+The companion currently needs a local build; the existing Stellar setup below
+does not fund Tempo.
 
 A personal context and execution layer above service discovery catalogs.
 Algoria keeps the user's preferred services, project context, job history and

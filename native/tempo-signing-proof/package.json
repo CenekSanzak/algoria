@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "fast-text-encoding": "1.0.6",
+    "mppx": "0.13.1",
     "ox": "1.8.5",
     "viem": "2.57.3"
   },
