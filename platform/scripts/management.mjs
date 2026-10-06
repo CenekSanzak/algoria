@@ -15,7 +15,7 @@ function accessToken() {
     '-a',
     'supabase',
     '-w',
-  ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, maxBuffer: 8192 });
   if (result.status !== 0 || !result.stdout.trim()) throw new Error('Supabase CLI credential unavailable');
   cachedToken = result.stdout.trim();
   return cachedToken;
@@ -32,7 +32,9 @@ export async function management(path, body, sensitive = false) {
     const details = !sensitive && path.startsWith('database/') ? await result.text() : '';
     throw new Error(`Management API HTTP ${result.status}: ${details.slice(0, 1000)}`);
   }
-  return result.json();
+  // Secret updates can succeed with an empty 200/201/204 response.
+  const contents = await result.text();
+  return contents ? JSON.parse(contents) : undefined;
 }
 if (process.argv[1]?.endsWith('/management.mjs')) {
   const action = process.argv[2];

@@ -112,7 +112,9 @@ export function readConfig(): Config {
         },
       }
       : {}),
-    serviceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
+    // Preserve the deployed key override: platform-injected legacy JWTs can
+    // have a future `iat` after a platform key change and fail PostgREST reads.
+    serviceRoleKey: Deno.env.get('ALGORIA_SERVICE_ROLE_KEY') || required('SUPABASE_SERVICE_ROLE_KEY'),
     falKey: required('FAL_KEY'),
     imagePayTo,
     baseUrl: (Deno.env.get('ALGORIA_API_BASE_URL') || `${supabaseUrl}/functions/v1/api`).replace(/\/$/, ''),

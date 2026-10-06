@@ -77,7 +77,7 @@ const inProgress = (job: Job) => !['awaiting_payment', 'succeeded', 'failed'].in
 export function createApp(d: Dependencies) {
   const { config, store, payments, fal, artifacts } = d;
   const sleep = d.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-  const app = new Hono({
+  const app = new Hono<{ Variables: { failureStage: string } }>({
     getPath(request) {
       const path = new URL(request.url).pathname;
       return path.replace(/^\/functions\/v1\/api(?=\/|$)/, '').replace(/^\/api(?=\/|$)/, '') || '/';
@@ -357,10 +357,14 @@ export function createApp(d: Dependencies) {
     c.header('Cache-Control', 'no-store');
     await next();
   });
-  app.onError((e) => {
+  app.onError((e, c) => {
     if (e instanceof HttpError) return json({ code: e.code, message: e.message }, e.status);
-    // Log only the class; SDK errors can contain authorization or user prompts.
-    console.error('API request failed', e.name);
+    // Only static stages and bounded error codes; SDK messages can contain
+    // authorization or user prompts. Never log the message, request or stack.
+    const code = (e as Error & { code?: unknown }).code;
+    console.error('API request failed', e.name, c.get('failureStage') ?? 'other',
+      typeof code === 'string' && /^[A-Z0-9_]{1,40}$/.test(code) ? code
+        : e.message === 'Invalid API key' ? 'SUPABASE_API_KEY_INVALID' : 'unclassified');
     return json({
       code: 'temporarily-unavailable',
       message: 'Retry the same request identity or check its status.',
@@ -450,6 +454,7 @@ export function createApp(d: Dependencies) {
         'Send a UUID v4 Idempotency-Key and random base64url X-Recovery-Token.',
       );
     }
+    c.set('failureStage', 'read-job');
     let job = await store.get(id);
     let service: Service | undefined;
     if (job) {
@@ -471,6 +476,7 @@ export function createApp(d: Dependencies) {
     if (job) {
       if (job.input_hash !== inputHash) throw new HttpError(409, 'request-conflict');
     } else {
+      c.set('failureStage', 'check-capacity');
       if (!(await store.capacity()).available) throw new HttpError(429, 'demo-capacity-exhausted');
       if (service.id === 'video.social') {
         if (!d.social) throw new HttpError(503, 'social-unavailable');
@@ -480,14 +486,17 @@ export function createApp(d: Dependencies) {
         if (!d.phone) throw new HttpError(503, 'phone-unavailable');
         d.phone.validate(input as PhoneInput);
       }
+      c.set('failureStage', 'validate-sources');
       await resolveSources(service, input, { supabaseUrl: config.supabaseUrl, store, artifacts }, true);
       const payment = servicePayment(config, service.id)!;
       const resource = `${config.baseUrl}/v1/services/${service.id}`;
       const expires = new Date(started + 10 * 60 * 1000).toISOString();
+      c.set('failureStage', 'create-challenge');
       const requirements = protocol === 'mpp'
         ? d.mpp!.quote(id, inputHash, resource, expires)
         : await payments.requirements(payment.payTo, payment.priceAtomic);
       try {
+        c.set('failureStage', 'save-quote');
         job = (await store.create({
           id,
           service_id: service.id,
@@ -523,6 +532,7 @@ export function createApp(d: Dependencies) {
       if (!signature) {
         if (!(await store.capacity()).available) throw new HttpError(429, 'demo-capacity-exhausted');
         if (protocol === 'mpp') {
+          c.set('failureStage', 'send-challenge');
           const challenge = d.mpp!.challenge(job);
           return json(challenge.body, 402, { 'WWW-Authenticate': challenge.header });
         }

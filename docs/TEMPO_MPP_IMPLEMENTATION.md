@@ -123,9 +123,11 @@ The pay skill passed the available Codex skill validator. The host's standalone
 host manifests and npm package agree on version 0.9.0. A native-build automatic
 approval review timed out once; its retry and offline check completed successfully.
 
-No live paid image was generated and no backend was deployed during this change.
-Live validation requires configuring a testnet service recipient, deploying this
-backend version and an approved fal provider test budget. Plugin native signing
-and server verification have been tested with offline payment/provider fixtures.
+The initial implementation was validated with offline payment/provider fixtures.
+On 2026-10-06, the published npm package **0.11.0** completed a live Touch ID
+image purchase against the deployed backend: one `0.010000` test PathUSD
+payment and one real fal image. Same-task recovery returned the original
+receipt without another payment. See [live verification](TEMPO_LIVE_VERIFICATION.md)
+for evidence, deployment fixes, current test counts and remaining limitations.
 
 Protocol reference: [MPP SDK](https://github.com/wevm/mppx).

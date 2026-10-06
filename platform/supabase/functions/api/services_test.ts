@@ -650,6 +650,7 @@ Deno.test('slideshow configuration defaults to its own 0.01 test USDC recipient'
   const names = [
     'SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
+    'ALGORIA_SERVICE_ROLE_KEY',
     'FAL_KEY',
     ...prefixes.flatMap((prefix) => [`${prefix}_PAY_TO`, `${prefix}_PRICE_ATOMIC`]),
   ];
@@ -662,6 +663,9 @@ Deno.test('slideshow configuration defaults to its own 0.01 test USDC recipient'
     Deno.env.set('IMAGE_GENERATE_PAY_TO', CONFIG.imagePayTo);
     const recipient = ALL_CONFIG.servicePayments!['video.slideshow'].payTo;
     Deno.env.set('VIDEO_SLIDESHOW_PAY_TO', recipient);
+    equal(readConfig().serviceRoleKey, 'test-key');
+    Deno.env.set('ALGORIA_SERVICE_ROLE_KEY', 'explicit-operator-key');
+    equal(readConfig().serviceRoleKey, 'explicit-operator-key');
     deepEqual(readConfig().servicePayments, {
       'video.slideshow': { payTo: recipient, priceAtomic: '100000' },
     });

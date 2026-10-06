@@ -33,4 +33,14 @@ describe('Tempo build dependency contract', () => {
   it('checks release inputs when shared Tempo source changes', async () => {
     expect(await read('.github/workflows/publish-npm.yml')).toContain("- 'native/tempo-signing-proof/**'");
   });
+
+  it('verifies published CLI stdout separately from npm notices, including on reruns', async () => {
+    const source = await read('.github/workflows/publish-npm.yml');
+    const smoke = source.slice(source.indexOf('- name: Smoke test the published package'));
+    expect(smoke).not.toContain("if: steps.version.outputs.publish");
+    expect(smoke).toContain('NPM_CONFIG_CACHE: ${{ runner.temp }}/algoria-published-npm-cache');
+    expect(smoke).toContain('npm exec --yes --package="algoria@$VERSION" -- algoria --version 2>npm-install-error.log');
+    expect(smoke).not.toContain('2>&1');
+    expect(smoke).toContain('seq 1 30');
+  });
 });
