@@ -4,6 +4,7 @@ import { createApp } from './app.ts';
 import { readConfig } from './config.ts';
 import { Store } from './store.ts';
 import { PaymentGateway } from './payments.ts';
+import { MppGateway } from './mpp.ts';
 import { FalProvider } from './fal.ts';
 import { SupabaseArtifacts } from './artifacts.ts';
 import { openAiSummarizer, PhoneCalls, SupabaseCallRepository, Twilio } from './phone.ts';
@@ -41,5 +42,6 @@ const app = createApp({
   references: repository,
   workflowSecret: Deno.env.get('SOCIAL_WORKFLOW_SECRET'),
   payments: new PaymentGateway(config.facilitatorUrl),
+  mpp: config.mpp ? new MppGateway(config.mpp) : undefined,
 });
 Deno.serve(app.fetch);

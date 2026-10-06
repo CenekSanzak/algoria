@@ -1,7 +1,7 @@
 {
   "name": "algoria",
-  "version": "0.8.3",
-  "description": "Check balance first for paid tasks, then use local memory and discovery. Execute Algoria/Stellar8004 x402 services or registered MCP tools; MCP access does not require USDC funding.",
+  "version": "0.11.0",
+  "description": "Use local memory and discovery to buy AI services. Tempo image purchases use MPP and a local Touch ID companion; Stellar services use x402 and a USDC wallet. Recover saved jobs and use registered MCP tools.",
   "type": "module",
   "bin": {
     "algoria": "bin/algoria.mjs"
@@ -10,6 +10,9 @@
     "node": ">=22"
   },
   "files": [
+    ".claude-plugin/",
+    ".codex-plugin/",
+    "README.md",
     "bin/",
     "lib/",
     "skills/",

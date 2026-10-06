@@ -1,0 +1,24 @@
+{
+  "name": "@algoria/tempo-signing-proof",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "test:ui": "node scripts/check-wallet-ui.mjs",
+    "package": "node scripts/package.mjs",
+    "proof": "node scripts/proof.mjs"
+  },
+  "dependencies": {
+    "fast-text-encoding": "1.0.6",
+    "mppx": "0.13.1",
+    "ox": "1.8.5",
+    "viem": "2.57.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

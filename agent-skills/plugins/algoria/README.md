@@ -1,9 +1,19 @@
 # algoria
 
-For every new paid task, **check the USDC wallet balance first**, before service
+For every new Stellar paid task, **check the USDC wallet balance first**, before service
 discovery, planning, quotes or payment attempts. If empty, provide the funding
 link immediately, verify the deposit, then resume the original task within its
 approved budget. The installed skills state this order in their entrypoints.
+
+Version 0.11.0 adds Touch ID-approved local Tempo budgets, exact recipient/service
+scope, spending caps, expiry and immediate local revocation. Every purchase still
+requires Touch ID; this is not on-chain ERC-8196 enforcement. It retains a
+**single saved Tempo image task**, read-only readiness,
+clear progress/recovery actions and queued native Touch ID purchases. MPP uses
+a separate test PathUSD budget. See
+[Tempo payment setup](skills/algoria-pay/references/tempo-payments.md).
+The companion currently needs a local build; the existing Stellar setup below
+does not fund Tempo.
 
 A personal context and execution layer above service discovery catalogs.
 Algoria keeps the user's preferred services, project context, job history and
@@ -59,8 +69,14 @@ npx algoria@latest install --agent codex --ref codex/stellar8004-testnet-service
 ```
 
 Before this version is published, `@latest` still downloads the previous npm
-release. An unpacked checkout or a supplied `algoria-0.7.0.tgz` can exercise the
-same installer: `npx --package=/absolute/path/algoria-0.7.0.tgz algoria install --agent codex --ref <branch>`.
+release. For uncommitted development files, use this checkout's `bin/algoria.mjs`
+with `install --agent codex|claude --source /absolute/path/to/algoria-x`. This
+installs the local marketplace without switching branches or downloading `main`.
+Restart the host after installation. The companion is a separate local build;
+the npm package does not install a native wallet automatically.
+
+An unpacked checkout or a supplied `algoria-0.11.0.tgz` can exercise the same
+installer: `npx --package=/absolute/path/algoria-0.11.0.tgz algoria install --agent codex --source /absolute/path/to/algoria-x`.
 If a host rejects an existing marketplace with a different source, the installer
 reports its error and stops; it does not remove existing marketplaces or plugins.
 

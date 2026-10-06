@@ -6,6 +6,7 @@ import { uploadReference } from './references.ts';
 import { Hono } from 'npm:hono@4.13.8';
 import type { Config } from './config.ts';
 import { PaymentGateway, type PaymentRequirements, receiptHeader } from './payments.ts';
+import { type MppGateway, mppReceiptHeader } from './mpp.ts';
 import type { Job, Store } from './store.ts';
 import {
   downloadAudio,
@@ -46,6 +47,7 @@ type JobStore = Pick<
   | 'recordWebhook'
 >;
 export interface Dependencies {
+  mpp?: Pick<MppGateway, 'quote' | 'challenge' | 'parse' | 'verify'>;
   config: Config;
   social?: Pick<SocialWorkflow, 'start' | 'advance' | 'progress' | 'parent' | 'sweep' | 'validateReferences'>;
   references?: Pick<SocialStore, 'reserveReference'>;
@@ -93,9 +95,41 @@ export function createApp(d: Dependencies) {
     queuePath: service.queuePath,
     output: service.providerOutput,
   });
-  async function document(service: Service) {
+  async function document(service: Service, mppOnly = false) {
     const payment = servicePayment(config, service.id)!;
-    return serviceDocument(config, await payments.requirements(payment.payTo, payment.priceAtomic), service);
+    const offer = service.id === 'image.generate' && config.mpp
+      ? {
+        protocol: 'mpp',
+        method: 'tempo',
+        intent: 'charge',
+        chain: 'eip155:42431',
+        token: '0x20c0000000000000000000000000000000000000',
+        decimals: 6,
+        recipient: config.mpp.recipient.toLowerCase(),
+        amount: config.mpp.amount,
+      }
+      : undefined;
+    if (mppOnly) {
+      if (!offer) throw new HttpError(400, 'mpp-service-unavailable');
+      const { x402Version: _v, accepts: _a, extensions: _e, ...doc } = serviceDocument(config, null, service);
+      return {
+        ...doc,
+        protocol: 'mpp',
+        mpp: offer,
+        headers: {
+          'Idempotency-Key': doc.headers['Idempotency-Key'],
+          'X-Recovery-Token': doc.headers['X-Recovery-Token'],
+          'X-Payment-Protocol': 'mpp',
+          Authorization: 'Payment <MPP hash credential>',
+        },
+      };
+    }
+    const doc = serviceDocument(
+      config,
+      await payments.requirements(payment.payTo, payment.priceAtomic),
+      service,
+    );
+    return { ...doc, ...(offer ? { mpp: offer } : {}) };
   }
 
   async function response(job: Job, isStatus = false, signal?: AbortSignal) {
@@ -174,7 +208,11 @@ export function createApp(d: Dependencies) {
         ? 502
         : 202,
       {
-        ...(job.payment_receipt?.success ? { 'PAYMENT-RESPONSE': receiptHeader(job.payment_receipt) } : {}),
+        ...(job.payment_receipt?.success
+          ? job.payment_receipt.protocol === 'mpp'
+            ? { 'Payment-Receipt': mppReceiptHeader(job.payment_receipt) }
+            : { 'PAYMENT-RESPONSE': receiptHeader(job.payment_receipt) }
+          : {}),
         ...(inProgress(job) ? { 'Retry-After': '3' } : {}),
       },
     );
@@ -335,7 +373,9 @@ export function createApp(d: Dependencies) {
   );
   app.get('/openapi.json', () => json(openApi(config)));
   app.get('/v1/services/:service_id', async (c) => {
-    return json(await document(findService(c.req.param('service_id'))));
+    return json(
+      await document(findService(c.req.param('service_id')), c.req.header('X-Payment-Protocol') === 'mpp'),
+    );
   });
   async function discovery(url: URL) {
     const params = url.searchParams;
@@ -370,7 +410,9 @@ export function createApp(d: Dependencies) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isInteger(offset) || offset < 0) {
       throw new HttpError(400, 'invalid-pagination');
     }
-    const resources = await Promise.all(included.slice(offset, offset + limit).map(document));
+    const resources = await Promise.all(
+      included.slice(offset, offset + limit).map((service) => document(service)),
+    );
     return json({
       x402Version: 2,
       resources,
@@ -387,6 +429,11 @@ export function createApp(d: Dependencies) {
   app.post('/v1/services/:service_id', async (c) => {
     const started = Date.now();
     const serviceId = c.req.param('service_id');
+    const protocol = c.req.header('X-Payment-Protocol') ?? 'x402';
+    if (!['x402', 'mpp'].includes(protocol)) throw new HttpError(400, 'unsupported-payment-protocol');
+    if (protocol === 'mpp' && (serviceId !== 'image.generate' || !d.mpp)) {
+      throw new HttpError(400, 'mpp-service-unavailable');
+    }
     const mode = c.req.query('mode') ?? 'sync';
     const wait = c.req.query('wait_ms') === undefined
       ? MODES.default_wait_ms
@@ -408,6 +455,9 @@ export function createApp(d: Dependencies) {
     if (job) {
       if (!(await tokenMatches(token, job.recovery_token_hash))) throw new HttpError(404, 'job-not-found');
       if (job.service_id !== serviceId) throw new HttpError(409, 'request-conflict');
+      if ((job.requirements.protocol === 'mpp' ? 'mpp' : 'x402') !== protocol) {
+        throw new HttpError(409, 'payment-protocol-conflict');
+      }
       service = getService(job.service_id, job.service_version);
       if (!service) throw new Error('Unknown persisted service');
     } else {
@@ -432,7 +482,11 @@ export function createApp(d: Dependencies) {
       }
       await resolveSources(service, input, { supabaseUrl: config.supabaseUrl, store, artifacts }, true);
       const payment = servicePayment(config, service.id)!;
-      const requirements = await payments.requirements(payment.payTo, payment.priceAtomic);
+      const resource = `${config.baseUrl}/v1/services/${service.id}`;
+      const expires = new Date(started + 10 * 60 * 1000).toISOString();
+      const requirements = protocol === 'mpp'
+        ? d.mpp!.quote(id, inputHash, resource, expires)
+        : await payments.requirements(payment.payTo, payment.priceAtomic);
       try {
         job = (await store.create({
           id,
@@ -457,13 +511,21 @@ export function createApp(d: Dependencies) {
         throw e;
       }
     }
+    // A concurrent first request may have created a job on another protocol.
+    if ((job.requirements.protocol === 'mpp' ? 'mpp' : 'x402') !== protocol) {
+      throw new HttpError(409, 'payment-protocol-conflict');
+    }
     if (job.status === 'awaiting_payment') {
       if (Date.parse(job.expires_at) <= Date.now()) {
         throw new HttpError(409, 'quote-expired', 'This unpaid request expired. Use a new request identity.');
       }
-      const signature = c.req.header('PAYMENT-SIGNATURE');
+      const signature = c.req.header(protocol === 'mpp' ? 'Authorization' : 'PAYMENT-SIGNATURE');
       if (!signature) {
         if (!(await store.capacity()).available) throw new HttpError(429, 'demo-capacity-exhausted');
+        if (protocol === 'mpp') {
+          const challenge = d.mpp!.challenge(job);
+          return json(challenge.body, 402, { 'WWW-Authenticate': challenge.header });
+        }
         const challenge = payments.challenge(
           job.requirements as PaymentRequirements,
           job.resource_url,
@@ -475,32 +537,62 @@ export function createApp(d: Dependencies) {
         });
       }
       if (signature.length > 32768) throw new HttpError(400, 'payment-header-too-large');
-      let payload;
-      try {
-        payload = payments.parse(signature);
-      } catch {
-        throw new HttpError(400, 'invalid-payment-payload');
-      }
-      const verified = await payments.verify(payload, job.requirements as PaymentRequirements);
-      if (!verified.valid || !verified.payer) {
-        const transient = verified.reason?.startsWith('facilitator_');
-        throw new HttpError(transient ? 503 : 402, verified.reason ?? 'invalid-payment');
-      }
-      const fingerprint = await payments.fingerprint(payload);
-      const claim = await store.claimPayment(id, fingerprint, verified.payer, payload);
-      job = claim.job;
-      if (!claim.claimed && claim.reason === 'capacity-exhausted') {
-        throw new HttpError(429, 'demo-capacity-exhausted');
-      }
-      if (!claim.claimed && claim.reason === 'payment-replayed') {
-        throw new HttpError(409, 'payment-already-used');
-      }
-      if (!claim.claimed && claim.reason === 'expired') throw new HttpError(409, 'quote-expired');
-      if (claim.claimed) {
-        const settlement = await payments.settle(payload, job.requirements as PaymentRequirements);
-        job = await store.finishPayment(id, settlement.outcome, settlement.receipt);
-        if (settlement.outcome === 'failed') {
-          return json({ code: 'payment-failed', job_id: id, payment: settlement.receipt }, 402);
+      if (protocol === 'mpp') {
+        let credential;
+        try {
+          credential = d.mpp!.parse(signature, job);
+        } catch {
+          throw new HttpError(400, 'invalid-mpp-credential');
+        }
+        let verified;
+        try {
+          verified = await d.mpp!.verify(credential);
+        } catch {
+          throw new HttpError(503, 'mpp-payment-unconfirmed');
+        }
+        const claim = await store.claimPayment(
+          id,
+          verified.fingerprint,
+          verified.payer,
+          credential as unknown as Record<string, unknown>,
+        );
+        job = claim.job;
+        if (!claim.claimed && claim.reason === 'payment-replayed') {
+          throw new HttpError(409, 'payment-already-used');
+        }
+        if (!claim.claimed && claim.reason === 'capacity-exhausted') {
+          throw new HttpError(429, 'demo-capacity-exhausted');
+        }
+        if (!claim.claimed && claim.reason === 'expired') throw new HttpError(409, 'quote-expired');
+        if (claim.claimed) job = await store.finishPayment(id, 'success', verified.receipt);
+      } else {
+        let payload;
+        try {
+          payload = payments.parse(signature);
+        } catch {
+          throw new HttpError(400, 'invalid-payment-payload');
+        }
+        const verified = await payments.verify(payload, job.requirements as PaymentRequirements);
+        if (!verified.valid || !verified.payer) {
+          const transient = verified.reason?.startsWith('facilitator_');
+          throw new HttpError(transient ? 503 : 402, verified.reason ?? 'invalid-payment');
+        }
+        const fingerprint = await payments.fingerprint(payload);
+        const claim = await store.claimPayment(id, fingerprint, verified.payer, payload);
+        job = claim.job;
+        if (!claim.claimed && claim.reason === 'capacity-exhausted') {
+          throw new HttpError(429, 'demo-capacity-exhausted');
+        }
+        if (!claim.claimed && claim.reason === 'payment-replayed') {
+          throw new HttpError(409, 'payment-already-used');
+        }
+        if (!claim.claimed && claim.reason === 'expired') throw new HttpError(409, 'quote-expired');
+        if (claim.claimed) {
+          const settlement = await payments.settle(payload, job.requirements as PaymentRequirements);
+          job = await store.finishPayment(id, settlement.outcome, settlement.receipt);
+          if (settlement.outcome === 'failed') {
+            return json({ code: 'payment-failed', job_id: id, payment: settlement.receipt }, 402);
+          }
         }
       }
     }

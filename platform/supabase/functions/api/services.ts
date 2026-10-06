@@ -14,7 +14,7 @@ const PAYMENT_RECEIPT_SCHEMA = {
   required: ['success', 'network', 'transaction'],
   properties: {
     success: { type: 'boolean' },
-    network: { const: 'stellar:testnet' },
+    network: { enum: ['stellar:testnet', 'eip155:42431'] },
     transaction: { type: 'string' },
     payer: { type: 'string' },
     amount: { type: 'string', pattern: '^\\d+$' },
@@ -406,6 +406,7 @@ const SERVICE_DOCUMENT_SCHEMA = {
     method: { const: 'POST' },
     input_schema: { type: 'object' },
     output_schema: { type: 'object' },
+    mpp: { type: 'object' },
     execution: {
       type: 'object',
       required: ['supported', 'default', 'default_wait_ms', 'max_wait_ms'],
@@ -460,6 +461,38 @@ const DISCOVERY_SCHEMA = {
       },
     },
   },
+};
+const MPP_CHALLENGE_SCHEMA = {
+  type: 'object',
+  required: ['protocol', 'challenge', 'job_id', 'expires_at'],
+  properties: {
+    protocol: { const: 'mpp' },
+    job_id: { type: 'string', format: 'uuid' },
+    expires_at: { type: 'string', format: 'date-time' },
+    challenge: {
+      type: 'object',
+      required: ['id', 'realm', 'method', 'intent', 'request', 'expires', 'opaque'],
+      properties: {
+        id: { type: 'string' },
+        realm: { type: 'string' },
+        method: { const: 'tempo' },
+        intent: { const: 'charge' },
+        request: { type: 'object' },
+        meta: { type: 'object' },
+        opaque: { type: 'string' },
+        expires: { type: 'string', format: 'date-time' },
+      },
+    },
+  },
+};
+const MPP_SERVICE_DOCUMENT_SCHEMA = {
+  ...SERVICE_DOCUMENT_SCHEMA,
+  required: [
+    ...SERVICE_DOCUMENT_SCHEMA.required.filter((k) => !['x402Version', 'accepts', 'extensions'].includes(k)),
+    'protocol',
+    'mpp',
+  ],
+  properties: { ...SERVICE_DOCUMENT_SCHEMA.properties, protocol: { const: 'mpp' }, mpp: { type: 'object' } },
 };
 const PAYMENT_CHALLENGE_SCHEMA = {
   type: 'object',
@@ -630,8 +663,18 @@ export function openApi(config: Config) {
           schema: { enum: services.map((service) => service.id) },
         }],
         get: {
+          parameters: [{
+            name: 'X-Payment-Protocol',
+            in: 'header',
+            required: false,
+            schema: { enum: ['x402', 'mpp'] },
+          }],
           responses: {
-            '200': response('Service schema and payment requirements', serviceSchema),
+            '200': response(
+              'Service schema and payment requirements',
+              config.mpp ? { anyOf: [serviceSchema, MPP_SERVICE_DOCUMENT_SCHEMA] } : serviceSchema,
+            ),
+            '400': response('Unsupported payment protocol for this service', error),
             '404': response('Unknown service', error),
             '503': unavailable,
           },
@@ -652,6 +695,19 @@ export function openApi(config: Config) {
               schema: { type: 'string', minLength: 43, maxLength: 128 },
             },
             { name: 'PAYMENT-SIGNATURE', in: 'header', required: false, schema: { type: 'string' } },
+            {
+              name: 'X-Payment-Protocol',
+              in: 'header',
+              required: false,
+              schema: { enum: ['x402', 'mpp'], default: 'x402' },
+            },
+            {
+              name: 'Authorization',
+              in: 'header',
+              required: false,
+              description: 'MPP Payment hash credential for Tempo image.generate.',
+              schema: { type: 'string' },
+            },
             { name: 'mode', in: 'query', schema: { enum: ['sync', 'async'], default: 'sync' } },
             {
               name: 'wait_ms',
@@ -675,7 +731,7 @@ export function openApi(config: Config) {
             '202': response('Accepted or result delivery pending; poll the same job', job),
             '400': response('Invalid input, request identity or payment payload', error),
             '402': response('x402 payment challenge, failed verification or failed settlement', {
-              anyOf: [PAYMENT_CHALLENGE_SCHEMA, error],
+              anyOf: [PAYMENT_CHALLENGE_SCHEMA, MPP_CHALLENGE_SCHEMA, error],
             }),
             '404': response('Unknown service or invalid recovery token', error),
             '409': response('Request conflict, expired quote or payment already used', error),
@@ -729,14 +785,28 @@ export function openApi(config: Config) {
         ...generic.get,
         responses: {
           ...generic.get.responses,
-          '200': response('Service schema and payment requirements', {
-            ...serviceSchema,
-            properties: {
-              ...serviceSchema.properties,
-              id: { const: service.id },
-              version: { const: service.version },
-            },
-          }),
+          '200': response(
+            'Service schema and payment requirements',
+            service.id === 'image.generate' && config.mpp
+              ? {
+                anyOf: [{
+                  ...serviceSchema,
+                  properties: {
+                    ...serviceSchema.properties,
+                    id: { const: service.id },
+                    version: { const: service.version },
+                  },
+                }, MPP_SERVICE_DOCUMENT_SCHEMA],
+              }
+              : {
+                ...serviceSchema,
+                properties: {
+                  ...serviceSchema.properties,
+                  id: { const: service.id },
+                  version: { const: service.version },
+                },
+              },
+          ),
         },
       },
       post: {
