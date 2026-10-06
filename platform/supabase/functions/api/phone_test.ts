@@ -143,7 +143,10 @@ Deno.test('phone input and contacts accept only approved names, never raw number
     contact: 'berkin',
     goal: 'Say hi',
     on_behalf_of: 'an Algoria user',
+    language: 'en',
   });
+  assert.equal(normalizeInput(PHONE_SERVICE, { contact: 'sinan', goal: 'x', language: 'tr' }).language, 'tr');
+  assert.throws(() => normalizeInput(PHONE_SERVICE, { contact: 'sinan', goal: 'x', language: 'de' }));
   assert.throws(() => normalizeInput(PHONE_SERVICE, { contact: '+905551112233', goal: 'x' }));
   assert.throws(() => normalizeInput(PHONE_SERVICE, { contact: 'berkin', goal: '' }));
   assert.throws(() => normalizeInput(PHONE_SERVICE, { contact: 'berkin', goal: 'x', to: '+1' }));
@@ -365,6 +368,8 @@ Deno.test('voice bridge relays mu-law audio, keeps transcript order, and hangs u
     assert.equal(update.session.audio.input.format.type, 'audio/pcmu');
     assert.equal(update.session.audio.output.format.type, 'audio/pcmu');
     assert.match(update.session.instructions, /on behalf of Dogukan/);
+    assert.match(update.session.instructions, /Speak English only/);
+    assert.equal(update.session.audio.input.transcription.language, 'en');
     assert.equal(openai.sent.at(-1)!.type, 'response.create', 'the assistant speaks first');
 
     twilio.receive({ event: 'media', media: { payload: 'AAAA' } });

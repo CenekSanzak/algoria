@@ -255,13 +255,19 @@ export const PHONE_INPUT_SCHEMA = {
       type: 'string',
       minLength: 1,
       maxLength: 1000,
-      description: 'What the AI caller should accomplish, in plain English.',
+      description: 'What the AI caller should accomplish, in plain language.',
     },
     on_behalf_of: {
       type: 'string',
       minLength: 1,
       maxLength: 80,
       description: 'Name the AI caller introduces itself as representing.',
+    },
+    language: {
+      type: 'string',
+      enum: ['en', 'tr'],
+      default: 'en',
+      description: 'Language the AI caller speaks: en (English, default) or tr (Turkish).',
     },
   },
 };
@@ -270,7 +276,7 @@ export const PHONE_SERVICE: Service = {
   version: '1',
   name: 'Algoria AI Phone Call',
   description:
-    'Place one real phone call to an approved contact. A realtime English AI voice introduces itself, pursues the given goal in a short conversation (about 90 seconds at most) and hangs up. Returns the transcript, a summary and whether the goal was achieved.',
+    'Place one real phone call to an approved contact. A realtime AI voice, speaking English or Turkish, introduces itself, pursues the given goal in a short conversation (about 90 seconds at most) and hangs up. Returns the transcript, a summary and whether the goal was achieved.',
   tags: ['phone', 'call', 'voice', 'twilio', 'assistant', 'reminder', 'booking', 'conversation'],
   inputSchema: PHONE_INPUT_SCHEMA,
   exampleInput: {
@@ -310,8 +316,8 @@ export function normalizeInput(service: Service, body: unknown): ServiceInput {
   const value = body as Record<string, unknown>;
   if (service.id === 'video.social') return normalizeSocial(value);
   if (service.id === 'phone.call') {
-    if (Object.keys(value).some((key) => !['contact', 'goal', 'on_behalf_of'].includes(key))) {
-      throw new Error('Provide only contact, goal and an optional on_behalf_of.');
+    if (Object.keys(value).some((key) => !['contact', 'goal', 'on_behalf_of', 'language'].includes(key))) {
+      throw new Error('Provide only contact, goal and optional on_behalf_of and language.');
     }
     const contact = typeof value.contact === 'string' ? value.contact.trim().toLowerCase() : '';
     if (!/^[a-z][a-z0-9_-]{0,31}$/.test(contact)) throw new Error('Provide an approved contact name.');
@@ -322,7 +328,9 @@ export function normalizeInput(service: Service, body: unknown): ServiceInput {
     if (typeof onBehalfOf !== 'string' || !onBehalfOf.trim() || onBehalfOf.length > 80) {
       throw new Error('on_behalf_of must be a nonempty string of at most 80 characters.');
     }
-    return { contact, goal: value.goal.trim(), on_behalf_of: onBehalfOf.trim() };
+    const language = value.language ?? 'en';
+    if (language !== 'en' && language !== 'tr') throw new Error('language must be en or tr.');
+    return { contact, goal: value.goal.trim(), on_behalf_of: onBehalfOf.trim(), language };
   }
   if (service.id === 'image.generate') {
     if (

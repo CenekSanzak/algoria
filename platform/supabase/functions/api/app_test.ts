@@ -371,6 +371,20 @@ export function harness(allServices = false) {
 }
 registerMppTests(harness);
 
+Deno.test('operator failure logs expose stages and safe codes, never SDK messages or tokens', async () => {
+  const h = harness();
+  h.store.get = () => Promise.reject(Object.assign(new Error('private-sdk-message-and-token'), { code: 'PGRST301' }));
+  const entries: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { entries.push(args); };
+  try {
+    const response = await h.post(crypto.randomUUID(), { payment: false });
+    equal(response.status, 503);
+    deepEqual(entries, [['API request failed', 'Error', 'read-job', 'PGRST301']]);
+    ok(!JSON.stringify(await response.json()).includes('private-sdk-message'));
+  } finally { console.error = original; }
+});
+
 /** A durable paid snapshot from a prior request, with no external source or payment I/O. */
 async function paidMediaJob(h: ReturnType<typeof harness>, kind: 'audio' | 'video') {
   const id = crypto.randomUUID();
