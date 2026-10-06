@@ -4,15 +4,11 @@ import AppKit
 // this window never constructs transactions, grants permissions or signs.
 enum WalletReviewKind { case purchase, permission }
 
-private let walletAccent = NSColor(name: "Algoria accent") { appearance in
-    appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        ? NSColor(red: 0.33, green: 0.85, blue: 0.72, alpha: 1)
-        : NSColor(red: 0.04, green: 0.40, blue: 0.33, alpha: 1)
-}
+private let walletAccent = WalletDesign.accent
 
 private final class WalletBackground: NSView {
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.windowBackgroundColor.setFill()
+        WalletDesign.background.setFill()
         bounds.fill()
     }
 }
@@ -26,19 +22,20 @@ private final class WalletSurface: NSView {
     init(tint: Bool = false) { self.tint = tint; super.init(frame: .zero) }
     required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
     override func draw(_ dirtyRect: NSRect) {
-        (tint ? walletAccent.withAlphaComponent(0.08) : NSColor.controlBackgroundColor).setFill()
+        (tint ? WalletDesign.elevated : WalletDesign.surface).setFill()
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 14, yRadius: 14)
         path.fill()
-        NSColor.labelColor.withAlphaComponent(0.10).setStroke()
+        WalletDesign.border.setStroke()
         path.lineWidth = 1
         path.stroke()
     }
 }
 
 private func walletText(_ text: String, size: CGFloat = 13, weight: NSFont.Weight = .regular,
-                        color: NSColor = .labelColor, mono: Bool = false) -> NSTextField {
+                        color: NSColor = WalletDesign.text, mono: Bool = false) -> NSTextField {
     let field = NSTextField(wrappingLabelWithString: text)
-    field.font = mono ? .monospacedSystemFont(ofSize: size, weight: weight) : .systemFont(ofSize: size, weight: weight)
+    field.font = WalletDesign.font(size: size, weight: weight, mono: mono)
+    field.lineBreakMode = mono ? .byCharWrapping : .byWordWrapping
     field.textColor = color
     field.isSelectable = true
     field.maximumNumberOfLines = 0
@@ -85,19 +82,25 @@ private func walletIcon(_ name: String, description: String, size: CGFloat = 24)
 
 private func walletCard(_ title: String, _ views: [NSView]) -> NSView {
     let surface = WalletSurface()
-    walletPin(walletStack([walletText(title, size: 14, weight: .semibold)] + views, spacing: 12), to: surface, inset: 18)
+    walletPin(walletStack([walletText(title, size: 13, weight: .medium)] + views, spacing: 12), to: surface, inset: 18)
     return surface
 }
 
 private func walletRow(_ name: String, _ value: String, mono: Bool = false) -> NSView {
-    let label = walletText(name, size: 12, color: .secondaryLabelColor)
+    let label = walletText(name, size: 11, color: WalletDesign.muted)
     let content = walletText(value, size: mono ? 12 : 13, weight: .medium, mono: mono)
     content.setAccessibilityLabel(name)
     return walletStack([label, content], spacing: 4)
 }
 
+private func walletParseDate(_ value: String) -> Date? {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+}
+
 private func walletDate(_ value: String) -> String {
-    guard let date = ISO8601DateFormatter().date(from: value) else { return value }
+    guard let date = walletParseDate(value) else { return value }
     let formatter = DateFormatter()
     formatter.dateStyle = .medium
     formatter.timeStyle = .medium
@@ -114,7 +117,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     private let pageHost = NSView()
     private var pages: [NSView] = []
     private var pageLabels: [String] = []
-    private var selector: NSSegmentedControl!
+    private var tabs: [WalletButton] = []
     private var approveButton: NSButton!
     private var cancelButton: NSButton!
     private var expiryLabel: NSTextField!
@@ -123,13 +126,14 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     init(summary: [String: Any], kind: WalletReviewKind, preview: Bool = false) {
         self.summary = summary; self.kind = kind; self.preview = preview
         let available = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1000, height: 900)
-        let size = NSSize(width: min(740, max(640, available.width - 48)),
-                          height: min(760, max(580, available.height - 60)))
+        let size = NSSize(width: min(640, available.width - 32),
+                          height: min(780, available.height - 48))
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = preview ? "Algoria Wallet — Design preview" : "Algoria Wallet"
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = .windowBackgroundColor
+        window.backgroundColor = WalletDesign.background
+        NSApplication.shared.applicationIconImage = WalletDesign.logo
         window.contentView = WalletBackground(frame: NSRect(origin: .zero, size: size))
         window.isReleasedWhenClosed = false
         super.init(window: window)
@@ -147,80 +151,92 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     private func build() {
         guard let content = window?.contentView else { return }
         let branding = walletStack([
-            walletText("Algoria", size: 20, weight: .bold),
-            walletText("Your agent. Your approval.", size: 12, color: .secondaryLabelColor),
+            walletText("Algoria", size: 19, weight: .semibold),
+            walletText("LOCAL WALLET", size: 9, color: WalletDesign.muted, mono: true),
         ], spacing: 2)
-        let badge = walletText(preview ? "DESIGN PREVIEW · NO SIGNING" : "TEMPO · TESTNET", size: 11, weight: .semibold, color: walletAccent)
+        let badge = WalletBadge("TEMPO · TESTNET")
         let spacer = NSView()
-        let header = walletStack([walletIcon("square.stack.3d.up.fill", description: "Algoria"), branding, spacer, badge], horizontal: true)
+        let header = walletStack([WalletBrandMark(), branding, spacer, badge], horizontal: true)
         branding.setContentHuggingPriority(.required, for: .horizontal)
         badge.setContentHuggingPriority(.required, for: .horizontal)
 
         let hero = WalletSurface(tint: true)
         var heroViews: [NSView]
         if kind == .permission {
-            heroViews = [walletText(summary["replacement"] is String ? "Update spending permission" : "Set a spending permission", size: 15, weight: .semibold),
-                         walletText("\(value("total"))", size: 36, weight: .bold, color: walletAccent),
-                         walletText("test PathUSD · lifetime budget", color: .secondaryLabelColor),
-                         walletText("No payment now. Every purchase still needs Touch ID.", size: 12)]
+            heroViews = [walletText("SPENDING PERMISSION", size: 10, color: WalletDesign.muted, mono: true),
+                         walletText(summary["replacement"] is String ? "Update your spending limit" : "Set your spending limit", size: 21, weight: .medium),
+                         walletText(value("total"), size: 38, weight: .semibold, mono: true),
+                         walletText("test PathUSD · lifetime budget", size: 12, color: WalletDesign.secondary),
+                         walletText("No payment now. Touch ID is still required for every purchase.", size: 11, color: WalletDesign.muted)]
         } else {
             let amount = (summary["amount"] as? String).flatMap(Double.init).map { String(format: "%.6f", $0 / 1e6) } ?? "0.000001"
-            heroViews = [walletText(summary["prompt"] == nil ? "Signing proof · self-transfer" : "Generate one image", size: 15, weight: .semibold),
-                         walletText(amount, size: 36, weight: .bold, color: walletAccent),
-                         walletText("test PathUSD · \(summary["prompt"] == nil ? "to your temporary account" : "Algoria image service")", color: .secondaryLabelColor),
-                         walletText("Testnet tokens have no monetary value. Network fee is separate.", size: 12)]
+            heroViews = [walletText("PAYMENT REQUEST", size: 10, color: WalletDesign.muted, mono: true),
+                         walletText(summary["prompt"] == nil ? "Review your self-transfer" : "Generate one image", size: 21, weight: .medium),
+                         walletText(amount, size: 38, weight: .semibold, mono: true),
+                         walletText("test PathUSD · \(summary["prompt"] == nil ? "your temporary account" : "Algoria image service")", size: 12, color: WalletDesign.secondary),
+                         walletText("Test tokens only. No monetary value. Network fee is separate.", size: 11, color: WalletDesign.muted)]
         }
         walletPin(walletStack(heroViews, spacing: 6), to: hero, inset: 20)
 
         pageLabels = kind == .permission ? ["Overview", "Scope", "Limits & safety"] : ["Review", "Wallet", "Permission", "Activity"]
-        selector = NSSegmentedControl(labels: pageLabels, trackingMode: .selectOne, target: self, action: #selector(changePage(_:)))
-        selector.segmentStyle = .rounded
-        selector.selectedSegment = 0
+        tabs = pageLabels.enumerated().map { index, label in
+            let tab = WalletButton(label, style: .tab, target: self, action: #selector(changePage(_:)))
+            tab.tag = index
+            tab.setAccessibilityHelp("Show \(label.lowercased()) details. Does not approve or sign.")
+            return tab
+        }
+        let selector = walletStack(tabs, spacing: 6, horizontal: true)
+        selector.distribution = .fillEqually
         selector.setAccessibilityLabel("Wallet details")
-        let segmentWidth = ((window?.contentView?.frame.width ?? 740) - 60) / CGFloat(pageLabels.count)
-        for i in pageLabels.indices { selector.setWidth(segmentWidth, forSegment: i) }
         pages = kind == .permission ? permissionPages() : purchasePages()
         showPage(0)
 
-        let divider = NSBox(); divider.boxType = .separator
-        expiryLabel = walletText(preview ? "No keys, funding or network requests." : "Review first. Authenticate next.", size: 11, color: .secondaryLabelColor)
+        expiryLabel = walletText(preview ? "Synthetic data · no keys, signing or network requests" : "Review first. Authenticate next.", size: 11, color: WalletDesign.muted)
         let security = walletStack([
-            walletText(preview ? "Preview only" : "Protected by Touch ID", size: 13, weight: .semibold),
+            walletText(preview ? "Design preview only" : "Protected by Touch ID", size: 12, weight: .medium),
             expiryLabel,
         ], spacing: 3)
-        approveButton = NSButton(title: preview ? "Close preview" : "Approve with Touch ID", target: self, action: #selector(approve(_:)))
-        approveButton.bezelStyle = .rounded
-        approveButton.controlSize = .large
-        approveButton.bezelColor = walletAccent
+        approveButton = WalletButton(preview ? "Close preview" : kind == .permission ? "Set limit with Touch ID" : "Approve with Touch ID", style: .primary, target: self, action: #selector(approve(_:)))
         // No Return default: opening a window must not imply spending approval.
         approveButton.keyEquivalent = ""
         approveButton.setAccessibilityHelp(preview ? "Closes this preview without signing." : "Approves this exact request, then asks for Touch ID to sign.")
-        cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancel(_:)))
-        cancelButton.bezelStyle = .rounded
-        cancelButton.controlSize = .large
+        cancelButton = WalletButton("Cancel", style: .secondary, target: self, action: #selector(cancel(_:)))
         cancelButton.keyEquivalent = "\u{1b}"
         cancelButton.setAccessibilityHelp("Close without returning a signed request.")
-        let footer = walletStack([walletIcon("touchid", description: "Touch ID protection", size: 22), security,
-                                  NSView(), cancelButton, approveButton], spacing: 12, horizontal: true)
-        let root = walletStack([header, hero, selector, pageHost, divider, footer], spacing: 18)
+        let actions = walletStack([cancelButton, approveButton], spacing: 10, horizontal: true)
+        cancelButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        approveButton.widthAnchor.constraint(equalTo: actions.widthAnchor, constant: -120).isActive = true
+        let protection = walletStack([walletIcon(preview ? "eye" : "touchid", description: preview ? "Safe design preview" : "Touch ID protection", size: 20), security], spacing: 10, horizontal: true)
+        let footer = WalletSurface()
+        walletPin(walletStack([protection, actions], spacing: 14), to: footer, inset: 16)
+        let root = walletStack([header, hero, selector, pageHost, footer], spacing: 16)
         walletPin(root, to: content, inset: 24)
         pageHost.setContentHuggingPriority(.defaultLow, for: .vertical)
-        pageHost.heightAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
+        pageHost.heightAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
         window?.initialFirstResponder = cancelButton
         updateExpiry()
     }
 
     private func updateExpiry(now: Date = Date()) {
-        guard !preview, let date = ISO8601DateFormatter().date(from: value("expires")) else { return }
+        guard !preview else { return }
+        guard let date = walletParseDate(value("expires")) else {
+            approveButton.isEnabled = false
+            approveButton.title = "Review unavailable"
+            expiryLabel.stringValue = "Expiry could not be verified. Cancel and request a fresh review."
+            expiryLabel.textColor = WalletDesign.danger
+            return
+        }
         let seconds = Int(ceil(date.timeIntervalSince(now)))
         approveButton.isEnabled = seconds > 0
         if seconds <= 0 {
             expiryLabel.stringValue = "Expired. Cancel and request a fresh review."
-            expiryLabel.textColor = .systemRed
+            expiryLabel.textColor = WalletDesign.danger
             approveButton.title = "Request expired"
         } else if kind == .purchase {
             expiryLabel.stringValue = "Expires in \(seconds / 60)m \(seconds % 60)s · nothing signed yet"
-            expiryLabel.textColor = seconds < 60 ? .systemOrange : .secondaryLabelColor
+            expiryLabel.textColor = seconds < 60 ? WalletDesign.warning : WalletDesign.muted
+        } else {
+            expiryLabel.stringValue = "Valid until \(walletDate(value("expires"))) · no payment now"
         }
     }
 
@@ -255,20 +271,20 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         } else { promptView = walletText(prompt, size: 14) }
         let review = scrollPage([
             walletCard("Request", [promptView,
-                                   walletRow("Valid until", walletDate(value("expires")))]),
-            walletCard("Payment destination", [walletRow("Recipient · full address", value(summary["recipient"] == nil ? "address" : "recipient"), mono: true),
-                                               walletRow("Network", value("network"))]),
+                                   walletRow("Recipient · full address", value(summary["recipient"] == nil ? "address" : "recipient"), mono: true)]),
+            walletCard("Payment details", [walletRow("Network", value("network")),
+                                           walletRow("Valid until", walletDate(value("expires")))]),
             walletCard("What approval means", [walletText("Touch ID signs only this exact transaction. The plugin may then submit it. Cancel now to return no signed payment.", size: 12),
-                                               walletText("A submitted payment cannot be undone by closing this window.", size: 12, color: .secondaryLabelColor)]),
+                                               walletText("A submitted payment cannot be undone by closing this window.", size: 12, color: WalletDesign.muted)]),
         ])
         let wallet = scrollPage([
             walletCard("Temporary testnet wallet", [walletText("A disposable Secure Enclave key is used for this request. It is discarded when this process exits. Your existing wallet is never opened.", size: 13),
                                                     walletRow("Account · full address", value("address"), mono: true),
-                                                    walletText("Never send real funds here. Any remaining test tokens are abandoned.", size: 12, color: .secondaryLabelColor)]),
+                                                    walletText("Never send real funds here. Any remaining test tokens are abandoned.", size: 12, color: WalletDesign.muted)]),
             walletCard("Asset & fee bounds", [walletRow("Token contract · test PathUSD", value("token"), mono: true),
                                               walletRow("Gas limit", value("gasLimit")),
                                               walletRow("Maximum fee per gas · protocol units", value("maxFeePerGas")),
-                                              walletText("These are upper bounds, not a final fee quote. Faucet funding is requested separately by the runner; this review does not fund the wallet.", size: 12, color: .secondaryLabelColor)]),
+                                              walletText("These are upper bounds, not a final fee quote. Faucet funding is requested separately by the runner; this review does not fund the wallet.", size: 12, color: WalletDesign.muted)]),
         ])
         var permissionCards: [NSView] = []
         if let p = permission {
@@ -282,12 +298,12 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             permissionCards.append(walletCard("One-request approval", [walletText("No reusable spending permission is attached to this signing proof.")]))
         }
         permissionCards.append(walletCard("Local protection, not delegation", [walletText("The native builder checks signed scope, the per-purchase cap and expiry. The plugin checks cumulative spending and revocation in its local ledger.", size: 12),
-            walletText("Every purchase still needs Touch ID. This is not on-chain enforcement or full ERC-8196 compliance. No remaining balance is claimed here.", size: 12, color: .secondaryLabelColor)]))
+            walletText("Every purchase still needs Touch ID. This is not on-chain enforcement or full ERC-8196 compliance. No remaining balance is claimed here.", size: 12, color: WalletDesign.muted)]))
         let activity = scrollPage([
             walletCard("Awaiting your approval", [walletRow("Current job", summary["jobId"] == nil ? "Signing proof" : value("jobId"), mono: true),
                                                    walletText("This is the current request, not a complete wallet history. No signed transaction has been returned yet.", size: 12)]),
             walletCard("If the flow is interrupted", [walletText("Resume the same saved job. The plugin keeps receipts and recovery state locally. Do not start a new payment to fix a missing image preview.", size: 13),
-                                                      walletText("Revocation stops future local dispatches. It cannot undo a submitted payment or erase an uncertain reservation.", size: 12, color: .secondaryLabelColor)]),
+                                                      walletText("Revocation stops future local dispatches. It cannot undo a submitted payment or erase an uncertain reservation.", size: 12, color: WalletDesign.muted)]),
         ])
         return [review, wallet, scrollPage(permissionCards), activity]
     }
@@ -297,7 +313,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             walletCard("Spending limits", [walletRow("Budget", value("budget")),
                                           walletRow("Maximum per purchase", "\(value("perCall")) test PathUSD"),
                                           walletRow("Expires", walletDate(value("expires"))),
-                                          walletText("Updating a permission preserves spent amounts and uncertain reservations. The lifetime cap is not your available balance.", size: 12, color: .secondaryLabelColor)]),
+                                          walletText("Updating a permission preserves spent amounts and uncertain reservations. The lifetime cap is not your available balance.", size: 12, color: WalletDesign.muted)]),
             walletCard("You stay in control", [walletText("This approval sets local limits. It does not pay, fund a wallet or allow unattended signing. Each purchase requires a separate Touch ID approval.", size: 13)]),
         ])
         let scope = scrollPage([
@@ -312,7 +328,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             walletCard("Permission boundary", [walletText("Limits and revocation are local to the plugin. They are not an on-chain policy, an autonomous signer, or full ERC-8196 compliance. Gas is separate from the service budget.", size: 13),
                                                 walletRow("Permission ID", value("policyId"), mono: true)]),
             walletCard("Changing your mind", [walletText("Cancel now: no permission receipt is returned. After approval, revoke the budget through the plugin to stop future local dispatches.", size: 13),
-                                             walletText("Revocation cannot undo a submitted payment, a signature already returned, or a dispatch already saved for recovery.", size: 12, color: .secondaryLabelColor)]),
+                                             walletText("Revocation cannot undo a submitted payment, a signature already returned, or a dispatch already saved for recovery.", size: 12, color: WalletDesign.muted)]),
         ])
         return [overview, scope, safety]
     }
@@ -322,10 +338,14 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         pageHost.subviews.forEach { $0.removeFromSuperview() }
         walletPin(pages[index], to: pageHost)
         selectedPage = index
-        selector?.selectedSegment = index
+        for (tabIndex, tab) in tabs.enumerated() {
+            tab.state = tabIndex == index ? .on : .off
+            tab.needsDisplay = true
+            tab.setAccessibilityValue(tabIndex == index ? "Selected" : "Not selected")
+        }
         pageHost.setAccessibilityLabel(pageLabels[index])
     }
-    @objc private func changePage(_ sender: NSSegmentedControl) { showPage(sender.selectedSegment) }
+    @objc private func changePage(_ sender: NSButton) { showPage(sender.tag) }
     @objc private func approve(_ sender: Any?) {
         updateExpiry()
         guard approveButton.isEnabled else { return }
@@ -399,10 +419,34 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     }
 
     static func selfTest() throws -> [String: Any] {
+        guard WalletDesign.font(size: 13).fontName == "Prompt-Regular",
+              WalletDesign.font(size: 13, weight: .medium).fontName == "Prompt-Medium",
+              WalletDesign.font(size: 13, weight: .semibold).fontName == "Prompt-SemiBold",
+              WalletDesign.font(size: 13, mono: true).fontName.hasPrefix("GeistMono"),
+              Bundle.main.url(forResource: "algoria-logo", withExtension: "svg") != nil else {
+            throw fail("UI_BRAND_ASSETS_FAILED")
+        }
         for kind in [WalletReviewKind.purchase, .permission] {
             let controller = WalletReviewController(summary: fixture(kind, longPrompt: true), kind: kind, preview: true)
             controller.window?.contentView?.layoutSubtreeIfNeeded()
-            for index in controller.pages.indices { controller.showPage(index) }
+            for index in controller.pages.indices {
+                controller.tabs[index].performClick(nil)
+                controller.window?.contentView?.layoutSubtreeIfNeeded()
+                guard controller.tabs[index].state == .on,
+                      controller.tabs.filter({ $0.state == .on }).count == 1 else { throw fail("UI_TAB_SELECTION_FAILED") }
+            }
+            // Fixed approval controls must fit, with a real gap rather than
+            // native rounded-bezel alignment outsets causing painted overlap.
+            for size in [NSSize(width: 640, height: 730), NSSize(width: 560, height: 620)] {
+                controller.window?.setContentSize(size)
+                guard let content = controller.window?.contentView else { throw fail("UI_LAYOUT_FAILED") }
+                content.layoutSubtreeIfNeeded()
+                let cancel = controller.cancelButton.convert(controller.cancelButton.bounds, to: content)
+                let approve = controller.approveButton.convert(controller.approveButton.bounds, to: content)
+                guard content.bounds.contains(cancel), content.bounds.contains(approve),
+                      cancel.maxX + 8 <= approve.minX,
+                      approve.width >= 260, controller.pageHost.bounds.height >= 100 else { throw fail("UI_LAYOUT_FAILED") }
+            }
             guard !controller.approved, controller.selectedPage == controller.pages.count - 1,
                   controller.cancelButton.keyEquivalent == "\u{1b}", controller.approveButton.keyEquivalent.isEmpty,
                   controller.window?.initialFirstResponder === controller.cancelButton else { throw fail("UI_SAFETY_FAILED") }
@@ -410,6 +454,8 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             guard !controller.approved else { throw fail("PREVIEW_APPROVAL_FAILED") }
             controller.window?.close()
             let live = WalletReviewController(summary: fixture(kind), kind: kind)
+            live.updateExpiry(now: walletParseDate(live.value("expires"))!.addingTimeInterval(-30))
+            guard live.approveButton.isEnabled else { throw fail("UI_FRESH_EXPIRY_FAILED") }
             live.approve(nil)
             guard live.approved else { throw fail("UI_APPROVAL_FAILED") }
             live.cancel(nil)
@@ -417,12 +463,14 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             _ = live.windowShouldClose(live.window!)
             guard !live.approved else { throw fail("UI_CLOSE_FAILED") }
             live.window?.close()
-            var expired = fixture(kind)
-            expired["expires"] = "2020-01-01T00:00:00Z"
-            let stale = WalletReviewController(summary: expired, kind: kind)
-            stale.approve(nil)
-            guard !stale.approved, !stale.approveButton.isEnabled else { throw fail("UI_EXPIRED_APPROVAL_FAILED") }
-            stale.window?.close()
+            for expiry in ["2020-01-01T00:00:00Z", "2020-01-01T00:00:00.123Z", "invalid"] {
+                var expired = fixture(kind)
+                expired["expires"] = expiry
+                let stale = WalletReviewController(summary: expired, kind: kind)
+                stale.approve(nil)
+                guard !stale.approved, !stale.approveButton.isEnabled else { throw fail("UI_EXPIRED_APPROVAL_FAILED") }
+                stale.window?.close()
+            }
         }
         return ["status": "ui-self-test-passed", "keyCreated": false, "signed": false, "networkRequests": false]
     }

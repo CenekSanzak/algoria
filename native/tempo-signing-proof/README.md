@@ -6,6 +6,11 @@ An isolated macOS development companion for the [implementation plan](../../docs
 
 A dedicated AppKit wallet window has Review, Wallet, Permission and Activity sections. Its price-first layout, light/dark themes, scrollable detail cards and fixed approval bar disclose the disposable Secure Enclave P-256 key, signed local budget, exact request and fee bounds before Touch ID. Budget approval uses the same design, with Overview, Scope and Limits & safety sections. Touch ID protects the key's actual signing operation. The runner verifies the signature, sends the transaction once, and checks both the successful receipt and expected token transfer event.
 
+The native presentation matches Algoria's existing landing design: its “A” logo,
+slate/silver light and dark palette, Prompt typography and Geist Mono metadata.
+Fonts and their SIL licenses are bundled, loaded only within this app process,
+and work offline. See [wallet design and verification](../../docs/TEMPO_WALLET_UI.md).
+
 In version-1 proof mode, the allowed transaction is fixed: **Moderato testnet (42431), one micro-unit of test PathUSD transferred to the signing account itself**. Gas is capped at 1,000,000 and max fee per gas at 30,000,000,000 protocol units. The request expires within five minutes. Version-2 MPP image purchases are described below and use the same fee and expiry caps.
 
 No existing wallet is opened. No private key is exported or saved. The ephemeral key is discarded when the process exits; remaining faucet tokens are deliberately abandoned. Never send real funds to the disposable account.
@@ -58,6 +63,8 @@ Recovery records are ignored by Git. They contain public transaction identity an
 
 - `Sources/main.swift`: Secure Enclave key access, signing, bounded input, offline self-test and preview routing.
 - `Sources/WalletReview.swift`: native wallet presentation, expiry feedback, cancellation and isolated design fixtures.
+- `Sources/WalletDesign.swift`: Algoria brand palette, vector logo, local fonts and native button styling.
+- `Resources/Fonts/`: unmodified Prompt/Geist Mono fonts, licenses and pinned-source hashes.
 - `src/transaction.mjs`: strict request validation and SDK-based transaction construction/verification.
 - `src/runtime.mjs`: UTF-8 compatibility for JavaScriptCore.
 - `scripts/build.mjs`: bundled runtime, native compilation, local ad-hoc signing.
@@ -137,6 +144,7 @@ revalidates expiry before and after Touch ID. Long prompts scroll within their
 own panel so destination details remain easy to reach. Full addresses and URLs
 are selectable, not shortened. Screen height adjusts to the available display.
 
-The UI check exercises preview isolation, page selection, explicit approval,
-Cancel, close, expired approval rejection and keyboard defaults without signing.
+The UI check exercises bundled font/logo loading, tab button actions, compact
+layout, preview isolation, explicit approval, Cancel, close, whole/fractional
+and invalid expiry rejection, and keyboard defaults without signing.
 It does not replace live biometric, keyboard-routing or VoiceOver acceptance.

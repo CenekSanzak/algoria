@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -8,6 +8,8 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const app = resolve(root, '.build/Algoria Signing Proof.app');
 await mkdir(resolve(app, 'Contents/MacOS'), { recursive: true });
 await mkdir(resolve(app, 'Contents/Resources'), { recursive: true });
+await cp(resolve(root, 'Resources/Fonts'), resolve(app, 'Contents/Resources/Fonts'), { recursive: true });
+await cp(resolve(root, '../../static/favicon.svg'), resolve(app, 'Contents/Resources/algoria-logo.svg'));
 await build({
   absWorkingDir: root, entryPoints: ['src/runtime.mjs'], bundle: true,
   format: 'iife', globalName: 'AlgoriaProof', platform: 'browser', target: 'safari18',
@@ -26,9 +28,9 @@ await writeFile(resolve(app, 'Contents/Info.plist'), `<?xml version="1.0" encodi
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 </dict></plist>
 `);
-execFileSync('swiftc', ['Sources/main.swift', 'Sources/WalletReview.swift', '-o', resolve(app, 'Contents/MacOS/AlgoriaSigningProof'),
+execFileSync('swiftc', ['Sources/main.swift', 'Sources/WalletDesign.swift', 'Sources/WalletReview.swift', '-o', resolve(app, 'Contents/MacOS/AlgoriaSigningProof'),
   '-framework', 'AppKit', '-framework', 'Security', '-framework', 'LocalAuthentication',
-  '-framework', 'JavaScriptCore', '-module-cache-path', resolve(root, '.build/module-cache')],
+  '-framework', 'JavaScriptCore', '-framework', 'CoreText', '-module-cache-path', resolve(root, '.build/module-cache')],
 { cwd: root, stdio: 'inherit' });
 execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' });
 console.log(`Built locally ad-hoc signed proof: ${app}\nNot notarized or production-distributable.`);
