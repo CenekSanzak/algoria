@@ -16,6 +16,7 @@ on:
     branches: [main]
     paths:
       - 'agent-skills/**'
+      - 'native/tempo-signing-proof/**'
       - '.github/workflows/publish-npm.yml'
   workflow_dispatch:
 
@@ -79,18 +80,30 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
 
+      # Shared Tempo transaction source lives outside the plugin harness and
+      # resolves its SDK imports against its own npm lockfile. Install only;
+      # the macOS companion and live wallet flows are not run in release CI.
+      - name: Install locked Tempo builder dependencies
+        working-directory: native/tempo-signing-proof
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Type check
         run: pnpm check
 
       - name: Unit tests
         run: pnpm test
 
-      # Both bundles are committed and byte-reproducible. A diff means the
-      # package would ship SDK code that does not match its lockfile.
-      - name: Committed SDK bundles match the lockfile
+      - name: Tempo builder unit tests (offline)
+        working-directory: native/tempo-signing-proof
+        run: npm test
+
+      # All three bundles are committed and byte-reproducible. A diff means the
+      # package would ship SDK code that does not match its source and lockfiles.
+      - name: Committed SDK bundles match the lockfiles
         run: |
           pnpm bundle:sdk
           pnpm bundle:services
+          pnpm bundle:tempo
           git diff --exit-code -- plugins/algoria/lib/vendor/
 
       - name: Pack dry run
