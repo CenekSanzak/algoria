@@ -1,20 +1,19 @@
 <script lang="ts">
   import { site } from '$lib/links';
   import HeroDemo from '$lib/components/HeroDemo.svelte';
-  import StellarMark from '$lib/components/StellarMark.svelte';
 
   const facts = [
-    'Bazaar & Stellar 8004 Agent Discovery',
-    'Pay in TRY via Stellar',
-    'Key stays on your machine'
+    'MPP payments on Tempo testnet',
+    'Local spending limits, expiry & revocation',
+    'Review and sign with Touch ID'
   ];
 
   const steps = [
-    { title: 'Install', body: 'Your assistant creates a Stellar wallet on your machine. The key never leaves it.' },
-    { title: 'Top up in lira', body: 'You get an IBAN and a reference. Send a TRY transfer and it arrives as USDC.' },
+    { title: 'Install', body: 'Add the plugin to Claude Code or Codex and build the lightweight local wallet on your Touch ID Mac.' },
+    { title: 'Set your limits', body: 'Choose a budget, a per-purchase limit and an expiry. Review and approve your local spending permission with Touch ID.' },
     {
-      title: 'Ask',
-      body: "Ask for anything your agent can't do on its own, like vlog generation or phone calls. It finds available AI services and pays within your budget."
+      title: 'Ask and approve',
+      body: 'Ask for an image. Your assistant gets a quote, you review the exact payment in the local wallet, and Touch ID signs it on Tempo testnet.'
     }
   ];
 </script>
@@ -28,8 +27,12 @@
   <meta property="og:url" content={site.url} />
   <meta property="og:title" content={site.title} />
   <meta property="og:description" content={site.description} />
-  <meta property="og:image" content="{site.url}algoria-thumbnail.png" />
+  <meta property="og:image" content="{site.url}algoria-tempo-preview.jpg" />
+  <meta property="og:image:alt" content="Algoria plugin for Claude and Codex: Tempo testnet MPP payments with a local wallet and Touch ID." />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="720" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="{site.url}algoria-tempo-preview.jpg" />
 </svelte:head>
 
 <section class="wrap hero" aria-labelledby="hero-title">
@@ -37,13 +40,14 @@
     <p class="eyebrow"><span class="live-dot" aria-hidden="true"></span>Plugin for Claude &amp; Codex</p>
     <h1 id="hero-title">Go beyond<br /><span class="nowrap">Claude &amp; Codex.</span><br /><span class="silver nowrap">Without leaving&nbsp;them.</span></h1>
     <p class="pay-line">
-      Pay in Turkish lira on
-      <span class="stellar-chip"><StellarMark />Stellar</span>
+      Pay for AI with
+      <span class="tempo-chip">Tempo</span>
     </p>
     <p class="lead">
-      One plugin, and your assistant can pay for AI services, paid APIs and more. No API keys, no crypto wallets to
-      manage, no new accounts.
+      One plugin, and your assistant can buy AI-generated images with MPP on Tempo. No provider API keys to manage.
+      Review the price in a lightweight local wallet and approve with Touch ID—without leaving your workflow.
     </p>
+    <p class="release-note">Testnet demo · test PathUSD · macOS + Touch ID · local wallet build required</p>
     <ul class="facts" aria-label="Key facts">
       {#each facts as fact (fact)}
         <li>
@@ -65,7 +69,7 @@
 <section class="wrap how" id="how" aria-labelledby="how-title">
   <div class="how-head">
     <p class="eyebrow">How it works</p>
-    <h2 id="how-title">Install. Top up. Ask.</h2>
+    <h2 id="how-title">Install. Set limits. Ask.</h2>
   </div>
   <ol class="card steps">
     {#each steps as step, i (step.title)}
@@ -117,15 +121,15 @@
     color: var(--txt-sec);
   }
 
-  .stellar-chip {
+  .tempo-chip {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     padding: 3px 12px 3px 10px;
-    border: 1px solid var(--stellar-border);
+    border: 1px solid var(--tempo-border);
     border-radius: 10px;
-    background: var(--stellar-bg);
-    color: var(--stellar);
+    background: var(--tempo-bg);
+    color: var(--tempo);
   }
 
   .lead {
@@ -144,6 +148,12 @@
     padding: 0;
     font: 12px var(--mono);
     color: var(--txt-sec);
+  }
+
+  .release-note {
+    margin-top: 14px;
+    font: 11px/1.7 var(--mono);
+    color: var(--txt-muted);
   }
 
   .facts li {
