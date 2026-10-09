@@ -117,7 +117,7 @@ The controlled reference provider is registered as Stellar 8004 testnet Agent `1
 
 ## Local development
 
-Requirements: Node 22+, pnpm, Docker, and Supabase CLI.
+Requirements: Node 22.19+ (or a newer supported LTS), pnpm, Docker, and Supabase CLI.
 
 ```bash
 cp .env.example .env

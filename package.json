@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.30.3",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "dev": "vite dev",
@@ -28,7 +28,7 @@
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "2.5.0",
     "@lucide/svelte": "^1.31.0",
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.2.0",
     "@stellar/stellar-sdk": "16.2.0",
     "@supabase/supabase-js": "2.112.3",
     "@trionlabs/stellar8004": "0.0.11",
@@ -38,7 +38,7 @@
     "ajv": "8.20.0",
     "buffer": "6.0.3",
     "jose": "6.2.8",
-    "undici": "8.10.0",
+    "undici": "8.10.2",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -60,7 +60,8 @@
     "overrides": {
       "@sveltejs/kit>cookie": "0.7.2",
       "jayson>uuid": "11.1.1",
-      "axios": "1.19.0",
+      "axios": "1.20.0",
+      "devalue": "5.9.4",
       "protobufjs": "7.6.5",
       "fast-uri": "3.1.8",
       "toml": "4.3.0"
