@@ -8,7 +8,7 @@ import { Bytes, Hash } from 'ox';
 import { TxEnvelopeTempo, SignatureEnvelope } from 'ox/tempo';
 import { Challenge } from 'mppx';
 import * as Attribution from '../node_modules/mppx/dist/tempo/Attribution.js';
-import { preparePurchase, completePurchaseJSON } from '../src/purchase.mjs';
+import { preparePurchase, completePurchaseJSON, prepareFundingJSON } from '../src/purchase.mjs';
 import { signedPermission } from '../../../agent-skills/tests/helpers/permission.mjs';
 import { tempoResource } from '../../../agent-skills/plugins/algoria/lib/services/tempo-services.mjs';
 
@@ -78,6 +78,20 @@ function callRequest() {
     totalAtomic: '2000000', perCallAtomic: '1000000', validAfter: now - 1, validUntil: now + 600, previousId: null };
   return { ...request, challenge: c, input: { ...callInput }, permission: signedPermission(policy) };
 }
+test('funding review derives this wallet address and exact price/fee shortfall without signing', () => {
+  const r = callRequest();
+  const wrapper = { type: 'funding-required', request: r, balanceAtomic: '10000', expiresAt: (now + 180) * 1000 };
+  const funding = JSON.parse(prepareFundingJSON(JSON.stringify(wrapper), publicKey, now));
+  assert.equal(funding.address, preparePurchase(r, publicKey, now).summary.address);
+  assert.equal(funding.requiredAtomic, '120000'); assert.equal(funding.shortfallAtomic, '110000');
+  assert.equal(funding.expires, new Date((now + 165) * 1000).toISOString());
+  for (const patch of [{ address: '0x1111111111111111111111111111111111111111' }, { amount: '1' },
+    { balanceAtomic: '-1' }, { expiresAt: now * 1000 }, { expiresAt: (now + 300) * 1000 }]) {
+    assert.throws(() => prepareFundingJSON(JSON.stringify({ ...wrapper, ...patch }), publicKey, now));
+  }
+  delete r.permission;
+  assert.throws(() => prepareFundingJSON(JSON.stringify(wrapper), publicKey, now));
+});
 test('native phone approval binds 0.10 PathUSD and exposes the complete real-call details', () => {
   const r = callRequest(); const value = preparePurchase(r, publicKey, now);
   assert.equal(value.summary.service, 'phone.call');

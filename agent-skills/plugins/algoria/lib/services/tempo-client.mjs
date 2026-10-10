@@ -7,6 +7,7 @@ import { loadTempoSdk } from './tempo-sdk.mjs';
 import { signAndPayTempo } from './tempo-signer.mjs';
 import { loadServicesSdk } from './sdk.mjs';
 import { normalizeTempoInput, tempoResource } from './tempo-services.mjs';
+import { TempoFundingError } from './tempo-funding.mjs';
 
 /** @param {any} job @param {string} [credential] */
 async function post(job, credential) {
@@ -131,16 +132,22 @@ export async function runTempo(id, options = {}) {
       if (!options.approve) throw new Error('Review the saved quote and run with --approve; Touch ID approves the exact purchase');
       job = await requestQuote(job);
       await reserveBudget(id, String(BigInt(job.offer.amount) * 10n));
+      await updateJob(id, { fundingIssue: null });
       try {
         await signAndPayTempo(job, { ...options, onStage: async uxStage => { await updateJob(id, { uxStage }); } }, async record => {
           job = await saveTempoDispatch(id, record);
         });
-      } catch {
+      } catch (error) {
         if (job.dispatchedAt) {
           await updateJob(id, { phase: 'uncertain', status: 'payment-uncertain' });
           throw new Error(`Job ${id}: Tempo submission uncertain. Recover this ID; its budget remains reserved.`);
         }
-        await editLedger(state => { delete state.budgets[job.budget].reservations[id]; state.jobs[id].uxStage = null; delete state.jobs[id].permissionId; });
+        await editLedger(state => {
+          delete state.budgets[job.budget].reservations[id]; state.jobs[id].uxStage = null;
+          delete state.jobs[id].permissionId;
+          state.jobs[id].fundingIssue = error instanceof TempoFundingError ? error.code : null;
+        });
+        if (error instanceof TempoFundingError) throw error;
         throw new Error(`Job ${id}: native purchase approval cancelled or unavailable; no payment dispatched.`);
       }
     }

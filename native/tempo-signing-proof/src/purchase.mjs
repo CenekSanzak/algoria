@@ -6,6 +6,7 @@ import * as Attribution from '../node_modules/mppx/dist/tempo/Attribution.js';
 import { CHAIN_ID, TOKEN, prepare, completePrepared } from './transaction.mjs';
 import { checkPurchasePermission } from './permissions.mjs';
 import { normalizeTempoInput, tempoResource } from '../../../agent-skills/plugins/algoria/lib/services/tempo-services.mjs';
+import { tempoFundingDetails } from '../../../agent-skills/plugins/algoria/lib/services/tempo-funding.mjs';
 
 const transfer = AbiFunction.from('function transferWithMemo(address to, uint256 amount, bytes32 memo) returns (bool)');
 
@@ -57,6 +58,23 @@ export function preparePurchase(request, publicKey, now = Math.floor(Date.now() 
 export function preparePurchaseJSON(json, publicKey, now) {
   const { digest, summary } = preparePurchase(JSON.parse(json), publicKey, now);
   return JSON.stringify({ digest, summary });
+}
+
+/** Funding UI is bound to this key and the same validated purchase/permission.
+ * The balance is informational; the plugin rechecks it on-chain before signing.
+ * @param {string} json @param {any} publicKey @param {number} now */
+export function prepareFundingJSON(json, publicKey, now) {
+  const wrapper = JSON.parse(json);
+  if (!wrapper || Object.keys(wrapper).length !== 4 ||
+      Object.keys(wrapper).some(key => !['type', 'request', 'balanceAtomic', 'expiresAt'].includes(key)) ||
+      wrapper.type !== 'funding-required' || !wrapper.request?.permission ||
+      !Number.isSafeInteger(wrapper.expiresAt) || wrapper.expiresAt <= (now + 15) * 1000 ||
+      wrapper.expiresAt > (now + 241) * 1000 ||
+      wrapper.expiresAt > Date.parse(wrapper.request.challenge?.expires) ||
+      wrapper.expiresAt > wrapper.request.permission.policy.validUntil * 1000) throw new Error('Invalid funding review');
+  const { summary } = preparePurchase(wrapper.request, publicKey, now);
+  return JSON.stringify({ ...tempoFundingDetails(summary, wrapper.balanceAtomic),
+    expires: new Date(Math.min(wrapper.expiresAt - 15000, wrapper.request.validBefore * 1000)).toISOString() });
 }
 /** @param {string} json @param {any} publicKey @param {any} der @param {number} now */
 export function completePurchaseJSON(json, publicKey, der, now) {

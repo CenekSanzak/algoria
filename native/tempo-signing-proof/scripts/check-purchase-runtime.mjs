@@ -81,6 +81,13 @@ for (
   assert.equal(output.status, 'self-test-passed');
   assert.equal(output.softwareTestKey, true);
   assert.equal(output.provesTouchID, false);
+  const funding = JSON.parse(execFileSync(executable, ['--self-test-funding-request'], {
+    input: JSON.stringify({ type: 'funding-required', request, balanceAtomic: '0', expiresAt: (now + 180) * 1000 }) + '\n',
+    encoding: 'utf8', timeout: 15000,
+  }));
+  assert.equal(funding.status, 'funding-self-test-passed');
+  assert.equal(funding.signed, false); assert.equal(funding.provesTouchID, false);
+  assert.equal(funding.summary.requiredAtomic, String(BigInt(amount) + 20000n));
   console.log(
     `Native JavaScriptCore ${service} construction and signature verification passed (offline software test key).`,
   );

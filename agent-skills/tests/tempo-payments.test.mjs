@@ -13,6 +13,7 @@ const sdk = await loadTempoSdk();
 const signer = await import('../plugins/algoria/lib/services/tempo-signer.mjs');
 const approval = await import('../plugins/algoria/lib/services/permission-approval.mjs');
 const readiness = await import('../plugins/algoria/lib/services/tempo-readiness.mjs');
+const { TempoFundingError } = await import('../plugins/algoria/lib/services/tempo-funding.mjs');
 const { imageTask, tempoTask } = await import('../plugins/algoria/lib/services/task.mjs');
 const { quoteTempo, validateMppQuote } = await import('../plugins/algoria/lib/services/tempo-client.mjs');
 const { runJob, statusJob } = await import('../plugins/algoria/lib/services/client.mjs');
@@ -129,6 +130,7 @@ describe('Tempo phone-call payments', () => {
     expect(done.status).toBe('succeeded'); expect(done.delivery).toMatchObject({ kind: 'call', previewRequired: false, call: { goalAchieved: true } });
     expect(done.delivery?.call?.transcript).toHaveLength(1);
     expect(done.journey.message).toContain('do not redial');
+    expect(done.payment.explorerUrl).toBe(`https://explore.testnet.tempo.xyz/tx/${transaction}`);
     await tempoTask({ id: q.id, approve: true, fundTestnet: true });
     expect(signatures).toBe(1); expect(paidPosts).toBe(1); expect(remote.size).toBe(1);
     expect((await getBudget('calls')).spent).toBe('0.1000000');
@@ -213,15 +215,28 @@ describe('Tempo plugin payments', () => {
     expect(done.journey.stage).toBe('ready'); expect(done.delivery?.previewRequired).toBe(true);
     const reopen = await imageTask({ id: q.id });
     expect(reopen.payment.transaction).toBe(transaction);
+    expect(reopen.transactionUrl).toBe(`https://explore.testnet.tempo.xyz/tx/${transaction}`);
     expect(remote.size).toBe(1); expect(signatures).toBe(1); expect(paidPosts).toBe(1);
   });
-  it('keeps the task when setup or faucet consent is missing', async () => {
+  it('automatically enables testnet funding for an approved task and still blocks missing setup', async () => {
     const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo', approve: true });
-    expect(q.nextAction).toContain('Confirm disposable'); expect(signatures).toBe(0);
+    expect(q.status).toBe('succeeded'); expect(signatures).toBe(1);
     vi.spyOn(readiness, 'tempoReadiness').mockReturnValue({ ready: false, reason: 'companion-missing', nextAction: 'Build companion',
       protocol: 'mpp', network: 'eip155:42431', unit: 'test PathUSD', walletMode: 'disposable', realFundsSupported: false, permissionsEnabled: true, permissionEnforcement: 'local-only', delegatedSigningEnabled: false });
-    expect((await imageTask({ id: q.id, approve: true, fundTestnet: true })).nextAction).toBe('Build companion');
-    expect(signatures).toBe(0); expect(remote.size).toBe(1);
+    const blocked = await imageTask({ input: { prompt: 'Dog' }, budget: 'tempo', approve: true });
+    expect(blocked.nextAction).toBe('Build companion');
+    expect(signatures).toBe(1); expect(remote.size).toBe(2);
+  });
+  it('releases an unfunded reservation and returns an actionable same-task retry, not a stale address', async () => {
+    const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' });
+    vi.mocked(signer.signAndPayTempo).mockRejectedValueOnce(new TempoFundingError('funding-cancelled'));
+    const stopped = await imageTask({ id: q.id, approve: true });
+    expect(stopped.nextAction).toBe('retry-wallet-funding'); expect(stopped.interrupted).toBe(true);
+    expect('paymentAttempted' in stopped && stopped.paymentAttempted).toBe(false);
+    expect(stopped.fundingIssue).toBe('funding-cancelled');
+    expect((await getBudget('tempo')).reserved).toBe('0.0000000'); expect(signatures).toBe(0); expect(paidPosts).toBe(0);
+    const done = await imageTask({ id: q.id, approve: true });
+    expect(done.status).toBe('succeeded'); expect(done.fundingIssue).toBeUndefined(); expect(signatures).toBe(1); expect(remote.size).toBe(1);
   });
   it('returns a recoverable task card on a lost paid response', async () => {
     const q = await imageTask({ input: { prompt: 'Cat' }, budget: 'tempo' });

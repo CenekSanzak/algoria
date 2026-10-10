@@ -96,6 +96,16 @@ approved contact, goal, on-behalf-of name, language and a real-call warning.
 Permissions bind exactly one service/URL; image grants cannot cover calls. See
 [payment implementation and setup](../../docs/TEMPO_MPP_IMPLEMENTATION.md).
 
+Current plugin funding: an approved purchase automatically checks the wallet's
+test PathUSD token balance, requests the testnet faucet once if needed, and
+verifies the balance covers price plus the maximum fee. If insufficient, a
+funding-only native prompt keeps the SAME temporary key alive, shows the exact
+shortfall, address and token, and lets the user choose **Check balance** or
+**Cancel**. It never signs. Closing/cancellation/expiry discards that key; never
+transfer tokens to its old address. `--no-fund-testnet` opts out of automatic
+faucet funding. No real-funds or persistent-wallet support is added.
+See [funding and receipts](../../docs/TEMPO_FUNDING_AND_RECEIPTS.md).
+
 After building, `node scripts/check-purchase-runtime.mjs` verifies this path in
 the real JavaScriptCore runtime with an explicit offline software test key.
 `--self-test-request` is exclusively that offline test mode; it never broadcasts
@@ -132,6 +142,7 @@ funding, RPC calls or purchases:
 ".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview purchase
 ".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview budget
 ".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview phone
+".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview funding
 npm run test:ui
 ```
 

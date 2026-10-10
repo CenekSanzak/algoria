@@ -108,7 +108,7 @@ async function fetchStatus(job) {
 /** Pay at most once for this job. --approve represents the user's approved budget.
  * @param {string} id @param {{approve?: boolean, fundTestnet?: boolean}} [options]
  */
-export async function runJob(id, { approve = false, fundTestnet = false } = {}) {
+export async function runJob(id, { approve = false, fundTestnet = true } = {}) {
   jobUrl(id);
   if ((await readJob(id)).protocol === 'mpp') return runTempo(id, { approve, fundTestnet });
   if ((await readJob(id)).transport === 'mcp') throw new Error('MCP calls cannot run through pay; use algoria mcp status for this saved call');

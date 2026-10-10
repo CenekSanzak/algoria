@@ -121,7 +121,15 @@ do {
     // Standalone design fixtures: no SDK, private key, funding or RPC access.
     if arguments == ["--ui-self-test"] {
         NSApplication.shared.setActivationPolicy(.prohibited)
+        try WalletFundingController.selfTest()
         emit(try WalletReviewController.selfTest())
+        exit(0)
+    }
+    if arguments == ["--preview", "funding"] {
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        _ = WalletFundingController(summary: WalletFundingController.fixture(), preview: true).runReview()
+        emit(["status": "preview-closed", "keyCreated": false, "signed": false])
         exit(0)
     }
     if arguments.count == 2, arguments[0] == "--render-ui" {
@@ -139,7 +147,7 @@ do {
         exit(0)
     }
     if arguments == ["--status"] {
-        emit(["status": "readiness", "touchIDAvailable": biometricStatus(), "keyCreated": false, "permissionVersion": 1])
+        emit(["status": "readiness", "touchIDAvailable": biometricStatus(), "keyCreated": false, "permissionVersion": 1, "fundingVersion": 1])
         exit(0)
     }
     if arguments == ["--approve-permission"] || arguments == ["--self-test-permission"] {
@@ -169,7 +177,8 @@ do {
         exit(0)
     }
     let selfTestRequest = arguments == ["--self-test-request"]
-    let selfTest = arguments == ["--self-test"] || selfTestRequest
+    let selfTestFunding = arguments == ["--self-test-funding-request"]
+    let selfTest = arguments == ["--self-test"] || selfTestRequest || selfTestFunding
     guard selfTest || arguments.isEmpty else { throw fail("UNKNOWN_ARGUMENT") }
     if !selfTest && !biometricStatus() { throw fail("TOUCH_ID_UNAVAILABLE") }
     let builder = try TransactionBuilder()
@@ -181,13 +190,30 @@ do {
     }
     let key = try makeKey(softwareTestOnly: selfTest)
     let publicKey = try publicHex(key)
-    let request: String
+    if selfTestFunding {
+        let result = try builder.call("prepareFundingJSON", [try readRequest(), publicKey, Int(Date().timeIntervalSince1970)])
+        let summary = try JSONSerialization.jsonObject(with: Data(result.utf8))
+        emit(["status": "funding-self-test-passed", "softwareTestKey": true, "provesTouchID": false, "signed": false, "summary": summary])
+        exit(0)
+    }
+    var request: String
     if selfTestRequest {
         request = try readRequest()
     } else if selfTest {
         request = "{\"version\":1,\"chainId\":42431,\"nonce\":\"0\",\"maxFeePerGas\":\"20000000000\",\"validBefore\":\(Int(Date().timeIntervalSince1970) + 120)}"
     } else {
-        emit(["status": "ready", "publicKey": publicKey, "disposable": true])
+        emit(["status": "ready", "publicKey": publicKey, "disposable": true, "fundingVersion": 1])
+        request = try readRequest()
+    }
+    // The parent retains this process/key while the person supplies TEST tokens.
+    // A funding check is never a purchase approval and never calls sign().
+    while !selfTest {
+        let object = try JSONSerialization.jsonObject(with: Data(request.utf8)) as? [String: Any]
+        guard object?["type"] as? String == "funding-required" else { break }
+        let json = try builder.call("prepareFundingJSON", [request, publicKey, Int(Date().timeIntervalSince1970)])
+        guard let summary = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { throw fail("INVALID_FUNDING_REVIEW") }
+        guard WalletFundingController(summary: summary).runReview() else { throw fail("FUNDING_CANCELLED_OR_EXPIRED") }
+        emit(["status": "funding-checked", "signed": false])
         request = try readRequest()
     }
     let prepared = try builder.prepare(request, publicKey)

@@ -9,6 +9,7 @@ import { journeyFor } from './journey.mjs';
 import { approvePermission, verifyPermissionReceipt } from './permission-approval.mjs';
 import { activePermission, permissionCovers, canonicalPermission } from './permission-schema.mjs';
 import { tempoResource } from './tempo-services.mjs';
+import { tempoTransactionUrl } from './tempo-links.mjs';
 
 /** @typedef {{total: string, perCall: string, reservations: Record<string, string>, protocol?: string, permission?: any, revokedAt?: string}} Budget */
 /** @typedef {{version: number, budgets: Record<string, Budget>, jobs: Record<string, any>}} Ledger */
@@ -199,6 +200,7 @@ export async function reserveBudget(id, amount) {
  */
 export function publicJob(job) {
   const offer = job.offer ?? job.expectedOffer;
+  const transactionUrl = job.protocol === 'mpp' ? tempoTransactionUrl(job.transaction) : null;
   return {
     id: job.id, service: job.service, serviceVersion: job.serviceVersion, budget: job.budget,
     ...(job.permissionId ? { permissionId: job.permissionId } : {}),
@@ -208,7 +210,10 @@ export function publicJob(job) {
     ...(job.protocol === 'mpp' ? { protocol: 'mpp', network: 'eip155:42431', token: '0x20c0000000000000000000000000000000000000', decimals: 6 } : {}),
     ...(job.transport === 'mcp' ? { transport: 'mcp', tool: job.tool, protocol: job.protocol } : {}),
     payTo: offer?.payTo ?? null, expiresAt: job.expiresAt ?? null,
-    payment: job.payment ?? null, output: job.output ?? null, error: job.error ?? null,
+    payment: job.payment ? { ...job.payment, ...(transactionUrl ? { explorerUrl: transactionUrl } : {}) } : null,
+    ...(transactionUrl ? { transactionUrl } : {}),
+    output: job.output ?? null, error: job.error ?? null,
+    ...(job.fundingIssue ? { fundingIssue: job.fundingIssue } : {}),
     delivery: deliveryFor(job),
     journey: journeyFor(job),
     requiresAttention: job.phase === 'uncertain' || String(job.status).endsWith('-uncertain'),

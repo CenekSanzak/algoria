@@ -10,6 +10,7 @@ export function journeyFor(job, now = Date.now()) {
   if (job.status === 'succeeded') return card('ready', job.service === 'phone.call' ? 'The call is finished. Show its summary and transcript; do not redial to recover this result.' : 'Your result is ready. Open it in the conversation; refresh this same task if access expires.', 'open-result');
   if (job.uxStage === 'queued-approval') return card('queued-approval', 'Waiting for the current wallet approval to finish.', 'wait');
   if (job.uxStage === 'funding') return card('funding', 'Preparing a disposable wallet with Tempo testnet faucet tokens. No real funds.', 'wait');
+  if (job.uxStage === 'funding-needed') return card('funding-needed', 'The wallet needs test PathUSD. See its exact top-up amount and address in the open local wallet, then check its balance. Never send real funds.', 'top-up-in-wallet');
   if (job.uxStage === 'review') return card('review', 'Review this exact purchase in the local wallet, then approve with Touch ID.', 'approve-in-wallet');
   if (job.dispatchedAt && job.status === 'awaiting_payment') return card('confirming-payment', 'Checking the saved transaction. A second payment will not be signed.', 'recover');
   if (job.service === 'phone.call') {

@@ -8,4 +8,4 @@ const result = JSON.parse(execFileSync(executable, ['--ui-self-test'], { encodin
 assert.deepEqual(result, {
   status: 'ui-self-test-passed', keyCreated: false, signed: false, networkRequests: false,
 });
-console.log('Native UI checks passed: bundled brand fonts/logo, tab actions, compact layout, preview isolation, explicit approval, Cancel, window close, fractional/invalid expiry and safe keyboard defaults.');
+console.log('Native UI checks passed: bundled brand fonts/logo, tab actions, compact purchase/funding layouts, funding-only check/cancel, preview isolation, explicit approval, window close, expiry and safe keyboard defaults.');

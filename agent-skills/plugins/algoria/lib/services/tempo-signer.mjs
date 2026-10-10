@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline';
 import { loadTempoSdk } from './tempo-sdk.mjs';
 import { withLock } from '../lock.mjs';
 import { purchasePermission } from './state.mjs';
+import { ensureTempoFunding, TempoFundingError } from './tempo-funding.mjs';
 
 /** Native app is configured outside the shipped plugin. No keys cross this pipe.
  * @param {any} job @param {{fundTestnet?: boolean, onStage?: (stage: string) => Promise<void>}} options
@@ -22,7 +23,6 @@ async function signQueued(job, options, saveBeforeBroadcast) {
   if (process.platform !== 'darwin' || !app?.endsWith('.app') || !app.startsWith('/')) {
     throw new Error('Set ALGORIA_TEMPO_SIGNER_APP to the built native companion .app on a Touch ID Mac');
   }
-  if (!options.fundTestnet) throw new Error('Disposable companion wallet requires explicit --fund-testnet');
   execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'ignore' });
   const sdk = await loadTempoSdk();
   const rpc = sdk.createPublicClient({ chain: sdk.tempoModerato,
@@ -30,6 +30,7 @@ async function signQueued(job, options, saveBeforeBroadcast) {
   if (await rpc.getChainId() !== 42431) throw new Error('Tempo network mismatch');
   const child = spawn(`${app}/Contents/MacOS/AlgoriaSigningProof`, [], { stdio: ['pipe', 'pipe', 'ignore'] });
   const lines = createInterface({ input: child.stdout });
+  const messages = lines[Symbol.asyncIterator]();
   child.on('error', () => lines.close());
   child.stdin.on('error', () => lines.close());
   const timer = setTimeout(() => child.kill(), 300000);
@@ -37,27 +38,43 @@ async function signQueued(job, options, saveBeforeBroadcast) {
     let request;
     let ready = false;
     let publicKey;
-    for await (const line of lines) {
+    while (true) {
+      const next = await messages.next();
+      if (next.done) break;
+      const line = next.value;
       if (line.length > 100000) throw new Error('Native signing response too large');
       const message = JSON.parse(line);
       if (message.status === 'error') throw new Error('Native purchase approval cancelled or denied');
       if (message.status === 'ready' && !ready) {
+        if (message.fundingVersion !== 1) throw new Error('Rebuild the native companion for wallet funding');
         ready = true;
         publicKey = message.publicKey;
-        const address = sdk.preparePurchase({ version: 2, chainId: 42431,
-          nonce: '0', maxFeePerGas: '1', validBefore: Math.min(Math.floor(Date.now() / 1000) + 120, Math.floor(Date.parse(job.expiresAt) / 1000)),
-          challenge: job.challenge, input: JSON.parse(job.body) }, message.publicKey).summary.address;
-        if (options.fundTestnet) {
-          await options.onStage?.('funding');
-          // Explicit disposable-wallet funding. Testnet faucet only, no real funds.
-          const hashes = await rpc.request({ method: 'tempo_fundAddress', params: [address] });
-          if (Array.isArray(hashes)) for (const hash of hashes) await rpc.waitForTransactionReceipt({ hash, timeout: 60000 });
-        } else throw new Error('Disposable companion wallet needs explicit --fund-testnet for this development flow');
-        request = { version: 2, chainId: 42431,
-          nonce: String(await rpc.getTransactionCount({ address, blockTag: 'pending' })),
-          maxFeePerGas: String((await rpc.getGasPrice()) * 2n),
+        const gasPrice = await rpc.getGasPrice();
+        if (gasPrice <= 0n || gasPrice > 30_000_000_000n) throw new Error('Tempo gas price exceeds the native signing cap');
+        const maxFeePerGas = String(gasPrice * 2n > 30_000_000_000n ? 30_000_000_000n : gasPrice * 2n);
+        const fundingExpiry = Math.min(Date.parse(job.expiresAt), permission.policy.validUntil * 1000, Date.now() + 240000);
+        const makeRequest = (nonce = '0') => ({ version: 2, chainId: 42431, nonce, maxFeePerGas,
           validBefore: Math.min(Math.floor(Date.now() / 1000) + 180, Math.floor(Date.parse(job.expiresAt) / 1000), permission.policy.validUntil),
-          challenge: job.challenge, input: JSON.parse(job.body), permission };
+          challenge: job.challenge, input: JSON.parse(job.body), permission });
+        const preparedFunding = sdk.preparePurchase(makeRequest(), publicKey);
+        const address = preparedFunding.summary.address;
+        await ensureTempoFunding(rpc, preparedFunding.summary, {
+          autoFund: options.fundTestnet !== false, expiresAt: fundingExpiry, onStage: options.onStage,
+          onRequired: async funding => {
+            // Keep stdin and the SAME enclave key alive until manual funding
+            // is checked or cancelled. Never return a dead deposit address.
+            await purchasePermission(job.id);
+            child.stdin.write(JSON.stringify({ type: 'funding-required', request: makeRequest(),
+              balanceAtomic: funding.balanceAtomic, expiresAt: fundingExpiry }) + '\n');
+            const response = await messages.next();
+            if (response.done || response.value.length > 100000) throw new TempoFundingError('funding-cancelled');
+            const status = JSON.parse(response.value);
+            if (status.status === 'error') throw new TempoFundingError('funding-cancelled');
+            if (status.status !== 'funding-checked') throw new Error('Unexpected native funding response');
+            return true;
+          },
+        });
+        request = makeRequest(String(await rpc.getTransactionCount({ address, blockTag: 'pending' })));
         await purchasePermission(job.id);
         await options.onStage?.('review');
         child.stdin.end(JSON.stringify(request) + '\n');
@@ -75,7 +92,8 @@ async function signQueued(job, options, saveBeforeBroadcast) {
         // One submission only. Persisted hash survives lost RPC/HTTP responses.
         const hash = await rpc.sendRawTransaction({ serializedTransaction: message.result.serializedTransaction });
         if (hash !== transaction) throw new Error('Unexpected Tempo transaction reference');
-        await rpc.waitForTransactionReceipt({ hash, timeout: 60000 });
+        const receipt = await rpc.waitForTransactionReceipt({ hash, timeout: 60000 });
+        if (receipt.status !== 'success') throw new Error('Tempo transaction reverted; reconcile the saved payment');
         return { transaction, credential, payer: prepared.summary.address };
       }
     }

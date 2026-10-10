@@ -36,8 +36,8 @@ export async function tempoTask(options) {
             spending.permission?.recipient !== job.payTo?.toLowerCase())) return { ...job, readiness, spending,
           interrupted: false, paymentAttempted: false, nextAction: 'review-spending-permission',
           message: 'This budget needs a Touch ID-approved permission for this exact service and recipient before spending. Keep this same task; review its scope and expiry.' };
-        if (needsSigner && (!readiness.ready || !options.fundTestnet)) return { ...job, readiness, interrupted: false,
-          nextAction: !readiness.ready ? readiness.nextAction : 'Confirm disposable Tempo testnet faucet funding; then approve this same task.', paymentAttempted: false };
+        if (needsSigner && !readiness.ready) return { ...job, readiness, interrupted: false,
+          nextAction: readiness.nextAction, paymentAttempted: false };
         job = await runJob(id, { approve: true, fundTestnet: options.fundTestnet });
       } else if (saved) {
         // Only the same identity may repair a lost initial unpaid quote POST.
@@ -50,6 +50,9 @@ export async function tempoTask(options) {
       let recovered;
       try { recovered = await readJob(id); } catch { throw error; }
       const job = publicJob(recovered);
+      if (job.fundingIssue && !recovered.dispatchedAt) return { ...job, interrupted: true,
+        paymentAttempted: false, nextAction: 'retry-wallet-funding',
+        message: 'Wallet funding stopped before signing. Retry this same task when ready. Only send test PathUSD to the address shown in the currently open wallet; a closed temporary wallet cannot receive a usable top-up.' };
       return { ...job, interrupted: true, nextAction: 'resume-same-task',
         message: job.requiresAttention ? 'This task needs reconciliation. Keep its receipt and reserved budget; do not pay again.' : 'The task could not finish this step. Resume this same task; no automatic replacement purchase was created.' };
     }

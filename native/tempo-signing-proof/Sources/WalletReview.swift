@@ -297,7 +297,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             walletCard("Asset & fee bounds", [walletRow("Token contract · test PathUSD", value("token"), mono: true),
                                               walletRow("Gas limit", value("gasLimit")),
                                               walletRow("Maximum fee per gas · protocol units", value("maxFeePerGas")),
-                                              walletText("These are upper bounds, not a final fee quote. Faucet funding is requested separately by the runner; this review does not fund the wallet.", size: 12, color: WalletDesign.muted)]),
+                                              walletText("These are upper bounds, not a final fee quote. The plugin checks test PathUSD and automatically requests faucet tokens when needed before this review. If insufficient, it asks for a test-token top-up first.", size: 12, color: WalletDesign.muted)]),
         ])
         var permissionCards: [NSView] = []
         if let p = permission {
@@ -429,6 +429,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
                 }
                 controller.window?.close()
             }
+            paths.append(try WalletFundingController.renderPreview(to: directory, dark: dark))
         }
         return paths
     }
@@ -488,5 +489,136 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             }
         }
         return ["status": "ui-self-test-passed", "keyCreated": false, "signed": false, "networkRequests": false]
+    }
+}
+
+// A funding-only prompt. The same temporary key stays alive; checking a balance
+// neither signs a payment nor grants spending authority.
+final class WalletFundingController: NSWindowController, NSWindowDelegate {
+    let summary: [String: Any]
+    let preview: Bool
+    private var checked = false
+    private var modalActive = false
+    private var checkButton: NSButton!
+    private var cancelButton: NSButton!
+    private var expiryLabel: NSTextField!
+    init(summary: [String: Any], preview: Bool = false) {
+        self.summary = summary; self.preview = preview
+        let available = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1000, height: 900)
+        let size = NSSize(width: min(620, available.width - 32), height: min(740, available.height - 48))
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = preview ? "Algoria Wallet — Funding preview" : "Algoria Wallet — Test tokens"
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = WalletDesign.background
+        window.contentView = WalletBackground(frame: NSRect(origin: .zero, size: size))
+        window.isReleasedWhenClosed = false
+        NSApplication.shared.applicationIconImage = WalletDesign.logo
+        super.init(window: window)
+        window.delegate = self
+        let value = { (key: String) in summary[key] as? String ?? "Unavailable" }
+        let header = walletStack([WalletBrandMark(), walletText("Algoria", size: 19, weight: .semibold), NSView(), WalletBadge("TEMPO · TESTNET")], horizontal: true)
+        let hero = walletCard("ADD TEST TOKENS", [walletText("Your wallet needs a top-up", size: 23, weight: .medium),
+            walletText(value("shortfall"), size: 36, weight: .semibold, mono: true),
+            walletText("test PathUSD · minimum amount to add", size: 12, color: WalletDesign.secondary),
+            walletText("Automatic funding was insufficient or disabled. Keep this wallet open. Never send real funds.", size: 12, color: WalletDesign.muted)])
+        let scroll = NSScrollView()
+        scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
+        let document = WalletDocument(); scroll.documentView = document
+        document.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+            document.topAnchor.constraint(equalTo: scroll.contentView.topAnchor), document.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor)])
+        walletPin(walletStack([
+            walletCard("Funding details", [walletRow("Current balance · test PathUSD", value("balance")),
+                walletRow("Required balance · price + maximum fee", value("required")),
+                walletRow("Temporary wallet · copy the full address", value("address"), mono: true),
+                walletRow("Token contract · Tempo Moderato (42431)", value("token"), mono: true)]),
+            walletCard("Keep this wallet open", [walletText("Add test PathUSD to this address, then check the balance. Checking does not approve the purchase.", size: 13),
+                walletText("Never send real funds. This temporary address expires when the wallet closes; leftover test tokens are abandoned.", size: 12, color: WalletDesign.warning)]),
+        ]), to: document, inset: 2)
+        expiryLabel = walletText(preview ? "Synthetic data · no keys or network" : "Temporary wallet · no payment signed", size: 11, color: WalletDesign.muted)
+        checkButton = WalletButton(preview ? "Close preview" : "Check balance", style: .primary, target: self, action: #selector(check(_:)))
+        checkButton.keyEquivalent = ""
+        checkButton.setAccessibilityHelp("Checks for test tokens. Does not sign or approve a payment.")
+        cancelButton = WalletButton("Cancel", style: .secondary, target: self, action: #selector(cancel(_:)))
+        cancelButton.keyEquivalent = "\u{1b}"
+        let actions = walletStack([cancelButton, checkButton], spacing: 10, horizontal: true)
+        cancelButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        checkButton.widthAnchor.constraint(equalTo: actions.widthAnchor, constant: -120).isActive = true
+        let footer = walletCard("No signing at this step", [expiryLabel, actions])
+        walletPin(walletStack([header, hero, scroll, footer], spacing: 16), to: window.contentView!, inset: 24)
+        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
+        window.initialFirstResponder = cancelButton
+        window.center()
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
+    private var expired: Bool { (walletParseDate(summary["expires"] as? String ?? "") ?? .distantPast) <= Date() }
+    @objc private func check(_ sender: Any?) { finish(!preview && !expired) }
+    @objc private func cancel(_ sender: Any?) { finish(false) }
+    private func finish(_ checked: Bool) {
+        self.checked = checked
+        if modalActive { NSApplication.shared.stopModal(withCode: checked ? .OK : .cancel) }
+        window?.orderOut(nil)
+    }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { finish(false); return true }
+    func runReview() -> Bool {
+        guard let window, preview || !expired else { return false }
+        let timer = Timer(timeInterval: 1, repeats: true) { [self] _ in
+            guard !self.preview else { return }
+            let seconds = max(0, Int((walletParseDate(self.summary["expires"] as? String ?? "") ?? .distantPast).timeIntervalSinceNow))
+            self.expiryLabel.stringValue = "Top-up window: \(seconds / 60)m \(seconds % 60)s · no payment signed"
+            if self.expired { self.finish(false) }
+        }
+        RunLoop.main.add(timer, forMode: .modalPanel)
+        modalActive = true
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.runModal(for: window)
+        modalActive = false
+        timer.invalidate()
+        window.orderOut(nil)
+        return !preview && checked && !expired
+    }
+    static func fixture() -> [String: Any] {
+        ["balance": "0.000000", "required": "0.030000", "shortfall": "0.030000",
+         "address": "0x2222222222222222222222222222222222222222",
+         "token": "0x20c0000000000000000000000000000000000000", "expires": "2030-10-05T18:30:00Z"]
+    }
+    static func selfTest() throws {
+        let controller = WalletFundingController(summary: fixture(), preview: true)
+        controller.window?.contentView?.layoutSubtreeIfNeeded()
+        guard controller.checkButton.keyEquivalent.isEmpty, controller.cancelButton.keyEquivalent == "\u{1b}",
+              controller.window?.initialFirstResponder === controller.cancelButton else { throw fail("FUNDING_UI_SAFETY_FAILED") }
+        for size in [NSSize(width: 620, height: 740), NSSize(width: 560, height: 620)] {
+            controller.window?.setContentSize(size)
+            guard let content = controller.window?.contentView else { throw fail("FUNDING_UI_LAYOUT_FAILED") }
+            content.layoutSubtreeIfNeeded()
+            let cancel = controller.cancelButton.convert(controller.cancelButton.bounds, to: content)
+            let check = controller.checkButton.convert(controller.checkButton.bounds, to: content)
+            guard content.bounds.contains(cancel), content.bounds.contains(check), cancel.maxX + 8 <= check.minX else { throw fail("FUNDING_UI_LAYOUT_FAILED") }
+        }
+        controller.check(nil)
+        guard !controller.checked else { throw fail("FUNDING_PREVIEW_CHECK_FAILED") }
+        controller.window?.close()
+        let live = WalletFundingController(summary: fixture())
+        live.check(nil)
+        guard live.checked else { throw fail("FUNDING_CHECK_FAILED") }
+        _ = live.windowShouldClose(live.window!)
+        guard !live.checked else { throw fail("FUNDING_CLOSE_FAILED") }
+        live.window?.close()
+        var expired = fixture(); expired["expires"] = "2020-01-01T00:00:00Z"
+        guard !WalletFundingController(summary: expired).runReview() else { throw fail("FUNDING_UI_EXPIRY_FAILED") }
+    }
+    static func renderPreview(to directory: String, dark: Bool) throws -> String {
+        let controller = WalletFundingController(summary: fixture(), preview: true)
+        controller.window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        guard let view = controller.window?.contentView else { throw fail("PREVIEW_RENDER_FAILED") }
+        view.layoutSubtreeIfNeeded()
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw fail("PREVIEW_RENDER_FAILED") }
+        view.effectiveAppearance.performAsCurrentDrawingAppearance { view.cacheDisplay(in: view.bounds, to: bitmap) }
+        guard let png = bitmap.representation(using: .png, properties: [:]) else { throw fail("PREVIEW_RENDER_FAILED") }
+        let path = URL(fileURLWithPath: directory).appendingPathComponent("funding-\(dark ? "dark" : "light").png")
+        try png.write(to: path, options: .atomic)
+        controller.window?.close()
+        return path.path
     }
 }

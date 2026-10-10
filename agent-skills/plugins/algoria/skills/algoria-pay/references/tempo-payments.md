@@ -8,8 +8,11 @@ skill. Do not run Stellar top-up for this route.
 
 Build the development native companion on a Touch ID Mac and set
 `ALGORIA_TEMPO_SIGNER_APP` to its absolute `.app` path. It creates a disposable
-Secure Enclave key for this purchase. `--fund-testnet` explicitly requests test
-faucet tokens. Persistent wallet setup and packaged installation come later.
+Secure Enclave key for this purchase. Rebuild the companion for funding protocol
+version 1. For an approved purchase, testnet faucet funding is **automatic when
+needed**; no separate faucet-consent question or flag is required. Persistent
+wallet setup and packaged installation come later. Readiness and quoting never
+create a wallet, request faucet tokens or sign anything.
 
 Use only the user's approved budget and request:
 
@@ -18,17 +21,31 @@ node "$PAY" readiness --json
 # Substitute the live service's recipient and the user's chosen host/expiry.
 node "$PAY" budget --name tempo-demo --total 0.10 --per-call 0.02 --protocol mpp --agent codex --recipient SERVICE_RECIPIENT --expires USER_APPROVED_ISO_DATE --json
 node "$PAY" task --input /absolute/path/input.json --budget tempo-demo --json
-node "$PAY" task SAVED_TASK_ID --approve --fund-testnet --wait --json
+node "$PAY" task SAVED_TASK_ID --approve --wait --json
 ```
 
 `task` is the preferred journey: quote, exact native review, payment,
 bounded execution wait and a result card, all using one saved job identity.
 New tasks default to `image.generate`; use `--service phone.call` for a call.
 Recovery infers the service from the saved ID; never change it.
-When the user's exact creative request, budget and testnet faucet use are already
-authorized, `task --input ... --budget ... --approve --fund-testnet --wait` can
+When the user's exact creative request and budget are already
+authorized, `task --input ... --budget ... --approve --wait` can
 combine those steps. Do not invent creative choices or budget limits. Touch ID
 still approves the exact transaction. No manual approval URL is needed.
+
+Before signing, the helper reads **test PathUSD `balanceOf`**, not a native ETH
+balance, and checks the service price plus the maximum fee bound. An empty or
+insufficient wallet requests `tempo_fundAddress` once, waits for receipts and
+rechecks the token balance. A sufficient balance skips the faucet. If the faucet
+fails, is rate-limited or returns too little, the **open native wallet** asks the
+user for the exact missing test PathUSD and shows the full address/token/network.
+Keep it open, add only test tokens, then choose **Check balance**. This action
+does not sign or approve a purchase. Cancelling or expiry stops before signing.
+Never ask for private keys, real-money tokens or a transfer to a closed temporary
+wallet; its key is gone. On `retry-wallet-funding`, resume the same saved task,
+which opens a new temporary wallet. Do not reuse a previous deposit address.
+`--no-fund-testnet` opts out of automatic funding and uses that manual prompt;
+the old `--fund-testnet` flag remains compatible. Never loop faucet requests.
 
 For restart/reopen, use `task SAVED_TASK_ID --wait --json` without `--approve`.
 This refreshes access and status, not payment. If the backend says `paid`, resume
@@ -54,6 +71,20 @@ before manual recovery. Host tool approvals remain separate.
 The native review shows the actual prompt, token, recipient, price and fees, then
 requires Touch ID for signing. `--approve` alone cannot bypass biometric approval.
 Display the returned image using the normal delivery rules.
+After a confirmed payment, always include a clickable **View transaction on
+Tempo Explorer** Markdown link using `payment.explorerUrl` (also available as
+`transactionUrl`), alongside the result or provider-error report. The helper
+constructs it from the saved hash on the pinned **testnet** explorer; do not
+invent a mainnet URL or use an API-supplied redirect. `status`, `list` and
+same-task recovery retain the link. An uncertain task can also have a hash/link;
+label it **transaction pending verification**, never payment completed, until
+`payment.success` is true. Never repay a task to obtain a receipt or link.
+
+If readiness reports Touch ID unavailable but Touch ID works on this Mac,
+request permission to rerun the same helper with the same companion path outside
+the host's restricted sandbox. A restricted-process result is not proof that
+Touch ID is disabled. Signing still needs its separate native approval; do not
+disable host security settings or bypass Touch ID.
 
 ## Real phone calls
 
@@ -67,7 +98,7 @@ authorize calls. The example limits below require the user's approval:
 ```sh
 node "$PAY" budget --name tempo-calls --service phone.call --total 0.10 --per-call 0.10 --protocol mpp --agent codex --recipient SERVICE_RECIPIENT --expires USER_APPROVED_ISO_DATE --json
 node "$PAY" task --service phone.call --input /absolute/path/call.json --budget tempo-calls --json
-node "$PAY" task SAVED_TASK_ID --approve --fund-testnet --wait --timeout 240 --json
+node "$PAY" task SAVED_TASK_ID --approve --wait --timeout 240 --json
 ```
 
 Input example: `{"contact":"berkin","goal":"Confirm the demo","on_behalf_of":"Dogukan","language":"tr"}`.

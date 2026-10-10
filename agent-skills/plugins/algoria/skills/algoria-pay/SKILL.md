@@ -18,6 +18,12 @@ before quoting. Image permissions do not authorize phone calls.
 Tempo budget grants/changes require a native Touch ID review with explicit scope
 and expiry; `revoke` stops future local dispatches. These are local permissions,
 not autonomous signing authority or ERC-8196 compliance.
+Tempo automatically tops up an insufficient temporary wallet from the testnet
+faucet before signing. If needed, its open native wallet asks for missing test
+tokens. Always show `payment.explorerUrl` as a clickable Tempo Explorer receipt
+after confirmed payment, including when service execution fails. A saved hash
+alone is not payment confirmation. Follow the Tempo reference for safe funding
+and sandbox-restricted Touch ID diagnostics.
 
 **First action for a new Stellar paid task: check wallet balance, before discovery,
 quotes or payment attempts.** Use the wallet helper from this plugin at

@@ -20,6 +20,7 @@ describe('durable task presentation', () => {
     expect(journeyFor({ phase: 'uncertain', status: 'succeeded', uxStage: 'review' }).nextAction).toBe('recover');
     expect(journeyFor({ status: 'awaiting_payment', uxStage: 'queued-approval' }).stage).toBe('queued-approval');
     expect(journeyFor({ status: 'awaiting_payment', uxStage: 'funding' }).stage).toBe('funding');
+    expect(journeyFor({ status: 'awaiting_payment', uxStage: 'funding-needed' }).nextAction).toBe('top-up-in-wallet');
     expect(journeyFor({ status: 'awaiting_payment', uxStage: 'review' }).nextAction).toBe('approve-in-wallet');
   });
   it('distinguishes expired unpaid quotes, confirmed failure and delivery readiness', () => {

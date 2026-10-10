@@ -15,6 +15,13 @@ a separate test PathUSD budget. See
 The companion currently needs a local build; the existing Stellar setup below
 does not fund Tempo.
 
+Source update: approved Tempo purchases automatically check the test PathUSD
+balance and request faucet tokens only when needed. If the balance still cannot
+cover the price plus maximum fee, the open wallet asks for missing **test** tokens
+and rechecks before signing. Rebuild the companion for this funding protocol;
+wallets remain temporary. Payment results and recovered tasks expose a clickable
+Tempo testnet explorer receipt. This source update still needs a plugin release.
+
 Tempo phone support: `phone.call` accepts **0.10 test PathUSD** by default, in
 addition to Stellar x402. Use `pay budget --service phone.call` for a separate
 biometric-approved call scope, then `pay task --service phone.call`. The local
