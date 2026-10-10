@@ -5,7 +5,7 @@
 
   // What to type in Claude Code or Codex; the plugin runs the commands itself.
   const steps = [
-    { title: 'Check readiness', body: 'After building the companion below, check that the local wallet and Touch ID are available. No payment yet.', ask: 'Check if my local Tempo wallet is ready. Do not sign or pay yet.' },
+    { title: 'Check readiness', body: 'After building the companion above, check that the local wallet and Touch ID are available. No payment yet.', ask: 'Check if my local Tempo wallet is ready. Do not sign or pay yet.' },
     { title: 'Set a budget', body: 'Review the service recipient, total limit, per-purchase limit and expiry in the local wallet. Touch ID approves the permission, not a payment.', ask: 'Set a Tempo image budget of 0.01 test PathUSD total and per purchase, expiring in one hour, for this assistant and the current Algoria image-service recipient.' },
     { title: 'Ask for an image', body: 'Your assistant gets an MPP quote. Review the prompt, recipient, exact price and fee bounds before Touch ID signs. Test tokens have no real value; generation uses a real provider.', ask: 'Generate one image of a sailboat at sunset using Tempo MPP, within that budget. Use testnet faucet tokens and show the exact payment for my Touch ID approval.' },
     { title: 'Recover or revoke', body: 'Resume the same saved task after an interruption. Revoke the local budget to stop future dispatches; this does not undo a submitted payment.', ask: 'Show my saved Tempo image task without making another payment, then revoke its local spending permission.' }
@@ -15,7 +15,7 @@
 <svelte:head>
   <title>How to use — Algoria</title>
   <meta name="description" content="Install Algoria in Claude Code or Codex, build the local macOS wallet and approve Tempo testnet MPP image payments with Touch ID." />
-  <link rel="canonical" href="{site.url}how-to-use" />
+  <link rel="canonical" href="{site.url}how-to-use/" />
 </svelte:head>
 
 <section class="wrap intro" aria-labelledby="page-title">
@@ -26,6 +26,11 @@
       Install the plugin in Claude Code or Codex and build the local wallet companion. Ask for an image,
       review the quote and approve with Touch ID. No bank transfer or external approval link.
     </p>
+    <nav class="setup-nav" aria-label="Setup steps">
+      <a href="#install">1. Install plugin</a>
+      <a href="#wallet">2. Build wallet</a>
+      <a href="#use">3. Try a prompt</a>
+    </nav>
     <ul class="needs" aria-label="Requirements">
       <li>Claude Code or Codex</li>
       <li>Node.js 22+</li>
@@ -37,7 +42,7 @@
   <InstallCard />
 </section>
 
-<section class="wrap setup" aria-labelledby="setup-title">
+<section class="wrap setup" id="wallet" aria-labelledby="setup-title">
   <div class="card setup-card">
     <p class="eyebrow">Developer preview</p>
     <h2 id="setup-title">Build the local wallet first.</h2>
@@ -109,6 +114,20 @@
     padding: 0;
     font: 12px var(--mono);
     color: var(--txt-sec);
+  }
+
+  .setup-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--txt-sec);
+  }
+
+  .setup-nav a {
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
 
   .needs li::before {

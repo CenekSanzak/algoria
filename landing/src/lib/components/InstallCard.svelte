@@ -16,9 +16,12 @@
         {
           marker: '1',
           title: 'Add the plugin in Claude Code',
-          snippets: [{ code: '/plugin marketplace add CenekSanzak/algoria\n/plugin install algoria@algoria-skills', label: 'Copy install commands' }]
+          snippets: [
+            { code: '/plugin marketplace add CenekSanzak/algoria', label: 'Copy marketplace command' },
+            { code: '/plugin install algoria@algoria-skills', label: 'Copy install command' }
+          ]
         },
-        { marker: '2', title: 'Ask', snippets: [firstPrompt] }
+        { marker: '2', title: 'Build the wallet below, restart Claude Code, then ask', snippets: [firstPrompt] }
       ]
     },
     {
@@ -28,9 +31,9 @@
         {
           marker: '1',
           title: 'Add the plugin from your terminal',
-          snippets: [{ code: 'codex plugin marketplace add CenekSanzak/algoria\ncodex plugin add algoria@algoria-skills', label: 'Copy install commands' }]
+          snippets: [{ code: 'npx algoria@latest install --agent codex', label: 'Copy install command' }]
         },
-        { marker: '2', title: 'Start a new Codex session and ask', snippets: [firstPrompt] }
+        { marker: '2', title: 'Build the wallet below, start a new Codex session, then ask', snippets: [firstPrompt] }
       ]
     },
     {
@@ -55,8 +58,9 @@
 
   function onKeydown(event: KeyboardEvent) {
     const step = ({ ArrowRight: 1, ArrowLeft: -1 } as Record<string, number>)[event.key];
-    if (!step) return;
-    selected = (selected + step + clients.length) % clients.length;
+    if (!step && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    selected = event.key === 'Home' ? 0 : event.key === 'End' ? clients.length - 1 : (selected + step + clients.length) % clients.length;
     tabs[selected]?.focus();
   }
 </script>
@@ -97,7 +101,7 @@
     </div>
   {/each}
 
-  <div class="foot"><span class="live-dot" aria-hidden="true"></span>Tempo testnet · native companion setup required</div>
+  <div class="foot"><span class="live-dot" aria-hidden="true"></span><a href="#wallet">Next: build the local wallet ↓</a></div>
 </div>
 
 <style>

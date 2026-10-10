@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
+
   type Variant = 'block' | 'ask' | 'line';
 
   let { code, label, variant = 'block' }: { code: string; label: string; variant?: Variant } = $props();
@@ -7,8 +9,10 @@
   let status = $state('');
   let codeEl: HTMLElement;
   let resetTimer: ReturnType<typeof setTimeout>;
+  onDestroy(() => clearTimeout(resetTimer));
 
   async function copy() {
+    copied = false;
     try {
       await navigator.clipboard.writeText(code);
       copied = true;
@@ -22,7 +26,10 @@
       status = 'Copy is unavailable. The text is selected; copy it manually.';
     }
     clearTimeout(resetTimer);
-    resetTimer = setTimeout(() => (copied = false), 1800);
+    resetTimer = setTimeout(() => {
+      copied = false;
+      status = '';
+    }, 5000);
   }
 </script>
 
@@ -34,13 +41,15 @@
     {:else}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
     {/if}
+    <span>{copied ? 'Copied' : 'Copy'}</span>
   </button>
-  <span class="sr-only" role="status" aria-live="polite">{status}</span>
+  <span class="copy-status" class:sr-only={copied} role="status" aria-live="polite">{status}</span>
 </div>
 
 <style>
   .code {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: flex-start;
     gap: 8px;
     padding: 4px 6px 4px 0;
@@ -82,11 +91,15 @@
 
   .copy {
     flex-shrink: 0;
-    width: 30px;
+    min-width: 64px;
     height: 30px;
     margin-top: 4px;
-    display: grid;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding-inline: 6px;
+    font-size: 11px;
     border: 1px solid transparent;
     border-radius: 8px;
     background: none;
@@ -112,5 +125,18 @@
   .copy svg {
     width: 14px;
     height: 14px;
+  }
+
+  .copy-status {
+    display: block;
+    grid-column: 1 / -1;
+    padding: 0 12px 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--txt-sec);
+  }
+
+  .copy-status:empty {
+    display: none;
   }
 </style>

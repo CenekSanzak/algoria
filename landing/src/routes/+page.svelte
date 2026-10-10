@@ -58,8 +58,8 @@
     </ul>
 
     <div class="actions">
-      <a class="btn primary" href="/how-to-use">Get started</a>
-      <a class="btn" href="/how-to-use#use">Example prompts</a>
+      <a class="btn primary" href="/how-to-use/#install">Get started</a>
+      <a class="btn" href="/how-to-use/#use">Example prompts</a>
     </div>
   </div>
 

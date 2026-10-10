@@ -27,7 +27,7 @@ pnpm install
 pnpm dev       # http://127.0.0.1:4173
 pnpm check     # svelte-check
 pnpm build     # prerenders to dist/
-pnpm test      # checks the built pages for Tempo copy and setup disclosures
+pnpm test      # checks built page copy, setup steps, links and anchors
 pnpm preview   # serves the built dist/
 ```
 
@@ -50,8 +50,10 @@ src/lib/components/
 static/                          favicon and Open Graph image
 ```
 
-The install commands in `InstallCard.svelte` mirror `agent-skills/README.md`; update both together when
-the marketplace name (`algoria-skills`) or CLI commands change. The npx tab shows
+The install commands in `InstallCard.svelte` use the marketplace and installer documented in
+`agent-skills/README.md`. Claude Code commands have separate copy buttons so each can be submitted
+on its own. Codex uses `npx algoria@latest install --agent codex`, which refreshes the marketplace
+before installation. Update both together when the marketplace name (`algoria-skills`) or installer changes. The npx tab shows
 read-only Tempo readiness/help commands for a terminal, not legacy wallet/top-up commands.
 The build instructions use the same native companion setup as
 `native/tempo-signing-proof/README.md`.
@@ -65,7 +67,12 @@ Import the repository in Vercel and set **Root Directory** to `landing`. The fra
 detected; leave the output directory empty. Node.js 22 comes from `engines` in `package.json`.
 
 On Vercel `svelte.config.js` passes no options to `adapter-static`, which switches it to zero-config
-mode: it writes `.vercel/output/` with clean URLs (`/how-to-use`) and immutable caching for `_app/`.
+mode: it writes `.vercel/output/` with directory URLs (`/how-to-use/`) and immutable caching for `_app/`.
+The layout sets `trailingSlash = 'always'`, so local/static exports include `how-to-use/index.html`
+instead of relying on a host to rewrite an extensionless URL to an HTML file. All navigation links
+remain visible on mobile. The setup guide links separately to plugin installation, the wallet build
+and example prompts. After a Vercel-mode build (`VERCEL=1 pnpm build`), `pnpm test:vercel` checks its
+generated routing configuration. CI runs both export modes.
 No website environment variables are needed. `site.url` in `src/lib/links.ts`
 points canonical and Open Graph URLs at `https://algoria-x.vercel.app/`.
 The local signing companion's environment variable belongs to the plugin host,

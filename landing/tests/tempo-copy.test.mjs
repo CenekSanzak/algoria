@@ -6,7 +6,7 @@ const root = new URL('../', import.meta.url);
 const page = (path) => readFile(new URL(`dist/${path}`, root), 'utf8');
 
 test('built pages describe Tempo testnet without legacy funding instructions', async () => {
-  for (const path of ['index.html', 'how-to-use.html']) {
+  for (const path of ['index.html', 'how-to-use/index.html']) {
     const html = await page(path);
     assert.match(html, /Tempo/);
     assert.match(html, /testnet/);
@@ -35,7 +35,7 @@ test('Tempo share preview is a locally bundled JPEG', async () => {
 });
 
 test('setup discloses native build and local-only spending permissions', async () => {
-  const html = await page('how-to-use.html');
+  const html = await page('how-to-use/index.html');
   assert.match(html, /ALGORIA_TEMPO_SIGNER_APP/);
   assert.match(html, /pay readiness --json/);
   assert.match(html, /npm ci --ignore-scripts/);

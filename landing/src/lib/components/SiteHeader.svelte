@@ -6,10 +6,10 @@
   <div class="wrap inner">
     <a class="brand" href="/" aria-label="Algoria home"><img src="/favicon.svg" alt="" width="22" height="22" />Algoria</a>
     <nav aria-label="Main navigation">
-      <a class="how" href="/#how">How it works</a>
-      <a class="how" href="/how-to-use">How to use</a>
+      <a href="/#how">How it works</a>
+      <a href="/how-to-use/">How to use</a>
       <a href={links.github} target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a class="cta" href="/how-to-use#install">Install</a>
+      <a class="cta" href="/how-to-use/#install">Install</a>
     </nav>
   </div>
 </header>
@@ -70,12 +70,18 @@
   }
 
   @media (max-width: 560px) {
-    nav {
-      gap: 18px;
+    .inner {
+      height: auto;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-block: 12px;
     }
 
-    .how {
-      display: none;
+    nav {
+      width: 100%;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
     }
   }
 </style>
