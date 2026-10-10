@@ -116,13 +116,58 @@ func biometricStatus() -> Bool {
     return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) && context.biometryType == .touchID
 }
 
+// Read IPC off the UI thread so cancellation and painting work during RPC waits.
+private final class WalletInput {
+    let lock = NSLock()
+    var result: Result<String, Error>?
+}
+func readJourneyRequest(_ journey: WalletJourneyController?) throws -> String {
+    guard let journey else { return try readRequest() }
+    let input = WalletInput()
+    DispatchQueue.global(qos: .userInitiated).async {
+        let result = Result { try readRequest() }
+        input.lock.lock(); input.result = result; input.lock.unlock()
+    }
+    let deadline = Date().addingTimeInterval(600)
+    while !journey.closed && Date() < deadline {
+        input.lock.lock(); let result = input.result; input.lock.unlock()
+        if let result { return try result.get() }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.03))
+    }
+    throw fail(journey.signed ? "STATUS_WINDOW_CLOSED" : "USER_CANCELLED")
+}
+
+var journey: WalletJourneyController?
 do {
     let arguments = Array(CommandLine.arguments.dropFirst())
     // Standalone design fixtures: no SDK, private key, funding or RPC access.
     if arguments == ["--ui-self-test"] {
         NSApplication.shared.setActivationPolicy(.prohibited)
         try WalletFundingController.selfTest()
+        try WalletJourneyController.selfTest()
         emit(try WalletReviewController.selfTest())
+        exit(0)
+    }
+    if arguments == ["--self-test-journey-input"] || arguments == ["--self-test-journey-cancel"] {
+        // UI/IPC fixtures only: this branch never loads the SDK or creates keys.
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        let fixture = WalletJourneyController(preview: true)
+        let cancellation = arguments == ["--self-test-journey-cancel"]
+        var uiTicked = false
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: false) { _ in
+            uiTicked = true
+            if cancellation { _ = fixture.windowShouldClose(fixture.window!) }
+        }
+        emit(["status": "journey-input-ready", "keyCreated": false])
+        do {
+            let line = try readJourneyRequest(fixture)
+            guard uiTicked, let object = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { throw fail("JOURNEY_UI_BLOCKED") }
+            try fixture.update(object)
+            emit(["status": "journey-input-passed", "stage": fixture.stage, "keyCreated": false, "signed": false])
+        } catch let error as ProofError where cancellation && error.code == "USER_CANCELLED" {
+            emit(["status": "journey-cancel-passed", "keyCreated": false, "signed": false])
+        }
+        timer.invalidate(); fixture.window?.close()
         exit(0)
     }
     if arguments == ["--preview", "funding"] {
@@ -147,7 +192,7 @@ do {
         exit(0)
     }
     if arguments == ["--status"] {
-        emit(["status": "readiness", "touchIDAvailable": biometricStatus(), "keyCreated": false, "permissionVersion": 1, "fundingVersion": 1])
+        emit(["status": "readiness", "touchIDAvailable": biometricStatus(), "keyCreated": false, "permissionVersion": 1, "fundingVersion": 1, "journeyVersion": 1])
         exit(0)
     }
     if arguments == ["--approve-permission"] || arguments == ["--self-test-permission"] {
@@ -179,7 +224,8 @@ do {
     let selfTestRequest = arguments == ["--self-test-request"]
     let selfTestFunding = arguments == ["--self-test-funding-request"]
     let selfTest = arguments == ["--self-test"] || selfTestRequest || selfTestFunding
-    guard selfTest || arguments.isEmpty else { throw fail("UNKNOWN_ARGUMENT") }
+    let unifiedJourney = arguments == ["--journey"]
+    guard selfTest || arguments.isEmpty || unifiedJourney else { throw fail("UNKNOWN_ARGUMENT") }
     if !selfTest && !biometricStatus() { throw fail("TOUCH_ID_UNAVAILABLE") }
     let builder = try TransactionBuilder()
     if !selfTest {
@@ -187,6 +233,7 @@ do {
         NSApplication.shared.activate(ignoringOtherApps: true)
         // Creating an ephemeral key conveys no signing authority. Disclose its
         // lifetime in the single purchase review rather than a second alert.
+        if unifiedJourney { journey = WalletJourneyController() }
     }
     let key = try makeKey(softwareTestOnly: selfTest)
     let publicKey = try publicHex(key)
@@ -202,19 +249,25 @@ do {
     } else if selfTest {
         request = "{\"version\":1,\"chainId\":42431,\"nonce\":\"0\",\"maxFeePerGas\":\"20000000000\",\"validBefore\":\(Int(Date().timeIntervalSince1970) + 120)}"
     } else {
-        emit(["status": "ready", "publicKey": publicKey, "disposable": true, "fundingVersion": 1])
-        request = try readRequest()
+        emit(["status": "ready", "publicKey": publicKey, "disposable": true, "fundingVersion": 1, "journeyVersion": 1])
+        request = try readJourneyRequest(journey)
     }
     // The parent retains this process/key while the person supplies TEST tokens.
     // A funding check is never a purchase approval and never calls sign().
     while !selfTest {
         let object = try JSONSerialization.jsonObject(with: Data(request.utf8)) as? [String: Any]
+        if let object, object["type"] as? String == "wallet-progress", let journey {
+            try journey.update(object)
+            request = try readJourneyRequest(journey)
+            continue
+        }
         guard object?["type"] as? String == "funding-required" else { break }
         let json = try builder.call("prepareFundingJSON", [request, publicKey, Int(Date().timeIntervalSince1970)])
         guard let summary = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { throw fail("INVALID_FUNDING_REVIEW") }
-        guard WalletFundingController(summary: summary).runReview() else { throw fail("FUNDING_CANCELLED_OR_EXPIRED") }
+        guard WalletFundingController(summary: summary, journeyWindow: journey?.window).runReview() else { throw fail("FUNDING_CANCELLED_OR_EXPIRED") }
+        journey?.show("preparing")
         emit(["status": "funding-checked", "signed": false])
-        request = try readRequest()
+        request = try readJourneyRequest(journey)
     }
     let prepared = try builder.prepare(request, publicKey)
     if !selfTest, let object = try JSONSerialization.jsonObject(with: Data(request.utf8)) as? [String: Any],
@@ -222,21 +275,45 @@ do {
     guard let digest = prepared["digest"] as? String,
           let summary = prepared["summary"] as? [String: Any] else { throw fail("INVALID_SDK_RESULT") }
     if !selfTest {
-        let review = WalletReviewController(summary: summary, kind: .purchase)
+        journey?.attach(summary)
+        let review = WalletReviewController(summary: summary, kind: .purchase, journeyWindow: journey?.window)
         guard review.runReview() else { throw fail("USER_CANCELLED") }
+        journey?.show("authenticating")
     }
     // Revalidate expiry before key access and again after the biometric prompt.
     guard try builder.prepare(request, publicKey)["digest"] as? String == digest else { throw fail("REQUEST_CHANGED") }
+    guard journey?.closed != true else { throw fail("USER_CANCELLED") }
     let der = try sign(key, digest: digest)
+    // If a close event was processed during system authentication, never return
+    // the signature. Once "signed" is emitted, closing is presentation-only.
+    guard journey?.closed != true else { throw fail("USER_CANCELLED") }
     let result = try builder.call("completeJSON", [request, publicKey, der, Int(Date().timeIntervalSince1970)])
     if selfTest {
         emit(["status": "self-test-passed", "softwareTestKey": true,
               "provesTouchID": false, "provesTestnetSettlement": false])
     } else {
         guard let output = try JSONSerialization.jsonObject(with: Data(result.utf8)) as? [String: Any] else { throw fail("INVALID_SDK_RESULT") }
+        journey?.markSigned()
         emit(["status": "signed", "result": output])
+        // The signing phase is over. Only bounded presentation messages are
+        // accepted now; no path in this loop can call sign() a second time.
+        if let journey {
+            while !journey.closed {
+                do {
+                    let line = try readJourneyRequest(journey)
+                    guard let object = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { throw fail("INVALID_WALLET_PROGRESS") }
+                    if object.count == 1, object["type"] as? String == "wallet-finish" { break }
+                    try journey.update(object)
+                } catch {
+                    if !journey.closed { journey.show("needs-attention") }
+                    break
+                }
+            }
+            journey.finish()
+        }
     }
 } catch {
+    journey?.window?.orderOut(nil)
     emit(["status": "error", "code": (error as? ProofError)?.code ?? "PROOF_FAILED"])
     exit(1)
 }

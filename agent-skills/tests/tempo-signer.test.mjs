@@ -4,9 +4,13 @@ import { PassThrough } from 'node:stream';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { signedPermission } from './helpers/permission.mjs';
 import { TEMPO_TOKEN } from '../plugins/algoria/lib/services/tempo-links.mjs';
+import * as P256 from 'ox/P256';
+import * as PublicKey from 'ox/PublicKey';
+import * as Signature from 'ox/Signature';
+import { completePurchaseJSON } from '../../native/tempo-signing-proof/src/purchase.mjs';
 
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal(), spawn: vi.fn(), execFileSync: vi.fn(),
@@ -22,13 +26,14 @@ const originalHome = process.env.ALGORIA_HOME, originalApp = process.env.ALGORIA
 /** @type {any} */ let rpc;
 /** @type {any} */ let job;
 /** @type {any[]} */ let inputs;
-let cancelFunding = false;
+let cancelFunding = false, approvePurchase = false;
+const fixtureKey = /** @type {`0x${string}`} */ (`0x${'1'.padStart(64, '0')}`);
 
 beforeEach(() => {
   vi.stubGlobal('process', new Proxy(process, { get(target, key) { return key === 'platform' ? 'darwin' : Reflect.get(target, key); } }));
   process.env.ALGORIA_HOME = home;
   process.env.ALGORIA_TEMPO_SIGNER_APP = '/tmp/offline-fixture.app';
-  inputs = []; cancelFunding = false;
+  inputs = []; cancelFunding = false; approvePurchase = false;
   const now = Math.floor(Date.now() / 1000);
   const recipient = '0x1111111111111111111111111111111111111111';
   const id = randomUUID(), resource = 'https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate';
@@ -49,24 +54,32 @@ beforeEach(() => {
     waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: 'success' }),
     getTransactionCount: vi.fn().mockResolvedValue(0), sendRawTransaction: vi.fn() };
   vi.spyOn(sdkLoader, 'loadTempoSdk').mockResolvedValue({ ...sdk, createPublicClient: () => rpc });
-  const publicKey = '0x' + generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).publicKey
-    .export({ type: 'spki', format: 'der' }).subarray(-65).toString('hex');
+  const publicKey = PublicKey.toHex(P256.getPublicKey({ privateKey: fixtureKey }));
   child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.kill = vi.fn();
+  child.unref = vi.fn();
+  rpc.sendRawTransaction.mockImplementation(async (/** @type {any} */ data) => sdk.keccak256(data.serializedTransaction));
   let buffer = '';
   child.stdin.on('data', (/** @type {Buffer} */ data) => {
     buffer += data.toString();
     while (buffer.includes('\n')) {
       const end = buffer.indexOf('\n');
       const message = JSON.parse(buffer.slice(0, end)); buffer = buffer.slice(end + 1); inputs.push(message);
+      if (message.type === 'wallet-progress') continue;
+      if (message.type === 'wallet-finish') { queueMicrotask(() => child.emit('exit', 0)); continue; }
       if (message.type === 'funding-required') {
         // No real window/key/signature. Simulate the user checking or cancelling.
         child.stdout.write(JSON.stringify(cancelFunding ? { status: 'error', code: 'FUNDING_CANCELLED_OR_EXPIRED' }
           : { status: 'funding-checked', signed: false }) + '\n');
+      } else if (approvePurchase) {
+        const prepared = sdk.preparePurchase(message, publicKey);
+        const der = Signature.toDerHex(P256.sign({ privateKey: fixtureKey, payload: prepared.digest }));
+        const result = JSON.parse(completePurchaseJSON(JSON.stringify(message), publicKey, der, Math.floor(Date.now() / 1000)));
+        child.stdout.write(JSON.stringify({ status: 'signed', result }) + '\n');
       } else child.stdout.write('{"status":"error","code":"USER_CANCELLED"}\n');
     }
   });
   vi.mocked(spawn).mockImplementation(() => {
-    queueMicrotask(() => child.stdout.write(JSON.stringify({ status: 'ready', publicKey, fundingVersion: 1 }) + '\n'));
+    queueMicrotask(() => child.stdout.write(JSON.stringify({ status: 'ready', publicKey, fundingVersion: 1, journeyVersion: 1 }) + '\n'));
     return child;
   });
 });
@@ -107,5 +120,48 @@ describe('native funding bridge (offline process and RPC fixtures)', () => {
     rpc.readContract.mockReset().mockRejectedValue(new Error('RPC unavailable'));
     await expect(signAndPayTempo(job, {}, vi.fn())).rejects.toMatchObject({ code: 'balance-unavailable' });
     expect(inputs).toHaveLength(0); expect(rpc.request).not.toHaveBeenCalled(); expect(rpc.sendRawTransaction).not.toHaveBeenCalled();
+  });
+  it('keeps one native session through signing and verified settlement, then accepts read-only progress', async () => {
+    approvePurchase = true;
+    /** @type {any} */ let wallet;
+    const save = vi.fn();
+    const result = await signAndPayTempo(job, { onWalletSession: session => { wallet = session; } }, save);
+    expect(spawn).toHaveBeenCalledWith(expect.any(String), ['--journey'], expect.any(Object));
+    expect(save).toHaveBeenCalledTimes(1); expect(rpc.sendRawTransaction).toHaveBeenCalledTimes(1);
+    expect(child.stdin.writableEnded).toBe(false); expect(child.kill).not.toHaveBeenCalled();
+    expect(inputs.filter(input => input.type === 'wallet-progress').map(input => input.stage)).toEqual(['funding', 'confirming-payment', 'starting']);
+    wallet.update({ id: job.id, journey: { stage: 'generating' } });
+    wallet.finish({ id: job.id, journey: { stage: 'ready' }, transactionUrl: `https://explore.testnet.tempo.xyz/tx/${result.transaction}` });
+    expect(inputs.at(-1).type).toBe('wallet-finish'); expect(child.stdin.writableEnded).toBe(true);
+    expect(rpc.sendRawTransaction).toHaveBeenCalledTimes(1);
+  });
+  it('continues settlement when the read-only window is closed after signing', async () => {
+    approvePurchase = true;
+    /** @type {any} */ let wallet;
+    rpc.sendRawTransaction.mockImplementation(async (/** @type {any} */ data) => {
+      child.emit('exit', 0); return sdk.keccak256(data.serializedTransaction);
+    });
+    const result = await signAndPayTempo(job, { onWalletSession: session => { wallet = session; } }, vi.fn());
+    expect(result.transaction).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(() => wallet.finish({ id: job.id, journey: { stage: 'ready' } })).not.toThrow();
+    expect(rpc.sendRawTransaction).toHaveBeenCalledTimes(1);
+  });
+  it('stops before sending a purchase when the preparing window is closed', async () => {
+    rpc.readContract.mockReset().mockImplementation(async () => { child.emit('exit', 0); return 40000n; });
+    const save = vi.fn();
+    await expect(signAndPayTempo(job, { onWalletSession: vi.fn() }, save)).rejects.toThrow('cancelled');
+    expect(inputs.some(input => input.version === 2)).toBe(false);
+    expect(save).not.toHaveBeenCalled(); expect(rpc.sendRawTransaction).not.toHaveBeenCalled();
+  });
+  it('retains the presentation session on an uncertain broadcast for same-task recovery', async () => {
+    approvePurchase = true;
+    /** @type {any} */ let wallet;
+    rpc.sendRawTransaction.mockRejectedValue(new Error('lost RPC reply'));
+    const save = vi.fn();
+    await expect(signAndPayTempo(job, { onWalletSession: session => { wallet = session; } }, save)).rejects.toThrow('lost RPC');
+    expect(save).toHaveBeenCalledTimes(1);
+    wallet.finish({ id: job.id, requiresAttention: true });
+    expect(inputs.at(-2)).toEqual({ type: 'wallet-progress', stage: 'needs-attention' });
+    expect(rpc.sendRawTransaction).toHaveBeenCalledTimes(1);
   });
 });

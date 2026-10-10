@@ -24,6 +24,8 @@ export async function tempoTask(options) {
     if (saved && (saved.protocol !== 'mpp' || saved.service !== service)) throw new Error('Saved task service changed; recover the original Tempo task');
     if (saved && ((input && JSON.stringify(input) !== saved.body) || (options.budget && options.budget !== saved.budget))) throw new Error('Saved task input/budget changed; recover the original task');
     if (!saved && (!input || !options.budget)) throw new Error('A new Tempo task requires input and an approved named budget');
+    /** @type {ReturnType<import('./tempo-wallet-session.mjs').walletSession> | undefined} */
+    let wallet;
     try {
       let job = saved ? (saved.phase === 'prepared' && !saved.dispatchedAt
         ? await quoteTempo(service, JSON.parse(saved.body), saved.budget, id)
@@ -38,12 +40,15 @@ export async function tempoTask(options) {
           message: 'This budget needs a Touch ID-approved permission for this exact service and recipient before spending. Keep this same task; review its scope and expiry.' };
         if (needsSigner && !readiness.ready) return { ...job, readiness, interrupted: false,
           nextAction: readiness.nextAction, paymentAttempted: false };
-        job = await runJob(id, { approve: true, fundTestnet: options.fundTestnet });
+        job = await runJob(id, { approve: true, fundTestnet: options.fundTestnet,
+          onWalletSession: session => { wallet = session; } });
       } else if (saved) {
         // Only the same identity may repair a lost initial unpaid quote POST.
         job = await statusJob(id);
       }
-      if (options.wait && ['settling', 'submitting', 'queued', 'running', 'saving', 'result-ready'].includes(job.status)) job = await statusJob(id, { wait: true, timeout: options.timeout });
+      wallet?.update(job);
+      if ((options.wait ?? options.approve) && ['settling', 'submitting', 'queued', 'running', 'saving', 'result-ready'].includes(job.status)) job = await statusJob(id, { wait: true, timeout: options.timeout,
+        onUpdate: update => wallet?.update(update) });
       return { ...job, readiness, interrupted: false, spending: await getBudget(/** @type {string} */ (job.budget)), nextAction: job.journey.nextAction };
     } catch (error) {
       // Recoverable failures still return the task identity; never leak HTTP/IPC data.
@@ -55,6 +60,11 @@ export async function tempoTask(options) {
         message: 'Wallet funding stopped before signing. Retry this same task when ready. Only send test PathUSD to the address shown in the currently open wallet; a closed temporary wallet cannot receive a usable top-up.' };
       return { ...job, interrupted: true, nextAction: 'resume-same-task',
         message: job.requiresAttention ? 'This task needs reconciliation. Keep its receipt and reserved budget; do not pay again.' : 'The task could not finish this step. Resume this same task; no automatic replacement purchase was created.' };
+    } finally {
+      if (wallet) {
+        try { wallet.finish(publicJob(await readJob(id))); }
+        catch { wallet.finish({ id, requiresAttention: true }); }
+      }
     }
   });
 }

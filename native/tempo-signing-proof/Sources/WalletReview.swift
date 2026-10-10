@@ -122,13 +122,15 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     private var cancelButton: NSButton!
     private var expiryLabel: NSTextField!
     private var expiryTimer: Timer?
+    private let sharedWindow: Bool
 
-    init(summary: [String: Any], kind: WalletReviewKind, preview: Bool = false) {
+    init(summary: [String: Any], kind: WalletReviewKind, preview: Bool = false, journeyWindow: NSWindow? = nil) {
         self.summary = summary; self.kind = kind; self.preview = preview
+        self.sharedWindow = journeyWindow != nil
         let available = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1000, height: 900)
         let size = NSSize(width: min(640, available.width - 32),
                           height: min(780, available.height - 48))
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+        let window = journeyWindow ?? NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = preview ? "Algoria Wallet — Design preview" : "Algoria Wallet"
         window.titlebarAppearsTransparent = true
@@ -139,7 +141,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         build()
-        window.center()
+        if !sharedWindow { window.center() }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
 
@@ -179,7 +181,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         }
         walletPin(walletStack(heroViews, spacing: 6), to: hero, inset: 20)
 
-        pageLabels = kind == .permission ? ["Overview", "Scope", "Limits & safety"] : ["Review", "Wallet", "Permission", "Activity"]
+        pageLabels = kind == .permission ? ["Overview", "Scope", "Limits & safety"] : ["Review", "Details", "Permission", "Activity"]
         tabs = pageLabels.enumerated().map { index, label in
             let tab = WalletButton(label, style: .tab, target: self, action: #selector(changePage(_:)))
             tab.tag = index
@@ -279,18 +281,23 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         if let call {
             requestViews.append(walletText("\(value("language", from: call) == "tr" ? "Turkish" : "English") · calling on behalf of \(value("on_behalf_of", from: call))", size: 12, color: WalletDesign.secondary))
         }
-        requestViews.append(walletRow("Payment recipient · full address", value(summary["recipient"] == nil ? "address" : "recipient"), mono: true))
         if call != nil {
             requestViews.append(walletText("This will call a real person. Test tokens do not make the call simulated. Once dialed, closing this wallet cannot cancel the call.", size: 12, color: WalletDesign.warning))
         }
+        let gas = UInt64(value("gasLimit")) ?? 0
+        let fee = UInt64(value("maxFeePerGas")) ?? 0
+        let maximumFee = (gas * fee + 999_999_999_999) / 1_000_000_000_000
+        let feeText = "\(maximumFee / 1_000_000).\(String(format: "%06llu", maximumFee % 1_000_000)) test PathUSD"
         let review = scrollPage([
             walletCard(call != nil ? "Real call · review before approving" : "Request", requestViews),
-            walletCard("Payment details", [walletRow("Network", value("network")),
-                                           walletRow("Valid until", walletDate(value("expires")))]),
+            walletCard("Payment", [walletRow("Maximum network fee · separate from service price", feeText),
+                                    walletText("Tempo testnet · temporary wallet · test tokens only", size: 12, color: WalletDesign.secondary)]),
             walletCard("What approval means", [walletText("Touch ID signs only this exact transaction. The plugin may then submit it. Cancel now to return no signed payment.", size: 12),
                                                walletText("A submitted payment cannot be undone by closing this window.", size: 12, color: WalletDesign.muted)]),
         ])
         let wallet = scrollPage([
+            walletCard("Transaction details", [walletRow("Payment recipient · full address", value(summary["recipient"] == nil ? "address" : "recipient"), mono: true),
+                walletRow("Network", value("network")), walletRow("Valid until", walletDate(value("expires")))]),
             walletCard("Temporary testnet wallet", [walletText("A disposable Secure Enclave key is used for this request. It is discarded when this process exits. Your existing wallet is never opened.", size: 13),
                                                     walletRow("Account · full address", value("address"), mono: true),
                                                     walletText("Never send real funds here. Any remaining test tokens are abandoned.", size: 12, color: WalletDesign.muted)]),
@@ -369,7 +376,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         self.approved = approved
         expiryTimer?.invalidate(); expiryTimer = nil
         if modalActive { NSApplication.shared.stopModal(withCode: approved ? .OK : .cancel) }
-        window?.orderOut(nil)
+        if !sharedWindow { window?.orderOut(nil) }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool { finish(approved: false); return true }
     func runReview() -> Bool {
@@ -384,7 +391,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         NSApplication.shared.runModal(for: window)
         modalActive = false
         expiryTimer?.invalidate(); expiryTimer = nil
-        window.orderOut(nil)
+        if !sharedWindow { window.orderOut(nil) }
         return approved
     }
 
@@ -430,6 +437,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
                 controller.window?.close()
             }
             paths.append(try WalletFundingController.renderPreview(to: directory, dark: dark))
+            paths.append(contentsOf: try WalletJourneyController.renderPreview(to: directory, dark: dark))
         }
         return paths
     }
@@ -502,11 +510,13 @@ final class WalletFundingController: NSWindowController, NSWindowDelegate {
     private var checkButton: NSButton!
     private var cancelButton: NSButton!
     private var expiryLabel: NSTextField!
-    init(summary: [String: Any], preview: Bool = false) {
+    private let sharedWindow: Bool
+    init(summary: [String: Any], preview: Bool = false, journeyWindow: NSWindow? = nil) {
         self.summary = summary; self.preview = preview
+        self.sharedWindow = journeyWindow != nil
         let available = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1000, height: 900)
         let size = NSSize(width: min(620, available.width - 32), height: min(740, available.height - 48))
-        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+        let window = journeyWindow ?? NSWindow(contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = preview ? "Algoria Wallet — Funding preview" : "Algoria Wallet — Test tokens"
         window.titlebarAppearsTransparent = true
@@ -549,7 +559,7 @@ final class WalletFundingController: NSWindowController, NSWindowDelegate {
         walletPin(walletStack([header, hero, scroll, footer], spacing: 16), to: window.contentView!, inset: 24)
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
         window.initialFirstResponder = cancelButton
-        window.center()
+        if !sharedWindow { window.center() }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
     private var expired: Bool { (walletParseDate(summary["expires"] as? String ?? "") ?? .distantPast) <= Date() }
@@ -558,7 +568,7 @@ final class WalletFundingController: NSWindowController, NSWindowDelegate {
     private func finish(_ checked: Bool) {
         self.checked = checked
         if modalActive { NSApplication.shared.stopModal(withCode: checked ? .OK : .cancel) }
-        window?.orderOut(nil)
+        if !sharedWindow { window?.orderOut(nil) }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool { finish(false); return true }
     func runReview() -> Bool {
@@ -575,7 +585,7 @@ final class WalletFundingController: NSWindowController, NSWindowDelegate {
         NSApplication.shared.runModal(for: window)
         modalActive = false
         timer.invalidate()
-        window.orderOut(nil)
+        if !sharedWindow { window.orderOut(nil) }
         return !preview && checked && !expired
     }
     static func fixture() -> [String: Any] {
@@ -620,5 +630,175 @@ final class WalletFundingController: NSWindowController, NSWindowDelegate {
         try png.write(to: path, options: .atomic)
         controller.window?.close()
         return path.path
+    }
+}
+
+// One visible window for preparation, exact native reviews and read-only status.
+// Status messages cannot grant permission, construct a payment or sign again.
+final class WalletJourneyController: NSWindowController, NSWindowDelegate {
+    private(set) var closed = false
+    private(set) var signed = false
+    private(set) var stage = "preparing"
+    private(set) var transaction: String?
+    private var summary: [String: Any] = [:]
+    private var closeButton: NSButton!
+    private var explorerButton: NSButton!
+    private let preview: Bool
+    private let contentSize: NSSize
+    private let stages: [String: (String, String, Int)] = [
+        "preparing": ("Preparing your payment", "Checking the temporary testnet wallet. Nothing signed yet.", 0),
+        "funding": ("Preparing your payment", "Adding test tokens automatically. No real funds.", 0),
+        "authenticating": ("Approve with Touch ID", "Authenticate to sign only the purchase you just reviewed.", 1),
+        "confirming-payment": ("Confirming your payment", "Following the saved transaction. No second payment will be signed.", 2),
+        "paid": ("Payment confirmed", "Continue this saved task in your assistant. No additional payment.", 2),
+        "starting": ("Starting your service", "Your approved request is being submitted.", 3),
+        "queued": ("Your request is queued", "Waiting for the service. Follow this same task.", 3),
+        "generating": ("Creating your image", "Your assistant will show the result in your conversation.", 3),
+        "calling": ("Your call is in progress", "This is a real call. Closing this window will not end it.", 3),
+        "saving": ("Preparing your result", "Saving the result for delivery in your conversation.", 3),
+        "preparing-delivery": ("Preparing your result", "Refreshing access to your saved result.", 3),
+        "ready": ("Your result is ready", "Return to your assistant to see the image or call summary and receipt.", 4),
+        "failed": ("The service could not finish", "Check the saved task and receipt in your assistant. No automatic retry or refund.", 3),
+        "needs-attention": ("Your task is saved", "Payment or execution needs verification. Resume the same task; do not pay again.", 2),
+        "paused": ("Continue in your assistant", "Your task is saved. Resume this same task to check its progress.", 3),
+    ]
+
+    init(preview: Bool = false) {
+        self.preview = preview
+        let available = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1000, height: 900)
+        let size = NSSize(width: min(640, available.width - 32), height: min(780, available.height - 48))
+        contentSize = size
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = preview ? "Algoria Wallet — Journey preview" : "Algoria Wallet"
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = WalletDesign.background
+        window.isReleasedWhenClosed = false
+        NSApplication.shared.applicationIconImage = WalletDesign.logo
+        super.init(window: window)
+        window.center()
+        show("preparing")
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) unavailable") }
+    func attach(_ summary: [String: Any]) { self.summary = summary }
+    func markSigned() { signed = true; show("confirming-payment") }
+
+    func show(_ stage: String) {
+        guard !closed, let model = stages[stage], let window else { return }
+        self.stage = stage
+        window.delegate = self
+        let root = WalletBackground(frame: NSRect(origin: .zero, size: contentSize))
+        root.autoresizingMask = [.width, .height]
+        window.contentView = root
+        window.setContentSize(contentSize)
+        let header = walletStack([WalletBrandMark(), walletText("Algoria", size: 19, weight: .semibold), NSView(), WalletBadge("TEMPO · TESTNET")], horizontal: true)
+        let terminal = ["ready", "failed", "needs-attention", "paused", "paid"].contains(stage)
+        let spinner = NSProgressIndicator()
+        spinner.style = .spinning; spinner.controlSize = .regular
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([spinner.widthAnchor.constraint(equalToConstant: 32), spinner.heightAnchor.constraint(equalToConstant: 32)])
+        if !terminal { spinner.startAnimation(nil) }
+        let indicator: NSView = terminal ? walletIcon(stage == "ready" ? "checkmark.circle" : "info.circle", description: model.0, size: 36) : spinner
+        // Keep the fixed-size icon OUT of the width-stretched vertical stack.
+        // Otherwise its width constraint shrinks the entire window in AppKit.
+        let indicatorHost = NSView()
+        indicatorHost.addSubview(indicator)
+        NSLayoutConstraint.activate([indicatorHost.heightAnchor.constraint(equalToConstant: 44),
+            indicator.leadingAnchor.constraint(equalTo: indicatorHost.leadingAnchor),
+            indicator.centerYAnchor.constraint(equalTo: indicatorHost.centerYAnchor)])
+        var hero: [NSView] = [indicatorHost, walletText(model.0, size: 25, weight: .medium), walletText(model.1, size: 13, color: WalletDesign.secondary)]
+        if let amount = summary["amount"] as? String, let atomic = UInt64(amount) {
+            let price = "\(atomic / 1_000_000).\(String(format: "%06llu", atomic % 1_000_000))"
+            hero.append(walletText("\(price) test PathUSD · service price", size: 13, weight: .medium, mono: true))
+        }
+        let steps = walletStack(["Prepare", "Touch ID", "Payment", "Result"].enumerated().map { index, label in
+            walletText("\(index < model.2 ? "✓" : "\(index + 1)")  \(label)", size: 11, weight: index == model.2 ? .medium : .regular,
+                       color: index <= model.2 ? WalletDesign.text : WalletDesign.muted)
+        }, spacing: 8, horizontal: true)
+        steps.distribution = .fillEqually
+        closeButton = WalletButton(signed ? "Return to assistant" : "Cancel", style: .secondary, target: self, action: #selector(closeJourney(_:)))
+        closeButton.keyEquivalent = "\u{1b}"
+        closeButton.setAccessibilityHelp(signed ? "Closes this status window. Does not cancel a submitted payment or call." : "Stops before purchase signing.")
+        explorerButton = WalletButton("View transaction", style: .secondary, target: self, action: #selector(openExplorer(_:)))
+        explorerButton.isHidden = transaction == nil
+        explorerButton.isEnabled = !preview
+        let footer = walletStack([walletText(preview ? "Synthetic preview · no keys, signing or network" : signed ? "Task saved · closing does not cancel a submitted payment or call" : "Temporary wallet · test tokens only · nothing signed yet", size: 11, color: WalletDesign.muted),
+            walletStack([explorerButton, closeButton], spacing: 10, horizontal: true)], spacing: 12)
+        let space = NSView()
+        walletPin(walletStack([header, steps, walletCard("YOUR REQUEST", hero), space, footer], spacing: 22), to: root, inset: 24)
+        space.setContentHuggingPriority(.defaultLow, for: .vertical)
+        window.initialFirstResponder = closeButton
+        if !preview && !window.isVisible { window.makeKeyAndOrderFront(nil) }
+    }
+
+    // Only bounded, fixed presentation fields cross the post-signing pipe.
+    func update(_ object: [String: Any]) throws {
+        guard Set(object.keys).isSubset(of: ["type", "stage", "transaction"]),
+              object["type"] as? String == "wallet-progress",
+              let next = object["stage"] as? String, stages[next] != nil,
+              signed || ["preparing", "funding"].contains(next) else { throw fail("INVALID_WALLET_PROGRESS") }
+        if let hash = object["transaction"] as? String {
+            guard signed, hash.range(of: "^0x[0-9a-fA-F]{64}$", options: .regularExpression) != nil,
+                  transaction == nil || transaction == hash else { throw fail("INVALID_WALLET_RECEIPT") }
+            transaction = hash
+        } else if object["transaction"] != nil { throw fail("INVALID_WALLET_RECEIPT") }
+        show(next)
+    }
+    @objc private func closeJourney(_ sender: Any?) { closed = true; window?.orderOut(nil) }
+    @objc private func openExplorer(_ sender: Any?) {
+        guard !preview, let transaction, let url = URL(string: "https://explore.testnet.tempo.xyz/tx/\(transaction)") else { return }
+        NSWorkspace.shared.open(url)
+    }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { closeJourney(nil); return true }
+    func finish() {
+        let deadline = Date().addingTimeInterval(8)
+        while !closed && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+        window?.orderOut(nil)
+    }
+    static func selfTest() throws {
+        let controller = WalletJourneyController(preview: true)
+        let window = controller.window!
+        controller.show("funding")
+        guard controller.window === window, !controller.signed, controller.explorerButton.isHidden,
+              controller.closeButton.keyEquivalent == "\u{1b}" else { throw fail("JOURNEY_SAFETY_FAILED") }
+        do { try controller.update(["type": "wallet-progress", "stage": "ready"]); throw fail("JOURNEY_UNSIGNED_SUCCESS") }
+        catch let error as ProofError where error.code == "INVALID_WALLET_PROGRESS" {}
+        controller.markSigned()
+        let hash = "0x" + String(repeating: "a", count: 64)
+        try controller.update(["type": "wallet-progress", "stage": "generating", "transaction": hash])
+        try controller.update(["type": "wallet-progress", "stage": "ready", "transaction": hash])
+        guard controller.window === window, controller.stage == "ready" else { throw fail("JOURNEY_WINDOW_CHANGED") }
+        for size in [NSSize(width: 640, height: 780), NSSize(width: 560, height: 620)] {
+            window.setContentSize(size); window.contentView?.layoutSubtreeIfNeeded()
+            guard let root = window.contentView, abs(root.bounds.width - size.width) < 1,
+                  root.bounds.contains(controller.closeButton.convert(controller.closeButton.bounds, to: root)),
+                  root.bounds.contains(controller.explorerButton.convert(controller.explorerButton.bounds, to: root)) else { throw fail("JOURNEY_LAYOUT_FAILED") }
+        }
+        do { try controller.update(["type": "wallet-progress", "stage": "ready", "transaction": "https://evil.invalid"]); throw fail("JOURNEY_INVALID_HASH") }
+        catch let error as ProofError where error.code == "INVALID_WALLET_RECEIPT" {}
+        controller.closeJourney(nil)
+        guard controller.closed, controller.signed else { throw fail("JOURNEY_CLOSE_FAILED") }
+        window.close()
+    }
+    static func renderPreview(to directory: String, dark: Bool) throws -> [String] {
+        let controller = WalletJourneyController(preview: true)
+        controller.attach(WalletReviewController.fixture(.purchase))
+        controller.window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        var paths: [String] = []
+        for stage in ["preparing", "confirming-payment", "generating", "ready", "needs-attention"] {
+            if stage != "preparing" {
+                controller.markSigned()
+                try controller.update(["type": "wallet-progress", "stage": stage, "transaction": "0x" + String(repeating: "a", count: 64)])
+            }
+            controller.show(stage)
+            guard let view = controller.window?.contentView else { throw fail("PREVIEW_RENDER_FAILED") }
+            view.layoutSubtreeIfNeeded()
+            guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw fail("PREVIEW_RENDER_FAILED") }
+            view.effectiveAppearance.performAsCurrentDrawingAppearance { view.cacheDisplay(in: view.bounds, to: bitmap) }
+            guard let png = bitmap.representation(using: .png, properties: [:]) else { throw fail("PREVIEW_RENDER_FAILED") }
+            let path = URL(fileURLWithPath: directory).appendingPathComponent("journey-\(stage)-\(dark ? "dark" : "light").png")
+            try png.write(to: path, options: .atomic); paths.append(path.path)
+        }
+        controller.window?.close()
+        return paths
     }
 }

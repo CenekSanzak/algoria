@@ -6,6 +6,58 @@ Stellar-only. Read live service metadata for the exact price and recipient.
 Use the absolute `PAY` helper resolved in the parent
 skill. Do not run Stellar top-up for this route.
 
+## Short conversation flow
+
+For an exact request within an already authorized service-scoped budget, say
+briefly that the local wallet will open for Touch ID, then use one `task` call
+with `--approve`. It waits for completion by default (bounded by `--timeout`);
+`--no-wait` explicitly opts out. Do not ask for an extra chat confirmation,
+faucet consent or approval link. If the request, price ceiling, contact/call
+details or budget are not authorized, clarify only those missing choices.
+Native Touch ID and host tool permissions are still required where applicable.
+
+The same native window now handles preparation, funding fallback, exact review,
+Touch ID, payment confirmation and service progress. Use `task`, not separate
+`quote`/`run` invocations, for this unified journey. It is a local macOS window,
+not a panel embedded in Claude or Codex. Keep technical tool output out of the
+conversation. Don't narrate every polling tick; share a meaningful delay or
+required action only. Do not invent percentages or promise completion times.
+
+When the task finishes, show the verified media first (or the call outcome),
+then one short payment line: `Paid 0.01 test PathUSD · [View transaction](...)`
+using the actual confirmed price and `payment.explorerUrl`. Do not print JSON,
+the long signed media URL, recipient address, or task ID in a normal success
+reply. Show the saved ID when recovery/support needs it. Network fees are
+separate; show an actual fee only if returned, never treat the maximum as paid.
+If payment is uncertain, label the transaction pending verification instead.
+For provider failure after payment, show the failure and saved receipt together.
+
+Closing the native window before approval cancels signing. After the signature
+is returned, it closes presentation only: it cannot cancel payment, generation
+or a real call. Waiting timeouts preserve the task; resume that ID without
+`--approve` to check status, not a new purchase. Readiness problems never block
+retrieval of an already-paid result. Follow the recovery rules below.
+
+## Demo setup once, not during every purchase
+
+Install the plugin and build/configure the companion before presenting. The
+updated plugin requires a companion reporting `journeyVersion: 1`; rebuild both
+together. After the user has explicitly approved the budget limits and expiry,
+use the existing biometric `budget` flow once. This is separate from purchase
+approval; do not present a first-time setup as a one-Touch-ID experience.
+
+```sh
+node "$PAY" preflight --budget USER_APPROVED_BUDGET --service image.generate --agent codex --json
+```
+
+Use `claude` when that is the user's chosen host. The read-only checklist checks
+the companion, service metadata, Tempo RPC/fee cap, and existing permission and
+allowance. It never installs software, creates keys, grants a budget, requests
+faucet tokens or pays. Fix its first actionable issue, then rerun. It is not a
+live faucet, signing or provider test. Do not run it repeatedly on the happy
+path; the purchase still validates current terms. Use a separate phone-scoped
+budget and approved call details for a phone demonstration.
+
 Build the development native companion on a Touch ID Mac and set
 `ALGORIA_TEMPO_SIGNER_APP` to its absolute `.app` path. It creates a disposable
 Secure Enclave key for this purchase. Rebuild the companion for funding protocol

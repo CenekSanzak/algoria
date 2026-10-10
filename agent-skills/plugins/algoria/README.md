@@ -22,6 +22,15 @@ and rechecks before signing. Rebuild the companion for this funding protocol;
 wallets remain temporary. Payment results and recovered tasks expose a clickable
 Tempo testnet explorer receipt. This source update still needs a plugin release.
 
+Hackathon UX source update: `pay task --approve` now waits by default and keeps
+one native window through preparation, Touch ID review, confirmation and service
+progress. Use `--no-wait` to return early. The purchase card exposes the maximum
+network fee, with full addresses under Details. `pay preflight --budget NAME`
+checks installation, service, RPC and existing allowance without keys or payment.
+Agent instructions deliver media first and a short explorer receipt line.
+Rebuild the companion for `journeyVersion: 1` and release/update the plugin
+together. Initial budget approval remains a separate Touch ID step.
+
 Tempo phone support: `phone.call` accepts **0.10 test PathUSD** by default, in
 addition to Stellar x402. Use `pay budget --service phone.call` for a separate
 biometric-approved call scope, then `pay task --service phone.call`. The local

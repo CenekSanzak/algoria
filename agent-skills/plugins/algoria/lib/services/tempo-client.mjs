@@ -9,10 +9,10 @@ import { loadServicesSdk } from './sdk.mjs';
 import { normalizeTempoInput, tempoResource } from './tempo-services.mjs';
 import { TempoFundingError } from './tempo-funding.mjs';
 
-/** @param {any} job @param {string} [credential] */
-async function post(job, credential) {
+/** @param {any} job @param {string} [credential] @param {boolean} [asynchronous] */
+async function post(job, credential, asynchronous = false) {
   if (job.apiBase !== API_BASE || job.resource !== tempoResource(job.service) || job.resource !== serviceUrl(job.service)) throw new Error('Untrusted MPP endpoint');
-  return apiFetch(`${job.resource}?mode=sync&wait_ms=45000`, { method: 'POST',
+  return apiFetch(`${job.resource}${asynchronous ? '?mode=async' : '?mode=sync&wait_ms=45000'}`, { method: 'POST',
     headers: { 'content-type': 'application/json', 'X-Payment-Protocol': 'mpp',
       'Idempotency-Key': job.id, 'X-Recovery-Token': job.token,
       ...(credential ? { Authorization: credential } : {}) }, body: job.body }, 90000);
@@ -112,7 +112,7 @@ async function accept(job, response, body) {
     phase: body.status.endsWith('-uncertain') || (body.status === 'awaiting_payment' && job.dispatchedAt) ? 'uncertain' : body.status === 'succeeded' ? 'complete' : body.status === 'failed' ? 'failed' : payment ? 'settled' : job.phase });
 }
 
-/** @param {string} id @param {{approve?: boolean, fundTestnet?: boolean}} [options] */
+/** @param {string} id @param {import('./tempo-signer.mjs').SignOptions & {approve?: boolean}} [options] */
 export async function runTempo(id, options = {}) {
   return withLock(`job-${id}`, async () => {
     let job = await readJob(id);
@@ -122,7 +122,7 @@ export async function runTempo(id, options = {}) {
     if (status.body.status !== 'awaiting_payment') {
       job = await accept(job, status.response, status.body);
       if (job.status === 'paid') {
-        const result = await post(job);
+        const result = await post(job, undefined, Boolean(options.onWalletSession));
         job = await accept(job, result.response, result.body);
       }
       return publicJob(job);
@@ -153,7 +153,7 @@ export async function runTempo(id, options = {}) {
     }
     // Sending a saved hash credential cannot pay again. Backend claims it once.
     try {
-      const result = await post(job, job.credential);
+      const result = await post(job, job.credential, Boolean(options.onWalletSession));
       if (!result.body?.status) throw apiError(result.response, result.body);
       return publicJob(await accept(job, result.response, result.body));
     } catch {
@@ -163,8 +163,8 @@ export async function runTempo(id, options = {}) {
   });
 }
 
-/** @param {string} id @param {{wait?: boolean, timeout?: number}} [options] */
-export async function statusTempo(id, { wait = false, timeout = 180 } = {}) {
+/** @param {string} id @param {{wait?: boolean, timeout?: number, onUpdate?: (job: any) => void}} [options] */
+export async function statusTempo(id, { wait = false, timeout = 180, onUpdate } = {}) {
   if (!Number.isFinite(timeout) || timeout < 0 || timeout > 3600) throw new Error('Invalid status timeout');
   return withLock(`job-${id}`, async () => {
     let job = await readJob(id);
@@ -173,6 +173,7 @@ export async function statusTempo(id, { wait = false, timeout = 180 } = {}) {
       const result = await apiFetch(jobUrl(id), { headers: { Authorization: `Bearer ${job.token}` } });
       if (!result.response.ok) throw apiError(result.response, result.body);
       job = await accept(job, result.response, result.body);
+      try { onUpdate?.(publicJob(job)); } catch { /* Read-only UI is best effort. */ }
       if (!wait || !['settling', 'submitting', 'queued', 'running', 'saving', 'result-ready'].includes(job.status) || Date.now() >= deadline) break;
       await new Promise(resolve => setTimeout(resolve, Math.min(3000, deadline - Date.now())));
     } while (Date.now() < deadline);

@@ -13,6 +13,8 @@ saved job's protocol; never switch a saved job to another chain.
 Prefer the Tempo `task` coordinator over separate quote/run/status calls. Keep
 its saved ID across interruptions and delivery retries; the six skill entry
 points and Stellar helpers remain available.
+For the short Tempo conversation flow and read-only demo preflight, follow
+the opening sections of [Tempo payments](references/tempo-payments.md).
 Use `task --service phone.call` for real calls and read [phone-calls.md](references/phone-calls.md)
 before quoting. Image permissions do not authorize phone calls.
 Tempo budget grants/changes require a native Touch ID review with explicit scope

@@ -4,6 +4,18 @@ An isolated macOS development companion for the [implementation plan](../../docs
 
 ## What it proves
 
+The updated source plugin's `task` coordinator uses `--journey` to retain one
+native window through preparation, funding fallback, exact biometric approval,
+confirmation and real service status. `--status` reports `journeyVersion: 1`.
+The purchase's Wallet tab is now named Details; its full addresses remain
+available while the maximum network fee is on the first review page.
+Budget approval is still a separate operation. The post-signing pipe accepts
+fixed, bounded presentation stages and a validated testnet transaction hash
+only; it cannot sign another purchase. Closing before approval cancels signing.
+After signing it closes presentation only, not payment, generation or a call.
+The final status stays briefly, then closes; the result belongs in the chat.
+See [hackathon UX and rehearsal](../../docs/TEMPO_HACKATHON_UX.md).
+
 A dedicated AppKit wallet window has Review, Wallet, Permission and Activity sections. Its price-first layout, light/dark themes, scrollable detail cards and fixed approval bar disclose the disposable Secure Enclave P-256 key, signed local budget, exact request and fee bounds before Touch ID. Budget approval uses the same design, with Overview, Scope and Limits & safety sections. Touch ID protects the key's actual signing operation. The runner verifies the signature, sends the transaction once, and checks both the successful receipt and expected token transfer event.
 
 The native presentation matches Algoria's existing landing design: its “A” logo,

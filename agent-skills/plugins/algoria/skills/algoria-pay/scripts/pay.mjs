@@ -7,13 +7,17 @@ import { getBudget, setBudget, revokeBudget } from '../../../lib/services/state.
 import { quoteTempo } from '../../../lib/services/tempo-client.mjs';
 import { tempoTask } from '../../../lib/services/task.mjs';
 import { tempoReadiness } from '../../../lib/services/tempo-readiness.mjs';
+import { tempoPreflight } from '../../../lib/services/tempo-preflight.mjs';
 
 const USAGE = `algoria pay — buy AI services and resume saved tasks
 
   readiness                                           local Tempo/Touch ID checks; no payment
+  preflight --budget <name> [--service image.generate|phone.call]
+                                                      read-only demo setup checks; no signing
   task --service image.generate|phone.call --input <json-file> --budget <name>
                                                       prepare one Tempo task (default: image)
   task <saved-id> [--approve] [--wait]                  resume/open the same task
+                                                      approved tasks wait by default; --no-wait opts out
 
   budget --name <name> --total <USDC> --per-call <USDC>   set a named spending cap
   budget --name <name>                                 remaining/spent/reserved
@@ -55,6 +59,12 @@ export function main(argv) {
     if (flags.network && !(protocol === 'mpp' ? ['testnet', 'eip155:42431'] : ['testnet', 'stellar:testnet']).includes(String(flags.network))) throw new Error('Algoria services currently support testnet only');
     let result;
     if (command === 'readiness') result = tempoReadiness();
+    else if (command === 'preflight') {
+      result = await tempoPreflight({ budget: value(flags, 'budget'),
+        service: typeof flags.service === 'string' ? flags.service : undefined,
+        agent: typeof flags.agent === 'string' ? flags.agent : undefined });
+      if (!result.ready) process.exitCode = 1;
+    }
     else if (command === 'task') {
       let input;
       if (typeof flags.input === 'string') {
@@ -67,7 +77,7 @@ export function main(argv) {
         service: typeof flags.service === 'string' ? flags.service : undefined,
         budget: typeof flags.budget === 'string' ? flags.budget : undefined,
         approve: flags.approve === true, fundTestnet: flags['no-fund-testnet'] !== true,
-        wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
+        wait: flags['no-wait'] === true ? false : flags.wait === true || flags.approve === true, timeout: Number(flags.timeout ?? 180) });
       if ('interrupted' in result && result.interrupted) process.exitCode = 1;
     } else if (command === 'budget') {
       const name = value(flags, 'name');
@@ -92,14 +102,15 @@ export function main(argv) {
           : await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined, typeof flags.method === 'string' ? flags.method : undefined);
       } else if (command === 'run') result = await runJob(target, { approve: flags.approve === true, fundTestnet: flags['no-fund-testnet'] !== true });
       else if (command === 'status') result = await statusJob(target, { wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
-      else throw new Error('expected readiness, task, budget, quote, run, status, list or upload-reference');
+      else throw new Error('expected readiness, preflight, task, budget, quote, run, status, list or upload-reference');
     }
     const human = 'journey' in result ? ['message' in result ? result.message : result.journey.message,
       `Task: ${result.id}`, `Price: ${result.amount ?? 'pending'} ${result.unit ?? ''}`,
       `Next: ${'nextAction' in result ? result.nextAction : result.journey.nextAction}`,
       ...(result.payment?.success ? ['Payment confirmed; receipt saved.'] : []),
       ...('transactionUrl' in result && result.transactionUrl ? [`Tempo transaction: ${result.transactionUrl}`] : [])]
-      : command === 'readiness' ? [result.ready ? 'Tempo wallet is ready for a testnet purchase.' : 'Tempo wallet needs setup.', result.nextAction]
+      : command === 'readiness' || command === 'preflight' ? [result.ready ? 'Tempo wallet is ready for a testnet purchase.' : 'Tempo wallet needs setup.', result.nextAction,
+        ...('checks' in result ? result.checks.map((/** @type {{ready: boolean, message: string}} */ check) => `${check.ready ? '✓' : '•'} ${check.message}`) : [])]
       : [JSON.stringify(result, null, 2)];
     emit(flags, result, human);
   });

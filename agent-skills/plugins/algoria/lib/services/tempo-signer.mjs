@@ -4,9 +4,12 @@ import { loadTempoSdk } from './tempo-sdk.mjs';
 import { withLock } from '../lock.mjs';
 import { purchasePermission } from './state.mjs';
 import { ensureTempoFunding, TempoFundingError } from './tempo-funding.mjs';
+import { walletSession } from './tempo-wallet-session.mjs';
+
+/** @typedef {{fundTestnet?: boolean, onStage?: (stage: string) => Promise<void>, onWalletSession?: (session: ReturnType<typeof walletSession>) => void}} SignOptions */
 
 /** Native app is configured outside the shipped plugin. No keys cross this pipe.
- * @param {any} job @param {{fundTestnet?: boolean, onStage?: (stage: string) => Promise<void>}} options
+ * @param {any} job @param {SignOptions} options
  * @param {(record: any) => Promise<void>} saveBeforeBroadcast
  */
 export async function signAndPayTempo(job, options, saveBeforeBroadcast) {
@@ -14,7 +17,7 @@ export async function signAndPayTempo(job, options, saveBeforeBroadcast) {
   return withLock('tempo-wallet-approval', () => signQueued(job, options, saveBeforeBroadcast), { waitMs: 300000 });
 }
 
-/** @param {any} job @param {{fundTestnet?: boolean, onStage?: (stage: string) => Promise<void>}} options
+/** @param {any} job @param {SignOptions} options
  * @param {(record: any) => Promise<void>} saveBeforeBroadcast */
 async function signQueued(job, options, saveBeforeBroadcast) {
   if (Date.parse(job.expiresAt) <= Date.now() + 15000) throw new Error('Quote expired while queued; no signing or funding attempted');
@@ -28,12 +31,22 @@ async function signQueued(job, options, saveBeforeBroadcast) {
   const rpc = sdk.createPublicClient({ chain: sdk.tempoModerato,
     transport: sdk.http(undefined, { retryCount: 0, timeout: 15000 }) });
   if (await rpc.getChainId() !== 42431) throw new Error('Tempo network mismatch');
-  const child = spawn(`${app}/Contents/MacOS/AlgoriaSigningProof`, [], { stdio: ['pipe', 'pipe', 'ignore'] });
+  const unified = typeof options.onWalletSession === 'function';
+  const child = spawn(`${app}/Contents/MacOS/AlgoriaSigningProof`, unified ? ['--journey'] : [], { stdio: ['pipe', 'pipe', 'ignore'] });
   const lines = createInterface({ input: child.stdout });
   const messages = lines[Symbol.asyncIterator]();
-  child.on('error', () => lines.close());
-  child.stdin.on('error', () => lines.close());
+  let nativeClosed = false, handedOff = false;
+  /** @type {ReturnType<typeof walletSession> | undefined} */
+  let wallet;
+  const stopped = () => { nativeClosed = true; lines.close(); };
+  child.on('error', stopped); child.on('exit', stopped);
+  child.stdout.on('end', stopped); child.stdin.on('error', stopped);
   const timer = setTimeout(() => child.kill(), 300000);
+  /** @param {any} message */
+  const send = message => {
+    if (nativeClosed || child.stdin.destroyed || child.stdin.writableEnded) throw new Error('Native purchase approval cancelled or denied');
+    child.stdin.write(JSON.stringify(message) + '\n');
+  };
   try {
     let request;
     let ready = false;
@@ -47,6 +60,7 @@ async function signQueued(job, options, saveBeforeBroadcast) {
       if (message.status === 'error') throw new Error('Native purchase approval cancelled or denied');
       if (message.status === 'ready' && !ready) {
         if (message.fundingVersion !== 1) throw new Error('Rebuild the native companion for wallet funding');
+        if (unified && message.journeyVersion !== 1) throw new Error('Rebuild the native companion for the unified wallet journey');
         ready = true;
         publicKey = message.publicKey;
         const gasPrice = await rpc.getGasPrice();
@@ -59,13 +73,17 @@ async function signQueued(job, options, saveBeforeBroadcast) {
         const preparedFunding = sdk.preparePurchase(makeRequest(), publicKey);
         const address = preparedFunding.summary.address;
         await ensureTempoFunding(rpc, preparedFunding.summary, {
-          autoFund: options.fundTestnet !== false, expiresAt: fundingExpiry, onStage: options.onStage,
+          autoFund: options.fundTestnet !== false, expiresAt: fundingExpiry,
+          onStage: async stage => {
+            if (unified && stage === 'funding') send({ type: 'wallet-progress', stage });
+            await options.onStage?.(stage);
+          },
           onRequired: async funding => {
             // Keep stdin and the SAME enclave key alive until manual funding
             // is checked or cancelled. Never return a dead deposit address.
             await purchasePermission(job.id);
-            child.stdin.write(JSON.stringify({ type: 'funding-required', request: makeRequest(),
-              balanceAtomic: funding.balanceAtomic, expiresAt: fundingExpiry }) + '\n');
+            send({ type: 'funding-required', request: makeRequest(),
+              balanceAtomic: funding.balanceAtomic, expiresAt: fundingExpiry });
             const response = await messages.next();
             if (response.done || response.value.length > 100000) throw new TempoFundingError('funding-cancelled');
             const status = JSON.parse(response.value);
@@ -77,7 +95,8 @@ async function signQueued(job, options, saveBeforeBroadcast) {
         request = makeRequest(String(await rpc.getTransactionCount({ address, blockTag: 'pending' })));
         await purchasePermission(job.id);
         await options.onStage?.('review');
-        child.stdin.end(JSON.stringify(request) + '\n');
+        if (unified) send(request);
+        else child.stdin.end(JSON.stringify(request) + '\n');
       } else if (message.status === 'signed' && request) {
         const tx = sdk.TxEnvelopeTempo.deserialize(message.result.serializedTransaction);
         // Reconstruct the approved purchase rather than trusting the IPC summary.
@@ -89,14 +108,32 @@ async function signQueued(job, options, saveBeforeBroadcast) {
           payload: { type: 'hash', hash: transaction },
           source: `did:pkh:eip155:42431:${prepared.summary.address}` });
         await saveBeforeBroadcast({ transaction, credential, payer: prepared.summary.address });
+        if (unified) {
+          const lifetime = setTimeout(() => child.kill(), 600000); lifetime.unref();
+          child.once('exit', () => clearTimeout(lifetime));
+          const session = walletSession(job.id, send, () => {
+            clearTimeout(lifetime);
+            try { send({ type: 'wallet-finish' }); } catch { /* Already closed. */ }
+            child.stdin.end(); lines.close();
+            child.stdout.destroy(); child.unref();
+            const shutdown = setTimeout(() => child.kill(), 15000); shutdown.unref();
+            child.once('exit', () => clearTimeout(shutdown));
+          });
+          // The task now owns read-only progress, not signing authority.
+          try { options.onWalletSession?.(session); wallet = session; handedOff = true; }
+          catch { session.finish({ id: job.id, requiresAttention: true }); }
+          session.update({ id: job.id, transactionUrl: `https://explore.testnet.tempo.xyz/tx/${transaction}`,
+            journey: { stage: 'confirming-payment' } });
+        }
         // One submission only. Persisted hash survives lost RPC/HTTP responses.
         const hash = await rpc.sendRawTransaction({ serializedTransaction: message.result.serializedTransaction });
         if (hash !== transaction) throw new Error('Unexpected Tempo transaction reference');
         const receipt = await rpc.waitForTransactionReceipt({ hash, timeout: 60000 });
         if (receipt.status !== 'success') throw new Error('Tempo transaction reverted; reconcile the saved payment');
+        wallet?.update({ id: job.id, journey: { stage: 'starting' } });
         return { transaction, credential, payer: prepared.summary.address };
       }
     }
     throw new Error('Native signer exited before approving the purchase');
-  } finally { clearTimeout(timer); lines.close(); child.kill(); }
+  } finally { clearTimeout(timer); if (!handedOff) { lines.close(); child.kill(); } }
 }

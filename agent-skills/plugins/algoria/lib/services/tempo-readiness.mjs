@@ -14,6 +14,7 @@ export function tempoReadiness({ platform = process.platform, app = process.env.
     if (status.status !== 'readiness' || status.keyCreated !== false) throw new Error('Unexpected companion');
     if (status.permissionVersion !== 1) throw new Error('Rebuild companion for spending permissions');
     if (status.fundingVersion !== 1) throw new Error('Rebuild companion for safe wallet funding');
+    if (status.journeyVersion !== 1) throw new Error('Rebuild companion for the unified wallet journey');
     if (status.touchIDAvailable !== true) return { ...base, ready: false, reason: 'touch-id-unavailable', nextAction: 'Touch ID could not be accessed from this process. If it works on this Mac, request approval to rerun readiness outside the agent sandbox with the same companion path. Otherwise check Touch ID enrollment and unlock the Mac. No password or software-key fallback.' };
     return { ...base, ready: true, reason: 'ready', nextAction: 'Review the purchase in the local wallet. Testnet faucet funding is automatic when needed; if insufficient, the open wallet asks for test PathUSD.', fundingRequired: true };
   } catch { return { ...base, ready: false, reason: 'companion-unavailable', nextAction: 'Rebuild or repair the configured companion, then check readiness again. No payment was attempted.' }; }

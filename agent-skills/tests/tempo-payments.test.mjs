@@ -25,16 +25,19 @@ const transaction = `0x${'a'.repeat(64)}`;
 /** @type {Map<string, any>} */ let remote;
 /** @type {any} */ let contract;
 let signatures = 0, paidPosts = 0, loseResponse = false, loseBroadcast = false;
+/** @type {any} */ let walletFixture;
+/** @type {string[]} */ let pendingStatuses = [];
 /** @type {(c: any) => void} */ let mutate;
 
 /** @param {any} job @returns {any} */
 function result(job) {
+  const status = job.paid ? pendingStatuses.shift() ?? 'succeeded' : 'awaiting_payment';
   const payment = job.paid ? { success: true, protocol: 'mpp', network: 'eip155:42431',
     token: contract.mpp.token, decimals: 6, payer, transaction, amount: contract.mpp.amount,
     mpp: { method: 'tempo', status: 'success', reference: transaction, timestamp: '2026-10-05T00:00:00.000Z' } } : null;
   return { job_id: job.id, service_id: contract.id, service_version: contract.version,
-    status: job.paid ? 'succeeded' : 'awaiting_payment', status_url: `${API_BASE}/v1/jobs/${job.id}`,
-    payment, output: job.paid ? (contract.id === 'phone.call' ? { call: { contact: 'berkin', status: 'completed', duration_seconds: 25,
+    status, status_url: `${API_BASE}/v1/jobs/${job.id}`,
+    payment, output: job.paid && status === 'succeeded' ? (contract.id === 'phone.call' ? { call: { contact: 'berkin', status: 'completed', duration_seconds: 25,
       summary: 'Confirmed the demo.', goal_achieved: true, transcript: [{ speaker: 'contact', text: 'I am ready.' }] } }
       : { images: [{ url: 'https://media.example/image.png', content_type: 'image/png' }], url_expires_in: 3600 }) : null,
     error: null };
@@ -42,6 +45,7 @@ function result(job) {
 beforeEach(async () => {
   await rm(ledgerPath(), { force: true });
   remote = new Map(); signatures = 0; paidPosts = 0; loseResponse = false; loseBroadcast = false; mutate = () => {};
+  walletFixture = undefined; pendingStatuses = [];
   contract = structuredClone(fixture);
   vi.spyOn(readiness, 'tempoReadiness').mockReturnValue({ ready: true, reason: 'ready', nextAction: 'Review purchase', fundingRequired: true,
     protocol: 'mpp', network: 'eip155:42431', unit: 'test PathUSD', walletMode: 'disposable', realFundsSupported: false, permissionsEnabled: true, permissionEnforcement: 'local-only', delegatedSigningEnabled: false });
@@ -54,6 +58,7 @@ beforeEach(async () => {
     const credential = sdk.Credential.serialize({ challenge: job.challenge,
       payload: { type: 'hash', hash: transaction }, source: `did:pkh:eip155:42431:${payer}` });
     await save({ credential, transaction, payer });
+    if (walletFixture) _options.onWalletSession?.(walletFixture);
     if (loseBroadcast) throw new Error('lost RPC reply');
     return { credential, transaction, payer };
   });
@@ -101,6 +106,37 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 afterAll(async () => { await rm(home, { recursive: true, force: true }); });
 
 const callInput = { contact: 'berkin', goal: 'Confirm the demo', on_behalf_of: 'Dogukan', language: 'tr' };
+
+describe('continuous native task journey', () => {
+  it('uses async submission, waits by default and finishes the same wallet with the result', async () => {
+    walletFixture = { update: vi.fn(), finish: vi.fn() };
+    pendingStatuses = ['running', 'succeeded'];
+    const done = await imageTask({ input: { prompt: 'Demo image' }, budget: 'tempo', approve: true });
+    expect(done.status).toBe('succeeded');
+    expect(walletFixture.update.mock.calls.map((/** @type {any[]} */ args) => args[0].status)).toEqual(['running', 'succeeded']);
+    expect(walletFixture.finish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: done.id, status: 'succeeded' }));
+    const requests = vi.mocked(fetch).mock.calls;
+    expect(requests.some(([url, init]) => String(url).endsWith('?mode=async') && new Headers(init?.headers).has('Authorization'))).toBe(true);
+    expect(signatures).toBe(1); expect(paidPosts).toBe(1);
+  });
+  it('allows no-wait, keeps the saved task, and never signs again during status recovery', async () => {
+    walletFixture = { update: vi.fn(), finish: vi.fn() }; pendingStatuses = ['running'];
+    const pending = await imageTask({ input: { prompt: 'Demo image' }, budget: 'tempo', approve: true, wait: false });
+    expect(pending.status).toBe('running');
+    expect(walletFixture.finish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: pending.id, status: 'running' }));
+    const done = await imageTask({ id: pending.id, wait: true });
+    expect(done.status).toBe('succeeded'); expect(done.id).toBe(pending.id);
+    expect(signatures).toBe(1); expect(paidPosts).toBe(1);
+  });
+  it('finalizes the window with uncertainty after a lost broadcast and preserves its reservation', async () => {
+    walletFixture = { update: vi.fn(), finish: vi.fn() }; loseBroadcast = true;
+    const stopped = await imageTask({ input: { prompt: 'Demo image' }, budget: 'tempo', approve: true });
+    expect(stopped.requiresAttention).toBe(true);
+    expect(walletFixture.finish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: stopped.id, requiresAttention: true }));
+    expect((await getBudget('tempo')).reserved).toBe('0.0100000');
+    expect(signatures).toBe(1); expect(paidPosts).toBe(0);
+  });
+});
 async function phoneSetup() {
   contract.id = 'phone.call'; contract.version = '1'; contract.resource = `${API_BASE}/v1/services/phone.call`;
   contract.mpp.amount = '100000';
