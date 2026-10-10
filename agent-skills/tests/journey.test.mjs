@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { journeyFor } from '../plugins/algoria/lib/services/journey.mjs';
 describe('durable task presentation', () => {
+  it('describes real calls and transcript delivery without pretending to generate media', () => {
+    expect(journeyFor({ service: 'phone.call', status: 'running' })).toMatchObject({ stage: 'calling', nextAction: 'wait' });
+    expect(journeyFor({ service: 'phone.call', status: 'paid' }).message).toContain('same call job');
+    expect(journeyFor({ service: 'phone.call', status: 'succeeded' }).message).toContain('summary and transcript');
+    expect(journeyFor({ service: 'phone.call', status: 'submission-uncertain' }).nextAction).toBe('recover');
+  });
   it.each([
     ['settling', 'confirming-payment'], ['paid', 'paid'], ['submitting', 'starting'],
     ['queued', 'queued'], ['running', 'generating'], ['saving', 'saving'],

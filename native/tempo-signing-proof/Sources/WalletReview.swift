@@ -147,6 +147,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         (source ?? summary)[key].map { String(describing: $0) } ?? "Not attached"
     }
     private var permission: [String: Any]? { summary["permission"] as? [String: Any] }
+    private var call: [String: Any]? { summary["call"] as? [String: Any] }
 
     private func build() {
         guard let content = window?.contentView else { return }
@@ -171,10 +172,10 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         } else {
             let amount = (summary["amount"] as? String).flatMap(Double.init).map { String(format: "%.6f", $0 / 1e6) } ?? "0.000001"
             heroViews = [walletText("PAYMENT REQUEST", size: 10, color: WalletDesign.muted, mono: true),
-                         walletText(summary["prompt"] == nil ? "Review your self-transfer" : "Generate one image", size: 21, weight: .medium),
+                         walletText(call != nil ? "Place one real phone call" : summary["prompt"] == nil ? "Review your self-transfer" : "Generate one image", size: 21, weight: .medium),
                          walletText(amount, size: 38, weight: .semibold, mono: true),
-                         walletText("test PathUSD · \(summary["prompt"] == nil ? "your temporary account" : "Algoria image service")", size: 12, color: WalletDesign.secondary),
-                         walletText("Test tokens only. No monetary value. Network fee is separate.", size: 11, color: WalletDesign.muted)]
+                         walletText("test PathUSD · \(call != nil ? "Algoria phone service" : summary["prompt"] == nil ? "your temporary account" : "Algoria image service")", size: 12, color: WalletDesign.secondary),
+                         walletText(call != nil ? "Real call · test-token payment. Dialing is not simulated. Gas is separate." : "Test tokens only. No monetary value. Network fee is separate.", size: 11, color: call != nil ? WalletDesign.warning : WalletDesign.muted)]
         }
         walletPin(walletStack(heroViews, spacing: 6), to: hero, inset: 20)
 
@@ -261,7 +262,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     }
 
     private func purchasePages() -> [NSView] {
-        let prompt = summary["prompt"] as? String ?? "Transfer one micro-unit back to this same temporary account."
+        let prompt = call?["goal"] as? String ?? summary["prompt"] as? String ?? "Transfer one micro-unit back to this same temporary account."
         let promptView: NSView
         if prompt.count > 260 {
             let scroll = scrollPage([walletText(prompt, size: 14)])
@@ -269,9 +270,21 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             scroll.setAccessibilityLabel("Full request · scroll to read")
             promptView = scroll
         } else { promptView = walletText(prompt, size: 14) }
+        var requestViews: [NSView] = []
+        if let call {
+            requestViews += [walletRow("Approved contact", value("contact", from: call)),
+                             walletText("CALL GOAL", size: 10, color: WalletDesign.muted, mono: true)]
+        }
+        requestViews.append(promptView)
+        if let call {
+            requestViews.append(walletText("\(value("language", from: call) == "tr" ? "Turkish" : "English") · calling on behalf of \(value("on_behalf_of", from: call))", size: 12, color: WalletDesign.secondary))
+        }
+        requestViews.append(walletRow("Payment recipient · full address", value(summary["recipient"] == nil ? "address" : "recipient"), mono: true))
+        if call != nil {
+            requestViews.append(walletText("This will call a real person. Test tokens do not make the call simulated. Once dialed, closing this wallet cannot cancel the call.", size: 12, color: WalletDesign.warning))
+        }
         let review = scrollPage([
-            walletCard("Request", [promptView,
-                                   walletRow("Recipient · full address", value(summary["recipient"] == nil ? "address" : "recipient"), mono: true)]),
+            walletCard(call != nil ? "Real call · review before approving" : "Request", requestViews),
             walletCard("Payment details", [walletRow("Network", value("network")),
                                            walletRow("Valid until", walletDate(value("expires")))]),
             walletCard("What approval means", [walletText("Touch ID signs only this exact transaction. The plugin may then submit it. Cancel now to return no signed payment.", size: 12),
@@ -302,7 +315,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         let activity = scrollPage([
             walletCard("Awaiting your approval", [walletRow("Current job", summary["jobId"] == nil ? "Signing proof" : value("jobId"), mono: true),
                                                    walletText("This is the current request, not a complete wallet history. No signed transaction has been returned yet.", size: 12)]),
-            walletCard("If the flow is interrupted", [walletText("Resume the same saved job. The plugin keeps receipts and recovery state locally. Do not start a new payment to fix a missing image preview.", size: 13),
+            walletCard("If the flow is interrupted", [walletText("Resume the same saved job. The plugin keeps receipts and recovery state locally. Do not start a new payment or redial to recover a missing result.", size: 13),
                                                       walletText("Revocation stops future local dispatches. It cannot undo a submitted payment or erase an uncertain reservation.", size: 12, color: WalletDesign.muted)]),
         ])
         return [review, wallet, scrollPage(permissionCards), activity]
@@ -376,17 +389,19 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     }
 
     // Explicit fixture modes never reach key creation, SDK signing, or RPC.
-    static func fixture(_ kind: WalletReviewKind, longPrompt: Bool = false) -> [String: Any] {
-        let policy: [String: Any] = ["id": "00000000-0000-0000-0000-000000000001", "budget": "demo-images", "agent": "codex",
+    static func fixture(_ kind: WalletReviewKind, longPrompt: Bool = false, phone: Bool = false) -> [String: Any] {
+        let service = phone ? "phone.call" : "image.generate"
+        let policy: [String: Any] = ["id": "00000000-0000-0000-0000-000000000001", "budget": phone ? "demo-calls" : "demo-images", "agent": "codex",
             "total": "5.000000", "perCall": "0.100000", "expires": "2030-10-05T18:30:00Z"]
         let scope: [String: Any] = ["network": "Tempo Moderato (42431)", "token": "0x20c0000000000000000000000000000000000000",
             "recipient": "0x1111111111111111111111111111111111111111"]
         if kind == .permission {
-            return scope.merging(policy) { _, new in new }.merging(["policyId": policy["id"]!, "service": "image.generate",
-                "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate"]) { _, new in new }
+            return scope.merging(policy) { _, new in new }.merging(["policyId": policy["id"]!, "service": service,
+                "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/\(service)"]) { _, new in new }
         }
-        return scope.merging(["prompt": longPrompt ? String(repeating: "A quiet Japanese garden with warm morning light. ", count: 80) : "A quiet Japanese garden with warm morning light, soft mist and a small wooden bridge. Editorial photography, natural colours.",
-            "amount": "10000", "address": "0x2222222222222222222222222222222222222222", "gasLimit": "1000000",
+        let input: [String: Any] = phone ? ["call": ["contact": "berkin", "goal": longPrompt ? String(repeating: "Confirm the demo in İstanbul. ", count: 30) : "Remind him about the hackathon demo at 3pm and ask if he is ready.", "on_behalf_of": "Dogukan", "language": "tr"]] : ["prompt": longPrompt ? String(repeating: "A quiet Japanese garden with warm morning light. ", count: 80) : "A quiet Japanese garden with warm morning light, soft mist and a small wooden bridge. Editorial photography, natural colours."]
+        return scope.merging(input) { _, new in new }.merging(["service": service,
+            "amount": phone ? "100000" : "10000", "address": "0x2222222222222222222222222222222222222222", "gasLimit": "1000000",
             "maxFeePerGas": "20000000000", "expires": "2030-10-05T18:30:00Z", "permission": policy,
             "jobId": "00000000-0000-0000-0000-000000000002"]) { _, new in new }
     }
@@ -395,8 +410,8 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         guard directory.hasPrefix("/"), FileManager.default.fileExists(atPath: directory) else { throw fail("PREVIEW_DIRECTORY_REQUIRED") }
         var paths: [String] = []
         for dark in [false, true] {
-            for kind in [WalletReviewKind.purchase, .permission] {
-                let controller = WalletReviewController(summary: fixture(kind), kind: kind, preview: true)
+            for (kind, phone) in [(WalletReviewKind.purchase, false), (.permission, false), (.purchase, true), (.permission, true)] {
+                let controller = WalletReviewController(summary: fixture(kind, phone: phone), kind: kind, preview: true)
                 controller.window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
                 guard let view = controller.window?.contentView else { throw fail("PREVIEW_RENDER_FAILED") }
                 for index in controller.pages.indices {
@@ -407,7 +422,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
                         view.cacheDisplay(in: view.bounds, to: bitmap)
                     }
                     guard let png = bitmap.representation(using: .png, properties: [:]) else { throw fail("PREVIEW_RENDER_FAILED") }
-                    let name = "\(kind == .purchase ? "purchase" : "budget")-\(index)-\(dark ? "dark" : "light").png"
+                    let name = "\(phone ? "phone-" : "")\(kind == .purchase ? "purchase" : "budget")-\(index)-\(dark ? "dark" : "light").png"
                     let path = URL(fileURLWithPath: directory).appendingPathComponent(name)
                     try png.write(to: path, options: .atomic)
                     paths.append(path.path)
@@ -426,8 +441,8 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
               Bundle.main.url(forResource: "algoria-logo", withExtension: "svg") != nil else {
             throw fail("UI_BRAND_ASSETS_FAILED")
         }
-        for kind in [WalletReviewKind.purchase, .permission] {
-            let controller = WalletReviewController(summary: fixture(kind, longPrompt: true), kind: kind, preview: true)
+        for (kind, phone) in [(WalletReviewKind.purchase, false), (.permission, false), (.purchase, true), (.permission, true)] {
+            let controller = WalletReviewController(summary: fixture(kind, longPrompt: true, phone: phone), kind: kind, preview: true)
             controller.window?.contentView?.layoutSubtreeIfNeeded()
             for index in controller.pages.indices {
                 controller.tabs[index].performClick(nil)

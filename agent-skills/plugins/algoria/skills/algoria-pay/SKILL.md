@@ -1,11 +1,11 @@
 ---
 name: algoria-pay
-description: Pay for Algoria services and recover saved jobs. For an explicitly selected Tempo/MPP image task, use the native Touch ID purchase route and a separate test PathUSD budget. For Stellar tasks, FIRST check testnet USDC balance before discovery, planning or payment; if empty, use the Stellar top-up flow. Execute Algoria or Stellar8004 HTTP services over x402 within the approved scope and deliver the result. Use algoria-discover when no service is selected. Never repay an uncertain saved job.
+description: Pay for Algoria services and recover saved jobs. For an explicitly selected Tempo/MPP image or phone task, use the native Touch ID purchase route and a separate service-scoped test PathUSD budget. For Stellar tasks, FIRST check testnet USDC balance before discovery, planning or payment; if empty, use the Stellar top-up flow. Execute Algoria or Stellar8004 HTTP services over x402 within the approved scope and deliver the result. Use algoria-discover when no service is selected. Never repay an uncertain saved job.
 ---
 
 # Pay and execute an Algoria service
 
-For an explicitly selected **Tempo/MPP image task**, first read
+For an explicitly selected **Tempo/MPP image or phone task**, first read
 [tempo-payments.md](references/tempo-payments.md). Follow that route's native
 Touch ID review, test PathUSD funding and separate budget. The Stellar balance
 and top-up steps below apply to Stellar tasks only. `run` and `status` detect the
@@ -13,6 +13,8 @@ saved job's protocol; never switch a saved job to another chain.
 Prefer the Tempo `task` coordinator over separate quote/run/status calls. Keep
 its saved ID across interruptions and delivery retries; the six skill entry
 points and Stellar helpers remain available.
+Use `task --service phone.call` for real calls and read [phone-calls.md](references/phone-calls.md)
+before quoting. Image permissions do not authorize phone calls.
 Tempo budget grants/changes require a native Touch ID review with explicit scope
 and expiry; `revoke` stops future local dispatches. These are local permissions,
 not autonomous signing authority or ERC-8196 compliance.

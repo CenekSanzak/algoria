@@ -13,7 +13,7 @@ const sdk = await loadTempoSdk();
 const signer = await import('../plugins/algoria/lib/services/tempo-signer.mjs');
 const approval = await import('../plugins/algoria/lib/services/permission-approval.mjs');
 const readiness = await import('../plugins/algoria/lib/services/tempo-readiness.mjs');
-const { imageTask } = await import('../plugins/algoria/lib/services/task.mjs');
+const { imageTask, tempoTask } = await import('../plugins/algoria/lib/services/task.mjs');
 const { quoteTempo, validateMppQuote } = await import('../plugins/algoria/lib/services/tempo-client.mjs');
 const { runJob, statusJob } = await import('../plugins/algoria/lib/services/client.mjs');
 const { setBudget, getBudget, readJob, readLedger, ledgerPath, revokeBudget } = await import('../plugins/algoria/lib/services/state.mjs');
@@ -29,11 +29,13 @@ let signatures = 0, paidPosts = 0, loseResponse = false, loseBroadcast = false;
 /** @param {any} job @returns {any} */
 function result(job) {
   const payment = job.paid ? { success: true, protocol: 'mpp', network: 'eip155:42431',
-    token: contract.mpp.token, decimals: 6, payer, transaction, amount: '10000',
+    token: contract.mpp.token, decimals: 6, payer, transaction, amount: contract.mpp.amount,
     mpp: { method: 'tempo', status: 'success', reference: transaction, timestamp: '2026-10-05T00:00:00.000Z' } } : null;
-  return { job_id: job.id, service_id: 'image.generate', service_version: fixture.version,
+  return { job_id: job.id, service_id: contract.id, service_version: contract.version,
     status: job.paid ? 'succeeded' : 'awaiting_payment', status_url: `${API_BASE}/v1/jobs/${job.id}`,
-    payment, output: job.paid ? { images: [{ url: 'https://media.example/image.png', content_type: 'image/png' }], url_expires_in: 3600 } : null,
+    payment, output: job.paid ? (contract.id === 'phone.call' ? { call: { contact: 'berkin', status: 'completed', duration_seconds: 25,
+      summary: 'Confirmed the demo.', goal_achieved: true, transcript: [{ speaker: 'contact', text: 'I am ready.' }] } }
+      : { images: [{ url: 'https://media.example/image.png', content_type: 'image/png' }], url_expires_in: 3600 }) : null,
     error: null };
 }
 beforeEach(async () => {
@@ -71,9 +73,9 @@ beforeEach(async () => {
       const input = JSON.parse(String(options.body));
       const challenge = sdk.Challenge.from({ secretKey: 'offline-secret'.repeat(3), method: 'tempo', intent: 'charge',
         realm: new URL(API_BASE).host, expires: new Date(Date.now() + 600000).toISOString(),
-        meta: { job_id: id, resource: `${API_BASE}/v1/services/image.generate`,
-          input_hash: createHash('sha256').update(JSON.stringify({ service: 'image.generate', input })).digest('hex') },
-        request: { amount: '10000', recipient, currency: contract.mpp.token,
+        meta: { job_id: id, resource: contract.resource,
+          input_hash: createHash('sha256').update(JSON.stringify({ service: contract.id, input })).digest('hex') },
+        request: { amount: contract.mpp.amount, recipient, currency: contract.mpp.token,
           methodDetails: { chainId: 42431, supportedModes: ['push'] } } });
       job = { id, challenge, paid: false }; remote.set(id, job);
     }
@@ -96,6 +98,90 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 afterAll(async () => { await rm(home, { recursive: true, force: true }); });
+
+const callInput = { contact: 'berkin', goal: 'Confirm the demo', on_behalf_of: 'Dogukan', language: 'tr' };
+async function phoneSetup() {
+  contract.id = 'phone.call'; contract.version = '1'; contract.resource = `${API_BASE}/v1/services/phone.call`;
+  contract.mpp.amount = '100000';
+  contract.preparation = { contacts: ['berkin'] };
+  contract.input_schema = { type: 'object', required: ['contact', 'goal'], properties: {
+    contact: { type: 'string' }, goal: { type: 'string' }, on_behalf_of: { type: 'string' }, language: { enum: ['en', 'tr'] }
+  }, additionalProperties: false };
+  contract.output_schema.properties.service_id = { const: 'phone.call' };
+  contract.output_schema.properties.service_version = { const: '1' };
+  contract.output_schema.properties.output.anyOf[0] = { type: 'object', required: ['call'], additionalProperties: false,
+    properties: { call: { type: 'object', required: ['contact', 'status', 'summary', 'goal_achieved', 'transcript'],
+      properties: { contact: { type: 'string' }, status: { type: 'string' }, summary: { type: 'string' },
+        goal_achieved: { type: 'boolean' }, duration_seconds: { type: 'integer', minimum: 0 },
+        transcript: { type: 'array', items: { type: 'object', required: ['speaker', 'text'],
+          properties: { speaker: { enum: ['agent', 'contact'] }, text: { type: 'string' } }, additionalProperties: false } } }, additionalProperties: false } } };
+  await setBudget('calls', '0.20', '0.10', 'mpp', { agent: 'codex', service: 'phone.call', recipient,
+    expires: new Date(Date.now() + 3600000).toISOString() });
+}
+
+describe('Tempo phone-call payments', () => {
+  it('normalizes call details, approves 0.10 PathUSD once and delivers summary/transcript', async () => {
+    await phoneSetup();
+    const q = await tempoTask({ service: 'phone.call', input: { ...callInput, contact: ' Berkin ', goal: ' Confirm the demo ' }, budget: 'calls' });
+    expect(q.amount).toBe('0.1000000'); expect(signatures).toBe(0);
+    expect(JSON.parse((await readJob(q.id)).body)).toEqual(callInput);
+    const done = await tempoTask({ id: q.id, approve: true, fundTestnet: true, wait: true });
+    expect(done.status).toBe('succeeded'); expect(done.delivery).toMatchObject({ kind: 'call', previewRequired: false, call: { goalAchieved: true } });
+    expect(done.delivery?.call?.transcript).toHaveLength(1);
+    expect(done.journey.message).toContain('do not redial');
+    await tempoTask({ id: q.id, approve: true, fundTestnet: true });
+    expect(signatures).toBe(1); expect(paidPosts).toBe(1); expect(remote.size).toBe(1);
+    expect((await getBudget('calls')).spent).toBe('0.1000000');
+  });
+  it('blocks image permissions and per-call limits before the signer', async () => {
+    await phoneSetup();
+    const q = await quoteTempo('phone.call', callInput, 'tempo');
+    await expect(runJob(q.id, { approve: true })).rejects.toThrow('outside');
+    const guided = await tempoTask({ id: q.id, approve: true, fundTestnet: true });
+    expect(guided.nextAction).toBe('review-spending-permission');
+    expect('paymentAttempted' in guided && guided.paymentAttempted).toBe(false);
+    await setBudget('calls', '0.20', '0.09', 'mpp', { agent: 'codex', service: 'phone.call', recipient,
+      expires: new Date(Date.now() + 3600000).toISOString() });
+    const limited = await quoteTempo('phone.call', callInput, 'calls');
+    await expect(runJob(limited.id, { approve: true })).rejects.toThrow('outside');
+    expect(signatures).toBe(0); expect(paidPosts).toBe(0);
+  });
+  it('rejects changed goal, language, caller, service or contact without a replacement call', async () => {
+    await phoneSetup();
+    const q = await tempoTask({ service: 'phone.call', input: callInput, budget: 'calls' });
+    for (const patch of [{ goal: 'Different' }, { language: 'en' }, { on_behalf_of: 'Someone else' }, { contact: 'alice' }]) {
+      await expect(tempoTask({ id: q.id, input: { ...callInput, ...patch } })).rejects.toThrow('changed');
+    }
+    await expect(tempoTask({ id: q.id, service: 'image.generate' })).rejects.toThrow('service changed');
+    await expect(quoteTempo('phone.call', { ...callInput, contact: '+15550000000' }, 'calls')).rejects.toThrow('Invalid phone');
+    await expect(quoteTempo('phone.call', { ...callInput, contact: 'alice' }, 'calls')).rejects.toThrow('approved');
+    expect(signatures).toBe(0); expect(remote.size).toBe(1);
+  });
+  it('releases a cancelled call reservation, then recovers a lost paid response without resigning', async () => {
+    await phoneSetup();
+    const q = await quoteTempo('phone.call', callInput, 'calls');
+    vi.mocked(signer.signAndPayTempo).mockRejectedValueOnce(new Error('cancelled'));
+    await expect(runJob(q.id, { approve: true })).rejects.toThrow('cancelled');
+    expect((await getBudget('calls')).reserved).toBe('0.0000000');
+    expect(paidPosts).toBe(0);
+    loseResponse = true;
+    await expect(runJob(q.id, { approve: true })).rejects.toThrow('unconfirmed');
+    await revokeBudget('calls');
+    const done = await runJob(q.id);
+    expect(done.status).toBe('succeeded'); expect(signatures).toBe(1); expect(paidPosts).toBe(1);
+  });
+  it('rejects quote price tampering and recovers an interrupted broadcast using only its saved credential', async () => {
+    await phoneSetup(); mutate = c => { c.request.amount = '10000'; };
+    await expect(quoteTempo('phone.call', callInput, 'calls')).rejects.toThrow('price or destination');
+    expect(signatures).toBe(0);
+    mutate = () => {}; const q = await quoteTempo('phone.call', callInput, 'calls');
+    loseBroadcast = true;
+    await expect(runJob(q.id, { approve: true })).rejects.toThrow('uncertain');
+    expect((await getBudget('calls')).reserved).toBe('0.1000000');
+    const done = await runJob(q.id);
+    expect(done.status).toBe('succeeded'); expect(signatures).toBe(1); expect(paidPosts).toBe(1);
+  });
+});
 
 describe('Tempo plugin payments', () => {
   it('blocks new purchases after revoke but recovers a saved payment without signing again', async () => {

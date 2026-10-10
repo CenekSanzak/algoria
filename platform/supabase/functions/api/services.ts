@@ -705,7 +705,7 @@ export function openApi(config: Config) {
               name: 'Authorization',
               in: 'header',
               required: false,
-              description: 'MPP Payment hash credential for Tempo image.generate.',
+              description: 'MPP Payment hash credential for Tempo image.generate or phone.call.',
               schema: { type: 'string' },
             },
             { name: 'mode', in: 'query', schema: { enum: ['sync', 'async'], default: 'sync' } },
@@ -787,7 +787,7 @@ export function openApi(config: Config) {
           ...generic.get.responses,
           '200': response(
             'Service schema and payment requirements',
-            service.id === 'image.generate' && config.mpp
+            ['image.generate', 'phone.call'].includes(service.id) && config.mpp
               ? {
                 anyOf: [{
                   ...serviceSchema,

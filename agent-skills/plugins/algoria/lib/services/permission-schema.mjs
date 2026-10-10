@@ -1,12 +1,13 @@
 // Shared by the plugin and the trusted native bundle. Fixed field ordering binds
 // the biometric approval to exact limits, not caller-authored display strings.
-export const PERMISSION_RESOURCE = 'https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/image.generate';
+import { tempoResource } from './tempo-services.mjs';
+export const PERMISSION_RESOURCE = tempoResource('image.generate');
 const fields = ['version', 'id', 'budget', 'agent', 'service', 'resource', 'network', 'token', 'recipient', 'totalAtomic', 'perCallAtomic', 'validAfter', 'validUntil', 'previousId'];
 /** @param {any} p */
 export function canonicalPermission(p) {
   if (!p || Object.keys(p).length !== fields.length || Object.keys(p).some(k => !fields.includes(k))) throw new Error('Invalid permission fields');
   if (p.version !== 1 || !/^[0-9a-f-]{36}$/.test(p.id) || !/^[a-z][a-z0-9-]{0,63}$/.test(p.budget) ||
-      !['claude', 'codex'].includes(p.agent) || p.service !== 'image.generate' || p.resource !== PERMISSION_RESOURCE ||
+      !['claude', 'codex'].includes(p.agent) || !['image.generate', 'phone.call'].includes(p.service) || p.resource !== tempoResource(p.service) ||
       p.network !== 'eip155:42431' || p.token !== '0x20c0000000000000000000000000000000000000' ||
       !/^0x[0-9a-f]{40}$/.test(p.recipient) || /^0x0{40}$/.test(p.recipient) ||
       ![p.totalAtomic, p.perCallAtomic].every(v => typeof v === 'string' && /^[1-9][0-9]{0,9}$/.test(v) && BigInt(v) % 10n === 0n) ||

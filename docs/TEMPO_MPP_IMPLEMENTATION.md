@@ -1,5 +1,11 @@
 # Tempo / MPP image payments
 
+Phone extension (2026-10-10): `phone.call` now also supports MPP in source at
+0.10 test PathUSD by default, with a separate phone-scoped permission and native
+call-details review. See [Tempo phone payments](TEMPO_PHONE_PAYMENTS.md) for the
+current setup, recovery rules and release status. The notes below preserve the
+original image implementation history.
+
 Implemented in `algoria-x`, branch `colloseum-intro`, 2026-10-05.
 
 The existing Claude/Codex plugin can quote and buy `image.generate` through MPP

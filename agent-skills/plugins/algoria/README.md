@@ -8,12 +8,21 @@ approved budget. The installed skills state this order in their entrypoints.
 Version 0.11.0 adds Touch ID-approved local Tempo budgets, exact recipient/service
 scope, spending caps, expiry and immediate local revocation. Every purchase still
 requires Touch ID; this is not on-chain ERC-8196 enforcement. It retains a
-**single saved Tempo image task**, read-only readiness,
+**single saved Tempo image or phone task**, read-only readiness,
 clear progress/recovery actions and queued native Touch ID purchases. MPP uses
 a separate test PathUSD budget. See
 [Tempo payment setup](skills/algoria-pay/references/tempo-payments.md).
 The companion currently needs a local build; the existing Stellar setup below
 does not fund Tempo.
+
+Tempo phone support: `phone.call` accepts **0.10 test PathUSD** by default, in
+addition to Stellar x402. Use `pay budget --service phone.call` for a separate
+biometric-approved call scope, then `pay task --service phone.call`. The local
+wallet reviews the contact, goal, caller name and language before Touch ID.
+Image permissions cannot pay for calls. Rebuild the native companion from this
+checkout for phone support; source changes are not an npm/backend deployment.
+Calls are real, limited to operator-approved contacts, and never automatically
+redialed after an interruption. See [phone setup](skills/algoria-pay/references/phone-calls.md).
 
 A personal context and execution layer above service discovery catalogs.
 Algoria keeps the user's preferred services, project context, job history and

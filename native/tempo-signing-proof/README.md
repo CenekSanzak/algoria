@@ -1,6 +1,6 @@
 # Tempo native signing proof
 
-An isolated macOS development companion for the [implementation plan](../../docs/TEMPO_IMPLEMENTATION_PLAN.md). Its original proof mode is preserved; the source plugin can now launch it for structured MPP image purchases. The companion is built separately from the shipped plugin.
+An isolated macOS development companion for the [implementation plan](../../docs/TEMPO_IMPLEMENTATION_PLAN.md). Its original proof mode is preserved; the source plugin can now launch it for structured MPP image and phone purchases. The companion is built separately from the shipped plugin.
 
 ## What it proves
 
@@ -88,10 +88,12 @@ Pinned versions are recorded in `package.json` and `package-lock.json`. Both cha
 
 ## MPP purchase extension
 
-The companion now also accepts a structured version-2 MPP image purchase with a
+The companion now also accepts a structured version-2 MPP image or phone purchase with a
 signed permission receipt (required in live mode). It
 constructs the challenge-bound `transferWithMemo`, reviews the actual prompt,
-recipient and price, then requires Touch ID to sign. See
+recipient and price, then requires Touch ID to sign. Phone reviews show the
+approved contact, goal, on-behalf-of name, language and a real-call warning.
+Permissions bind exactly one service/URL; image grants cannot cover calls. See
 [payment implementation and setup](../../docs/TEMPO_MPP_IMPLEMENTATION.md).
 
 After building, `node scripts/check-purchase-runtime.mjs` verifies this path in
@@ -129,13 +131,14 @@ funding, RPC calls or purchases:
 ```sh
 ".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview purchase
 ".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview budget
+".build/Algoria Signing Proof.app/Contents/MacOS/AlgoriaSigningProof" --preview phone
 npm run test:ui
 ```
 
 Previews use clearly marked synthetic data and **Close preview**, never an
 approval action. All fixture branches exit before the SDK and key-creation
-paths. `--render-ui /absolute/existing/temp-directory` renders all seven pages
-in both light and dark appearances for visual review.
+paths. `--render-ui /absolute/existing/temp-directory` renders image and phone
+purchase/budget pages in both light and dark appearances for visual review.
 
 Live windows keep Cancel and Touch ID approval fixed below scrollable details.
 Escape and the close control cancel; Return is not a spending shortcut. The

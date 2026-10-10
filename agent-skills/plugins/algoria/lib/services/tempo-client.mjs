@@ -6,10 +6,11 @@ import { getBudget, readLedger, editLedger, updateJob, readJob, publicJob, reser
 import { loadTempoSdk } from './tempo-sdk.mjs';
 import { signAndPayTempo } from './tempo-signer.mjs';
 import { loadServicesSdk } from './sdk.mjs';
+import { normalizeTempoInput, tempoResource } from './tempo-services.mjs';
 
 /** @param {any} job @param {string} [credential] */
 async function post(job, credential) {
-  if (job.apiBase !== API_BASE || job.resource !== serviceUrl('image.generate')) throw new Error('Untrusted MPP endpoint');
+  if (job.apiBase !== API_BASE || job.resource !== tempoResource(job.service) || job.resource !== serviceUrl(job.service)) throw new Error('Untrusted MPP endpoint');
   return apiFetch(`${job.resource}?mode=sync&wait_ms=45000`, { method: 'POST',
     headers: { 'content-type': 'application/json', 'X-Payment-Protocol': 'mpp',
       'Idempotency-Key': job.id, 'X-Recovery-Token': job.token,
@@ -52,14 +53,12 @@ async function requestQuote(job) {
 /** @param {string} service @param {any} input @param {string} budget @param {string} [id] */
 export async function quoteTempo(service, input, budget, id = randomUUID()) {
   jobUrl(id);
-  if (service !== 'image.generate' || !input || Object.keys(input).length !== 1 ||
-      typeof input.prompt !== 'string' || !input.prompt.trim() || input.prompt.length > 4000) throw new Error('MPP supports image.generate with one prompt');
-  const body = JSON.stringify({ prompt: input.prompt.trim() });
+  const body = JSON.stringify(normalizeTempoInput(service, input));
   return withLock(`job-${id}`, async () => {
     if ((await getBudget(budget)).protocol !== 'mpp') throw new Error('Configure a separate --protocol mpp budget first');
     let job = (await readLedger()).jobs[id];
     if (job) {
-      if (job.protocol !== 'mpp' || job.body !== body || job.budget !== budget) throw new Error('Saved job identity conflict');
+      if (job.protocol !== 'mpp' || job.service !== service || job.body !== body || job.budget !== budget) throw new Error('Saved job identity conflict');
       return publicJob(await requestQuote(job));
     }
     const result = await apiFetch(serviceUrl(service), { headers: { 'X-Payment-Protocol': 'mpp' } });
@@ -70,6 +69,10 @@ export async function quoteTempo(service, input, budget, id = randomUUID()) {
         offer?.protocol !== 'mpp' || offer.chain !== 'eip155:42431' || offer.decimals !== 6 ||
         offer.token !== '0x20c0000000000000000000000000000000000000' ||
         !/^0x[0-9a-f]{40}$/.test(offer.recipient) || !/^[1-9][0-9]{0,6}$/.test(offer.amount)) throw new Error('Unsupported MPP service metadata');
+    const { validateInput } = await loadServicesSdk();
+    validateInput(contract.input_schema, JSON.parse(body));
+    if (service === 'phone.call' && (!Array.isArray(contract.preparation?.contacts) ||
+        !contract.preparation.contacts.includes(JSON.parse(body).contact))) throw new Error('Choose an operator-approved phone contact');
     job = { id, protocol: 'mpp', chain: 'eip155:42431', tokenAsset: offer.token, decimals: 6,
       token: randomBytes(32).toString('base64url'), apiBase: API_BASE, resource: serviceUrl(service),
       service, serviceVersion: contract.version, body, budget, expectedOffer: offer,
@@ -99,7 +102,7 @@ async function accept(job, response, body) {
         reference: job.transaction, timestamp: payment.mpp.timestamp } };
   }
   if (body.status === 'succeeded') {
-    if (!payment || !body.output) throw new Error('Paid image result is incomplete');
+    if (!payment || !body.output) throw new Error('Paid service result is incomplete');
     const { validateInput } = await loadServicesSdk();
     validateInput(job.outputSchema, body);
   }

@@ -8,8 +8,11 @@ const read = (path) => readFile(new URL(path, root), 'utf8');
 describe('Tempo build dependency contract', () => {
   for (const workflow of ['ci.yml', 'publish-npm.yml']) {
     it(`${workflow} installs the shared builder before checking and bundling`, async () => {
-      const source = await read(`.github/workflows/${workflow}`);
+      const workflowSource = await read(`.github/workflows/${workflow}`);
       // Check only the plugin job, not the independent Svelte app jobs.
+      const source = workflow === 'ci.yml'
+        ? workflowSource.slice(workflowSource.indexOf('\n  agent-skills:'), workflowSource.indexOf('\n  verify:'))
+        : workflowSource;
       const typeCheck = source.indexOf('run: pnpm check');
       const preparation = source.slice(0, typeCheck);
       expect(typeCheck).toBeGreaterThan(0);

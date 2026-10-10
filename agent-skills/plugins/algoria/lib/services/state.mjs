@@ -7,7 +7,8 @@ import { atomicAmount, displayAmount } from './policy.mjs';
 import { deliveryFor } from './delivery.mjs';
 import { journeyFor } from './journey.mjs';
 import { approvePermission, verifyPermissionReceipt } from './permission-approval.mjs';
-import { activePermission, permissionCovers, canonicalPermission, PERMISSION_RESOURCE } from './permission-schema.mjs';
+import { activePermission, permissionCovers, canonicalPermission } from './permission-schema.mjs';
+import { tempoResource } from './tempo-services.mjs';
 
 /** @typedef {{total: string, perCall: string, reservations: Record<string, string>, protocol?: string, permission?: any, revokedAt?: string}} Budget */
 /** @typedef {{version: number, budgets: Record<string, Budget>, jobs: Record<string, any>}} Ledger */
@@ -52,7 +53,7 @@ function committed(budget) {
 }
 
 /** @param {string} name @param {string} total @param {string} perCall @param {string} [protocol]
- * @param {{agent?: string, recipient?: string, expires?: string}} [scope] */
+ * @param {{agent?: string, recipient?: string, expires?: string, service?: string}} [scope] */
 export async function setBudget(name, total, perCall, protocol = 'x402', scope = {}) {
   budgetName(name);
   if (!['x402', 'mpp'].includes(protocol)) throw new Error('unsupported budget protocol');
@@ -64,7 +65,7 @@ export async function setBudget(name, total, perCall, protocol = 'x402', scope =
     if (previous && (previous.protocol ?? 'x402') !== protocol) throw new Error('use a separate budget for each payment protocol');
     if (previous && committed(previous) > BigInt(totalAtomic)) throw new Error('budget is below already spent/reserved amount');
     const policy = { version: 1, id: randomUUID(), budget: name, agent: scope.agent,
-      service: 'image.generate', resource: PERMISSION_RESOURCE, network: 'eip155:42431',
+      service: scope.service ?? 'image.generate', resource: tempoResource(scope.service ?? 'image.generate'), network: 'eip155:42431',
       token: '0x20c0000000000000000000000000000000000000', recipient: scope.recipient?.toLowerCase(),
       totalAtomic, perCallAtomic, validAfter: Math.floor(Date.now() / 1000),
       validUntil: Math.floor(Date.parse(scope.expires ?? '') / 1000), previousId: previous?.permission?.policy.id ?? null };

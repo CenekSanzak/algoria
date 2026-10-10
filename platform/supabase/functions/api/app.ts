@@ -4,9 +4,9 @@ import type { SocialStore } from './social-store.ts';
 import type { PhoneCalls, PhoneInput } from './phone.ts';
 import { uploadReference } from './references.ts';
 import { Hono } from 'npm:hono@4.13.8';
-import type { Config } from './config.ts';
+import { type Config, tempoServicePayment } from './config.ts';
 import { PaymentGateway, type PaymentRequirements, receiptHeader } from './payments.ts';
-import { type MppGateway, mppReceiptHeader } from './mpp.ts';
+import { type MppGateway, mppReceiptHeader, validateMppPayment } from './mpp.ts';
 import type { Job, Store } from './store.ts';
 import {
   downloadAudio,
@@ -85,6 +85,10 @@ export function createApp(d: Dependencies) {
   });
 
   const services = enabledServices(config);
+  for (const service of services) {
+    const payment = tempoServicePayment(config, service.id);
+    if (payment) validateMppPayment(payment);
+  }
   function findService(id: string) {
     const service = services.find((item) => item.id === id);
     if (!service) throw new HttpError(404, 'service-not-found');
@@ -97,7 +101,8 @@ export function createApp(d: Dependencies) {
   });
   async function document(service: Service, mppOnly = false) {
     const payment = servicePayment(config, service.id)!;
-    const offer = service.id === 'image.generate' && config.mpp
+    const tempoPayment = tempoServicePayment(config, service.id);
+    const offer = tempoPayment
       ? {
         protocol: 'mpp',
         method: 'tempo',
@@ -105,8 +110,8 @@ export function createApp(d: Dependencies) {
         chain: 'eip155:42431',
         token: '0x20c0000000000000000000000000000000000000',
         decimals: 6,
-        recipient: config.mpp.recipient.toLowerCase(),
-        amount: config.mpp.amount,
+        recipient: tempoPayment.recipient.toLowerCase(),
+        amount: tempoPayment.amount,
       }
       : undefined;
     if (mppOnly) {
@@ -362,9 +367,16 @@ export function createApp(d: Dependencies) {
     // Only static stages and bounded error codes; SDK messages can contain
     // authorization or user prompts. Never log the message, request or stack.
     const code = (e as Error & { code?: unknown }).code;
-    console.error('API request failed', e.name, c.get('failureStage') ?? 'other',
-      typeof code === 'string' && /^[A-Z0-9_]{1,40}$/.test(code) ? code
-        : e.message === 'Invalid API key' ? 'SUPABASE_API_KEY_INVALID' : 'unclassified');
+    console.error(
+      'API request failed',
+      e.name,
+      c.get('failureStage') ?? 'other',
+      typeof code === 'string' && /^[A-Z0-9_]{1,40}$/.test(code)
+        ? code
+        : e.message === 'Invalid API key'
+        ? 'SUPABASE_API_KEY_INVALID'
+        : 'unclassified',
+    );
     return json({
       code: 'temporarily-unavailable',
       message: 'Retry the same request identity or check its status.',
@@ -435,7 +447,7 @@ export function createApp(d: Dependencies) {
     const serviceId = c.req.param('service_id');
     const protocol = c.req.header('X-Payment-Protocol') ?? 'x402';
     if (!['x402', 'mpp'].includes(protocol)) throw new HttpError(400, 'unsupported-payment-protocol');
-    if (protocol === 'mpp' && (serviceId !== 'image.generate' || !d.mpp)) {
+    if (protocol === 'mpp' && (!tempoServicePayment(config, serviceId) || !d.mpp)) {
       throw new HttpError(400, 'mpp-service-unavailable');
     }
     const mode = c.req.query('mode') ?? 'sync';
@@ -493,7 +505,7 @@ export function createApp(d: Dependencies) {
       const expires = new Date(started + 10 * 60 * 1000).toISOString();
       c.set('failureStage', 'create-challenge');
       const requirements = protocol === 'mpp'
-        ? d.mpp!.quote(id, inputHash, resource, expires)
+        ? d.mpp!.quote(id, inputHash, resource, expires, tempoServicePayment(config, service.id)!)
         : await payments.requirements(payment.payTo, payment.priceAtomic);
       try {
         c.set('failureStage', 'save-quote');

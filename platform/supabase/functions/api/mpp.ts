@@ -8,6 +8,12 @@ export const TEMPO_CHAIN = 42431;
 export const TEMPO_TOKEN = '0x20c0000000000000000000000000000000000000';
 export type MppConfig = { recipient: string; amount: string; secret: string };
 type HashCredential = Credential.Credential<{ type: 'hash'; hash: `0x${string}` }>;
+export function validateMppPayment(payment: Pick<MppConfig, 'recipient' | 'amount'>) {
+  if (
+    !/^0x[0-9a-fA-F]{40}$/.test(payment.recipient) || /^0x0{40}$/.test(payment.recipient) ||
+    !/^[1-9][0-9]{0,8}$/.test(payment.amount)
+  ) throw new Error('Invalid Tempo MPP configuration');
+}
 
 /** Push charges: chain settlement happens in the wallet, verification is read-only.
  * The existing database transaction-hash claim is the durable replay boundary.
@@ -21,11 +27,8 @@ export class MppGateway {
       transport: http(undefined, { retryCount: 0, timeout: 15_000 }),
     }),
   ) {
-    if (
-      !/^0x[0-9a-fA-F]{40}$/.test(config.recipient) ||
-      /^0x0{40}$/.test(config.recipient) || !/^[1-9][0-9]{0,8}$/.test(config.amount) ||
-      config.secret.length < 32
-    ) throw new Error('Invalid Tempo MPP configuration');
+    validateMppPayment(config);
+    if (config.secret.length < 32) throw new Error('Invalid Tempo MPP configuration');
     [this.method] = tempo.charge({
       currency: TEMPO_TOKEN,
       recipient: config.recipient as `0x${string}`,
@@ -35,7 +38,14 @@ export class MppGateway {
     });
   }
 
-  quote(id: string, inputHash: string, resource: string, expires: string) {
+  quote(
+    id: string,
+    inputHash: string,
+    resource: string,
+    expires: string,
+    payment: Pick<MppConfig, 'recipient' | 'amount'> = this.config,
+  ) {
+    validateMppPayment(payment);
     const challenge = Challenge.from({
       secretKey: this.config.secret,
       method: 'tempo',
@@ -44,9 +54,9 @@ export class MppGateway {
       expires,
       meta: { job_id: id, input_hash: inputHash, resource },
       request: {
-        amount: this.config.amount,
+        amount: payment.amount,
         currency: TEMPO_TOKEN,
-        recipient: this.config.recipient.toLowerCase(),
+        recipient: payment.recipient.toLowerCase(),
         methodDetails: { chainId: TEMPO_CHAIN, supportedModes: ['push'] },
       },
     });

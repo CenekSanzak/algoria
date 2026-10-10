@@ -5,13 +5,14 @@ import { emit, isMain, parseArgs, run } from '../../../lib/cli.mjs';
 import { listJobs, quote, runJob, statusJob } from '../../../lib/services/client.mjs';
 import { getBudget, setBudget, revokeBudget } from '../../../lib/services/state.mjs';
 import { quoteTempo } from '../../../lib/services/tempo-client.mjs';
-import { imageTask } from '../../../lib/services/task.mjs';
+import { tempoTask } from '../../../lib/services/task.mjs';
 import { tempoReadiness } from '../../../lib/services/tempo-readiness.mjs';
 
 const USAGE = `algoria pay — buy AI services and resume saved tasks
 
   readiness                                           local Tempo/Touch ID checks; no payment
-  task --input <json-file> --budget <name>              prepare one Tempo image task
+  task --service image.generate|phone.call --input <json-file> --budget <name>
+                                                      prepare one Tempo task (default: image)
   task <saved-id> [--approve --fund-testnet] [--wait]    resume/open the same task
 
   budget --name <name> --total <USDC> --per-call <USDC>   set a named spending cap
@@ -26,6 +27,7 @@ const USAGE = `algoria pay — buy AI services and resume saved tasks
 Options: --json; quote --id <UUID-v4> reuses a known identity and identical input.
 Tempo: budget/quote --protocol mpp; run --approve --fund-testnet.
 Tempo budget requires --agent claude|codex --recipient 0x... --expires ISO_DATE.
+Use budget --service phone.call for calls; default image permissions cannot pay for calls.
 Grant/change opens Touch ID; revoke does not undo submitted payments.
 Tempo uses test PathUSD, a separate budget, and the native Touch ID companion.
 External: quote stellar8004:<agent>:<service-index> --method GET|POST ...
@@ -60,7 +62,8 @@ export function main(argv) {
         input = JSON.parse(data);
       }
       if (target && flags.id && target !== flags.id) throw new Error('conflicting task IDs');
-      result = await imageTask({ id: target ?? (typeof flags.id === 'string' ? flags.id : undefined), input,
+      result = await tempoTask({ id: target ?? (typeof flags.id === 'string' ? flags.id : undefined), input,
+        service: typeof flags.service === 'string' ? flags.service : undefined,
         budget: typeof flags.budget === 'string' ? flags.budget : undefined,
         approve: flags.approve === true, fundTestnet: flags['fund-testnet'] === true,
         wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
@@ -70,6 +73,7 @@ export function main(argv) {
       result = flags.total || flags['per-call']
         ? await setBudget(name, value(flags, 'total'), value(flags, 'per-call'), protocol,
           { agent: typeof flags.agent === 'string' ? flags.agent : undefined,
+            service: typeof flags.service === 'string' ? flags.service : undefined,
             recipient: typeof flags.recipient === 'string' ? flags.recipient : undefined,
             expires: typeof flags.expires === 'string' ? flags.expires : undefined })
         : await getBudget(name);

@@ -129,11 +129,11 @@ do {
         emit(["status": "ui-rendered", "paths": try WalletReviewController.renderPreviews(to: arguments[1]), "keyCreated": false])
         exit(0)
     }
-    if arguments.count == 2, arguments[0] == "--preview", ["purchase", "budget"].contains(arguments[1]) {
+    if arguments.count == 2, arguments[0] == "--preview", ["purchase", "budget", "phone"].contains(arguments[1]) {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
         let kind: WalletReviewKind = arguments[1] == "budget" ? .permission : .purchase
-        let preview = WalletReviewController(summary: WalletReviewController.fixture(kind), kind: kind, preview: true)
+        let preview = WalletReviewController(summary: WalletReviewController.fixture(kind, phone: arguments[1] == "phone"), kind: kind, preview: true)
         _ = preview.runReview()
         emit(["status": "preview-closed", "keyCreated": false, "signed": false])
         exit(0)

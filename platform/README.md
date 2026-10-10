@@ -1,7 +1,7 @@
 # Algoria API
 
 Independent hackathon API in `platform/`. TypeScript + Hono, Supabase Edge Functions/Postgres/Storage,
-Stellar testnet x402, and fal's persistent media queues.
+Stellar testnet x402, Tempo Moderato MPP, and fal's persistent media queues.
 
 Base URL: `https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api`
 
@@ -18,7 +18,7 @@ x402 signing, sync/async execution, persistent recovery, and acceptance tests.
 - `POST /v1/services/{service_id}?mode=sync`: pay for and execute the selected service.
 - `GET /v1/jobs/{job_id}`: recover status, payment receipt and output.
 
-The six implemented services share the same payment and job contract. Discovery lists only enabled services:
+The seven implemented services share the same durable job contract. Discovery lists only enabled services:
 
 - `video.social`: one approved plan, optional reference photos, 1–5 vertical scenes,
   English narration (female by default), automatic timing, composition and optional captions.
@@ -27,12 +27,13 @@ The six implemented services share the same payment and job contract. Discovery 
 - `phone.call`: `{ "contact": "berkin", "goal": "Remind him about the 3pm demo", "on_behalf_of": "Dogukan" }`.
   Places one real Twilio call to an operator-approved contact (`PHONE_CALL_CONTACTS`; raw numbers are
   never accepted). Twilio streams the call audio over a WebSocket (`/phone/stream`) to OpenAI Realtime
-  (`gpt-realtime-mini`, 8 kHz mu-law passed through untouched), so the AI talks live in English. It hangs up
+  (`gpt-realtime-mini`, 8 kHz mu-law passed through untouched), so the AI talks live in English or Turkish (`language: "tr"`). It hangs up
   after the goal or about 95 seconds, within the free-plan Edge wall clock. The job returns
   `{ call: { contact, status, duration_seconds, summary, goal_achieved, transcript } }`.
-  **0.1 test USDC** (`1000000` atomic units). Listed only when Twilio, OpenAI, contacts and its recipient are set.
+  **0.10 test USDC** (`1000000` atomic units) or **0.10 test PathUSD on Tempo** (`100000` atomic units).
+  Listed only when Twilio, OpenAI, contacts and its Stellar recipient are set; Tempo additionally requires MPP configuration.
 - `image.generate`: `{ "prompt": "A red sailboat, watercolor illustration" }`, 1–4000 characters;
-  one square 1K PNG. **0.01 test USDC** (`100000` atomic units).
+  one square 1K PNG. **0.01 test USDC** (`100000` atomic units) or **0.01 test PathUSD on Tempo** (`10000` atomic units).
 - `speech.generate`: `{ "text": "Meet Tide, your everyday bottle.", "voice": "Craig (en)" }`;
   nonempty English text up to 1000 characters. Optional voice is `Craig (en)` (default),
   `Olivia (en)`, `Dennis (en)`, or `Sarah (en)`. Returns 24 kHz WAV and its actual duration in seconds.
@@ -64,6 +65,17 @@ Before the first request for each job, the client generates and saves two values
 An unpaid call returns standard x402 v2 `402` with `PAYMENT-REQUIRED`. A local wallet signs the
 Stellar testnet authorization. Repeat the same input and headers with `PAYMENT-SIGNATURE`.
 Each service has its own receiving wallet and fixed price listed above; use its actual 402 offer.
+
+For `image.generate` and `phone.call`, `X-Payment-Protocol: mpp` on metadata/POST
+selects Tempo Moderato (42431). Metadata exposes `mpp.amount` (six decimals) and
+`mpp.recipient`. The 402 uses `WWW-Authenticate`; repeat the same saved request
+with `Authorization: Payment <hash credential>`. Successful responses include
+`Payment-Receipt`; authenticated job GETs use the existing recovery bearer token.
+Phone calls default to `100000` test PathUSD atomic units and inherit
+`TEMPO_IMAGE_RECIPIENT`. Optional `TEMPO_PHONE_RECIPIENT` and
+`TEMPO_PHONE_PRICE_ATOMIC` override only phone payments. `MPP_SECRET_KEY` remains
+stable/shared; do not rotate it on deployment. Other services remain Stellar-only.
+No database migration is needed. See [Tempo phone implementation](../docs/TEMPO_PHONE_PAYMENTS.md).
 
 `sync` is the default, with a 45-second waiting budget; `wait_ms` accepts 0–60000. Payment and provider
 submission are mandatory acceptance steps; a very short wait does not skip them. Completion within the
@@ -176,5 +188,6 @@ input, ID, and recovery token, without `PAYMENT-SIGNATURE`; GET does not submit 
 An accepted fal request whose ID was lost must be matched by an operator before attachment;
 there is no automatic resubmission or refund path.
 
-The project is Stellar testnet only. The composite social service supports reference-guided image
+The project supports Stellar testnet and Tempo Moderato testnet (image and phone only).
+The composite social service supports reference-guided image
 editing internally. The skill/plugin client remains a separate package in `agent-skills/`.

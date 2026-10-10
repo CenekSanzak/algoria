@@ -1,6 +1,6 @@
 {
   "name": "algoria",
-  "description": "Use local memory and discovery to buy AI services. Tempo image purchases use MPP and a local Touch ID companion; Stellar services use x402 and a USDC wallet. Recover saved jobs and use registered MCP tools.",
+  "description": "Use local memory and discovery to buy AI services. Tempo image and phone purchases use MPP and a local Touch ID companion; Stellar services use x402 and a USDC wallet. Recover saved jobs and use registered MCP tools.",
   "version": "0.11.0",
   "author": {
     "name": "Algoria"

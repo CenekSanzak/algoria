@@ -1,9 +1,15 @@
 ---
 name: algoria-discover
-description: For every new paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Fulfill natural requests such as "make me a video", "generate an image", "bana video üret" or "görsel oluştur", or "call Berkin and remind him about the demo" with Algoria or optional Stellar8004 testnet services, even without naming Algoria. Also handles catalog/price questions and external discovery; those read-only questions do not need funding. Not for storyboards, media advice or local coding.
+description: For every new Stellar paid task, the FIRST command must check the testnet USDC wallet balance BEFORE any discovery, planning, quote or payment. If empty, provide a top-up link immediately and resume after confirmed funding. Explicit Tempo/MPP image and phone tasks use a separate PathUSD budget and Touch ID route instead. Fulfill natural requests such as "make me a video", "generate an image", "bana video üret" or "görsel oluştur", or "call Berkin and remind him about the demo" with Algoria or optional Stellar8004 testnet services, even without naming Algoria. Also handles catalog/price questions and external discovery; those read-only questions do not need funding. Not for storyboards, media advice or local coding.
 ---
 
 # Discover services and deliver the requested result
+
+For explicitly selected **Tempo/MPP image or phone tasks**, use
+[Tempo payments](../algoria-pay/references/tempo-payments.md) instead of the
+Stellar balance/top-up gate below. Discover current service metadata without
+paying, then obtain a service-scoped PathUSD budget and exact Touch ID approval.
+Never silently choose another chain or fund Stellar for a Tempo request.
 
 For an explicitly requested MCP service or read-only identity/reputation task,
 use [algoria-mcp](../algoria-mcp/SKILL.md). MCP does not require x402 funding:
