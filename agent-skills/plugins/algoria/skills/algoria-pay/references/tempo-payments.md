@@ -1,7 +1,8 @@
-# Tempo image and phone payments
+# Tempo image, phone and social-video payments
 
-`image.generate` (default 0.01) and `phone.call` (default 0.10) support MPP on
-Tempo Moderato (42431), using six-decimal **test PathUSD**. Other services remain
+`image.generate` (default 0.01), `phone.call` (default 0.10) and `video.social`
+(default 0.11) support MPP on Tempo Moderato (42431), using six-decimal
+**test PathUSD**. Other services remain
 Stellar-only. Read live service metadata for the exact price and recipient.
 Use the absolute `PAY` helper resolved in the parent
 skill. Do not run Stellar top-up for this route.
@@ -78,7 +79,8 @@ node "$PAY" task SAVED_TASK_ID --approve --wait --json
 
 `task` is the preferred journey: quote, exact native review, payment,
 bounded execution wait and a result card, all using one saved job identity.
-New tasks default to `image.generate`; use `--service phone.call` for a call.
+New tasks default to `image.generate`; use `--service phone.call` for a call
+or `--service video.social` for a social video.
 Recovery infers the service from the saved ID; never change it.
 When the user's exact creative request and budget are already
 authorized, `task --input ... --budget ... --approve --wait` can
@@ -122,7 +124,7 @@ before manual recovery. Host tool approvals remain separate.
 
 The native review shows the actual prompt, token, recipient, price and fees, then
 requires Touch ID for signing. `--approve` alone cannot bypass biometric approval.
-Display the returned image using the normal delivery rules.
+Display the returned media using the normal delivery rules.
 After a confirmed payment, always include a clickable **View transaction on
 Tempo Explorer** Markdown link using `payment.explorerUrl` (also available as
 `transactionUrl`), alongside the result or provider-error report. The helper
@@ -137,6 +139,40 @@ request permission to rerun the same helper with the same companion path outside
 the host's restricted sandbox. A restricted-process result is not proof that
 Touch ID is disabled. Signing still needs its separate native approval; do not
 disable host security settings or bypass Touch ID.
+
+## Social videos
+
+Discover `video.social` and read [the media planning guidance](workflows.md).
+Discuss the brief, 1–5 still-image scenes, exact English narration (at most
+65 words/500 characters), voice, reference roles and captions before production.
+One quote/payment covers the entire vertical MP4; do not charge separately for
+its internal images, speech, slideshow, composition or captions. This creates a
+montage from still scenes, not arbitrary motion footage, and does not post to TikTok.
+
+Use a separate `video.social` permission with the live recipient, user-approved
+limits and expiry. Existing image/call permissions are not expanded. The default
+price is 0.11 test PathUSD plus network fees; live metadata is authoritative.
+Rebuild the companion from the same checkout for video-plan review. It shows
+the full scenes, narration, voice, captions and references before Touch ID.
+
+```sh
+# Example limits only: obtain the user's approval first.
+node "$PAY" budget --name tempo-videos --service video.social --total 0.11 --per-call 0.11 --protocol mpp --agent codex --recipient SERVICE_RECIPIENT --expires USER_APPROVED_ISO_DATE --json
+node "$PAY" task --service video.social --input /absolute/path/video.json --budget tempo-videos --approve --wait --timeout 600 --json
+```
+
+Minimal input: `{"brief":"A peaceful garden video","scenes":["One vertical photograph of a Japanese garden in morning mist"],"narration":"Take a breath. Find your quiet moment."}`.
+Defaults: Olivia (en), captions on, no references. Prepare each scene as an
+independent image prompt. Upload only user-selected reference photos through
+the existing `upload-reference` helper, and preserve the exact input after quoting.
+The backend validates references before payment and refreshes admitted URLs internally.
+Generation consumes real provider capacity despite test-token payment.
+
+Keep the same saved task on timeout, cancellation or a lost reply. A timeout is
+not failure; use `task SAVED_TASK_ID --wait --timeout 600` without `--approve`
+to recover progress and the MP4. Never buy internal stages or a replacement
+video to recover an uncertain result. Deliver the actual video preview and the
+confirmed Tempo explorer receipt, not a script or storyboard.
 
 ## Real phone calls
 
@@ -180,9 +216,9 @@ recipient, host label and expiry first. Use the recipient from current service
 metadata; do not guess it. Maximum lifetime is 30 days; maximum total is 100 test
 PathUSD. An existing MPP budget without a signed permission must be reapproved;
 Stellar budgets are unchanged. Each approved scope is exactly one fixed Algoria
-endpoint: image (default) or phone (`budget --service phone.call`), Tempo testnet
-and PathUSD. Granting a phone scope requires fresh biometric approval; existing
-image permissions are not expanded. Every purchase still requires Touch ID;
+endpoint: image (default), phone (`budget --service phone.call`) or social video
+(`budget --service video.social`), Tempo testnet and PathUSD. A new service scope
+requires fresh biometric approval; existing permissions are not expanded. Every purchase still requires Touch ID;
 this budget does not permit autonomous/delegated signing.
 
 `budget --name tempo-demo --json` reads permission state and usage. A grant or

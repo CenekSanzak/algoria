@@ -1,6 +1,11 @@
 # Tempo native signing proof
 
-An isolated macOS development companion for the [implementation plan](../../docs/TEMPO_IMPLEMENTATION_PLAN.md). Its original proof mode is preserved; the source plugin can now launch it for structured MPP image and phone purchases. The companion is built separately from the shipped plugin.
+An isolated macOS development companion for the [implementation plan](../../docs/TEMPO_IMPLEMENTATION_PLAN.md). Its original proof mode is preserved; the source plugin can launch it for structured MPP image, phone and social-video purchases. The companion is built separately from the shipped plugin.
+
+Version 0.12.0 adds `video.social`: the native review includes the exact brief,
+ordered scene prompts, narration, voice, captions and reference roles/URLs.
+It requires a separate video-scoped permission and signs one payment for the
+whole composite workflow. Rebuild this app alongside the updated plugin.
 
 ## What it proves
 

@@ -19,6 +19,11 @@ for (
       on_behalf_of: 'Dogukan',
       language: 'tr',
     }, '100000'],
+    ['video.social', {
+      brief: 'A peaceful garden social video', scenes: ['A vertical photograph of a misty Japanese garden'],
+      narration: 'Take a breath. Find your quiet moment.', voice: 'Olivia (en)',
+      references: [{ url: `https://vqqbvydiehuwdzbgvmun.supabase.co/storage/v1/object/sign/outputs/references/${randomUUID()}/${'a'.repeat(64)}.png?token=offline.fixture`, role: 'style' }], captions: true,
+    }, '110000'],
   ]
 ) {
   const challenge = Challenge.from({
@@ -50,7 +55,7 @@ for (
     token: challenge.request.currency,
     recipient: challenge.request.recipient,
     totalAtomic: '2000000',
-    perCallAtomic: '1000000',
+    perCallAtomic: '2000000',
     validAfter: now - 1,
     validUntil: now + 600,
     previousId: null,

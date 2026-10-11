@@ -5,7 +5,7 @@ import { TxEnvelopeTempo } from 'ox/tempo';
 import * as Attribution from '../node_modules/mppx/dist/tempo/Attribution.js';
 import { CHAIN_ID, TOKEN, prepare, completePrepared } from './transaction.mjs';
 import { checkPurchasePermission } from './permissions.mjs';
-import { normalizeTempoInput, tempoResource } from '../../../agent-skills/plugins/algoria/lib/services/tempo-services.mjs';
+import { normalizeTempoInput, tempoResource, TEMPO_SERVICES } from '../../../agent-skills/plugins/algoria/lib/services/tempo-services.mjs';
 import { tempoFundingDetails } from '../../../agent-skills/plugins/algoria/lib/services/tempo-funding.mjs';
 
 const transfer = AbiFunction.from('function transferWithMemo(address to, uint256 amount, bytes32 memo) returns (bool)');
@@ -18,7 +18,7 @@ export function preparePurchase(request, publicKey, now = Math.floor(Date.now() 
   const { challenge: c, input } = request;
   const offer = c?.request;
   const meta = c?.meta;
-  const service = ['image.generate', 'phone.call'].find(id => meta?.resource === tempoResource(id));
+  const service = TEMPO_SERVICES.find(id => meta?.resource === tempoResource(id));
   if (!service) throw new Error('Unsupported purchase service');
   const canonicalInput = normalizeTempoInput(service, input);
   const correlation = c?.opaque ? PaymentRequest.deserialize(c.opaque) : null;
@@ -48,9 +48,9 @@ export function preparePurchase(request, publicKey, now = Math.floor(Date.now() 
     calls: [{ to: TOKEN, value: 0n, data: AbiFunction.encodeData(transfer, [offer.recipient, BigInt(offer.amount), memo]) }] });
   return { transaction, digest: TxEnvelopeTempo.getSignPayload(transaction),
     summary: { ...base.summary, service, resource: tempoResource(service),
-      title: `Algoria ${service === 'phone.call' ? 'phone call' : 'image purchase'} — TESTNET`,
-      action: `${service === 'phone.call' ? 'Place one real phone call' : 'Generate one image'} for ${(Number(offer.amount) / 1e6).toFixed(6)} test PathUSD`,
-      recipient: offer.recipient, ...(service === 'phone.call' ? { call: canonicalInput } : { prompt: input.prompt }), jobId: meta.job_id,
+      title: `Algoria ${service === 'phone.call' ? 'phone call' : service === 'video.social' ? 'social video' : 'image purchase'} — TESTNET`,
+      action: `${service === 'phone.call' ? 'Place one real phone call' : service === 'video.social' ? 'Create one social video' : 'Generate one image'} for ${(Number(offer.amount) / 1e6).toFixed(6)} test PathUSD`,
+      recipient: offer.recipient, ...(service === 'phone.call' ? { call: canonicalInput } : service === 'video.social' ? { social: canonicalInput } : { prompt: input.prompt }), jobId: meta.job_id,
       amount: offer.amount, challengeId: c.id, ...(permission ? { permission } : {}) } };
 }
 

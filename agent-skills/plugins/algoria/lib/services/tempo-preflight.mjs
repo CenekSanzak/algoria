@@ -4,12 +4,13 @@ import { apiFetch, serviceUrl } from './api.mjs';
 import { loadTempoSdk } from './tempo-sdk.mjs';
 import { TEMPO_TOKEN } from './tempo-links.mjs';
 import { atomicAmount } from './policy.mjs';
+import { tempoResource } from './tempo-services.mjs';
 
 /** Rehearsal check only: no keys, quote POST, faucet, authentication or purchase.
  * Checks current installation, service, RPC and an ALREADY approved budget.
  * @param {{budget: string, service?: string, agent?: string}} options */
 export async function tempoPreflight({ budget, service = 'image.generate', agent }) {
-  if (!['image.generate', 'phone.call'].includes(service)) throw new Error('Choose image.generate or phone.call');
+  tempoResource(service);
   if (agent && !['claude', 'codex'].includes(agent)) throw new Error('Choose claude or codex');
   /** @type {{key: string, ready: boolean, message: string}[]} */
   const checks = [];
@@ -52,7 +53,7 @@ export async function tempoPreflight({ budget, service = 'image.generate', agent
   const ready = checks.every(check => check.ready);
   return { ready, service, budget, network: 'eip155:42431', unit: 'test PathUSD', checks,
     ...(offer ? { servicePrice: `${BigInt(offer.amount) / 1_000_000n}.${String(BigInt(offer.amount) % 1_000_000n).padStart(6, '0')}`, recipient: offer.recipient } : {}),
-    nextAction: ready ? 'Ask for your image or approved call. The purchase will still require Touch ID.' : checks.find(check => !check.ready)?.message,
+    nextAction: ready ? 'Ask for your image, approved call or social video. The purchase will still require Touch ID.' : checks.find(check => !check.ready)?.message,
     paymentAttempted: false, keyCreated: false, faucetRequested: false,
     note: 'Read-only snapshot, not a live signing, faucet or provider test. Wallets remain temporary; no persistent balance is checked.' };
 }

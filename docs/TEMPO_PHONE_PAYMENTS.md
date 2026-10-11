@@ -3,12 +3,15 @@
 Implemented in `algoria-x` source on `main`, 2026-10-10. This is not a claim of
 npm publication, backend deployment, or a completed live phone test.
 
+Follow-up: [Tempo social-video support](TEMPO_SOCIAL_PAYMENTS.md) adds
+`video.social` to the plugin/native/backend source in version 0.12.0.
+
 ## What changes
 
 The Claude/Codex plugin can pay for one real `phone.call` through MPP on Tempo
 Moderato (42431). Default price: **0.10 test PathUSD**, six-decimal atomic amount
 `100000`. Image payments remain **0.01 test PathUSD** (`10000`). Stellar x402
-continues unchanged for all enabled services. Other services do not gain Tempo.
+continues unchanged for all enabled services. Standalone speech/video primitives remain Stellar-only.
 
 | Service | Stellar test USDC | Tempo test PathUSD |
 | --- | ---: | ---: |
@@ -17,7 +20,7 @@ continues unchanged for all enabled services. Other services do not gain Tempo.
 | `video.slideshow` | 0.01 | — |
 | `video.compose` | 0.01 | — |
 | `video.caption` | 0.02 | — |
-| `video.social` | 0.11 | — |
+| `video.social` | 0.11 | 0.11 (0.12.0 source) |
 | `phone.call` | 0.10 | 0.10 |
 
 These are default prices. Always read deployed service metadata before spending.

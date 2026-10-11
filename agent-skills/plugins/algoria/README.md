@@ -5,10 +5,18 @@ discovery, planning, quotes or payment attempts. If empty, provide the funding
 link immediately, verify the deposit, then resume the original task within its
 approved budget. The installed skills state this order in their entrypoints.
 
-Version 0.11.0 adds Touch ID-approved local Tempo budgets, exact recipient/service
+Version 0.12.0 adds Tempo `video.social` purchases (default **0.11 test PathUSD**)
+with a separate video permission and full plan review in the local wallet.
+One payment covers generated still scenes, English narration, composition and
+optional captions into a vertical MP4. No automatic TikTok publishing.
+Rebuild the companion and update the plugin together; see
+[Tempo social videos](skills/algoria-pay/references/tempo-payments.md#social-videos).
+Source/package preparation does not imply npm publication or a live paid test.
+
+Version 0.11.0 introduced Touch ID-approved local Tempo budgets, exact recipient/service
 scope, spending caps, expiry and immediate local revocation. Every purchase still
 requires Touch ID; this is not on-chain ERC-8196 enforcement. It retains a
-**single saved Tempo image or phone task**, read-only readiness,
+**single saved Tempo image, phone or social-video task**, read-only readiness,
 clear progress/recovery actions and queued native Touch ID purchases. MPP uses
 a separate test PathUSD budget. See
 [Tempo payment setup](skills/algoria-pay/references/tempo-payments.md).

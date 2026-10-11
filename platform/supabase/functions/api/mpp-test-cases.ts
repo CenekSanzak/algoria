@@ -11,7 +11,8 @@ import { hash } from './security.ts';
 import type { Job } from './store.ts';
 import { Ajv2020 } from 'npm:ajv@8.20.0/dist/2020.js';
 import { type CallRow, PhoneCalls } from './phone.ts';
-import { normalizeInput, PHONE_SERVICE } from './catalog.ts';
+import { normalizeInput, PHONE_SERVICE, SOCIAL_SERVICE } from './catalog.ts';
+import { normalizeSocial } from './social-input.ts';
 import { normalizeTempoInput } from '../../../../agent-skills/plugins/algoria/lib/services/tempo-services.mjs';
 import { readConfig, tempoServicePayment } from './config.ts';
 
@@ -127,6 +128,8 @@ export function registerMppTests(harness: typeof testHarness) {
       'MPP_SECRET_KEY',
       'TEMPO_PHONE_RECIPIENT',
       'TEMPO_PHONE_PRICE_ATOMIC',
+      'TEMPO_SOCIAL_RECIPIENT',
+      'TEMPO_SOCIAL_PRICE_ATOMIC',
     ];
     const previous = new Map(names.map((name) => [name, Deno.env.get(name)]));
     try {
@@ -136,10 +139,15 @@ export function registerMppTests(harness: typeof testHarness) {
       Deno.env.set('FAL_KEY', 'offline');
       Deno.env.set('IMAGE_GENERATE_PAY_TO', h.dependencies.config.imagePayTo);
       equal(tempoServicePayment(readConfig(), 'phone.call'), undefined);
+      equal(tempoServicePayment(readConfig(), 'video.social'), undefined);
       Deno.env.set('TEMPO_IMAGE_RECIPIENT', recipient);
       Deno.env.set('MPP_SECRET_KEY', config.secret);
       deepEqual(tempoServicePayment(readConfig(), 'image.generate'), { recipient, amount: '10000' });
       deepEqual(tempoServicePayment(readConfig(), 'phone.call'), { recipient, amount: '100000' });
+      deepEqual(tempoServicePayment(readConfig(), 'video.social'), { recipient, amount: '110000' });
+      Deno.env.set('TEMPO_SOCIAL_RECIPIENT', payer);
+      Deno.env.set('TEMPO_SOCIAL_PRICE_ATOMIC', '130000');
+      deepEqual(tempoServicePayment(readConfig(), 'video.social'), { recipient: payer, amount: '130000' });
       Deno.env.set('TEMPO_PHONE_RECIPIENT', payer);
       Deno.env.set('TEMPO_PHONE_PRICE_ATOMIC', '120000');
       deepEqual(tempoServicePayment(readConfig(), 'phone.call'), { recipient: payer, amount: '120000' });
@@ -161,6 +169,217 @@ export function registerMppTests(harness: typeof testHarness) {
         else Deno.env.set(name, value);
       }
     }
+  });
+  Deno.test('social input is canonical across backend, plugin and signer, including references/defaults', () => {
+    for (
+      const value of [SOCIAL_SERVICE.exampleInput, {
+        narration: '  Take a breath. ',
+        scenes: [' A garden ', ' A bridge '],
+        brief: ' Calm ',
+      }, {
+        brief: 'Product',
+        scenes: ['Photograph'],
+        narration: 'Look here.',
+        voice: 'Sarah (en)',
+        captions: false,
+        references: [{
+          role: 'product',
+          url:
+            `https://vqqbvydiehuwdzbgvmun.supabase.co/storage/v1/object/sign/outputs/references/${crypto.randomUUID()}/${
+              'a'.repeat(64)
+            }.png?token=fixture`,
+        }],
+      }]
+    ) {
+      equal(
+        JSON.stringify(normalizeSocial(value)),
+        JSON.stringify(normalizeTempoInput('video.social', value)),
+      );
+    }
+    for (
+      const value of [
+        {},
+        { brief: 'x', scenes: [], narration: 'x' },
+        { brief: 'x', scenes: ['x'], narration: 'word '.repeat(66) },
+        { brief: 'x', scenes: ['x'], narration: 'x', voice: 'unknown' },
+        { brief: 'x', scenes: ['x'], narration: 'x', captions: 'false' },
+        { brief: 'x', scenes: ['x'], narration: 'x', hidden: true },
+        {
+          brief: 'x',
+          scenes: ['x'],
+          narration: 'x',
+          references: [{ role: 'person', url: 'http://example.test/a' }],
+        },
+      ]
+    ) {
+      throws(() => normalizeSocial(value));
+      throws(() => normalizeTempoInput('video.social', value));
+    }
+  });
+
+  function socialHarness() {
+    const h = harness();
+    const f = paymentFixture();
+    h.dependencies.config.mpp = { ...config, social: { recipient: payer, amount: '110000' } };
+    h.dependencies.config.servicePayments!['video.social'] = {
+      payTo: h.dependencies.config.imagePayTo,
+      priceAtomic: '1100000',
+    };
+    let starts = 0, uncertain = false;
+    h.dependencies.social = {
+      validateReferences: (input) => {
+        if (input.references.length) return Promise.reject(new Error('invalid test reference'));
+        return Promise.resolve([]);
+      },
+      start: async (job) => {
+        const claim = await h.store.claimSubmission(job.id);
+        if (!claim.claimed) return claim.job;
+        starts++;
+        return h.store.setSubmitted(job.id, `social-${job.id}`);
+      },
+      advance: async (job) => {
+        if (!['queued', 'running'].includes(job.status) || uncertain) return job;
+        const claim = await h.store.claimCompletion(job.id);
+        return claim.claimed
+          ? h.store.complete(job.id, claim.leaseToken!, {
+            path: `${job.id}/video.mp4`,
+            content_type: 'video/mp4',
+            width: 576,
+            height: 1024,
+            duration: 15,
+          })
+          : claim.job;
+      },
+      progress: () =>
+        Promise.resolve({
+          completed: uncertain ? 0 : 1,
+          total: 6,
+          steps: [],
+          needs_reconciliation: uncertain,
+        }),
+      parent: () => Promise.resolve(null),
+      sweep: () => Promise.resolve([]),
+    };
+    h.dependencies.mpp = f.gateway;
+    const app = createApp(h.dependencies);
+    const input = normalizeSocial({
+      brief: 'A garden video',
+      scenes: ['A vertical garden photograph', 'A wooden bridge'],
+      narration: 'Find your quiet moment.',
+    });
+    const post = (id: string, credential?: string, body = input) =>
+      app.request('/v1/services/video.social?mode=async', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'X-Payment-Protocol': 'mpp',
+          'Idempotency-Key': id,
+          'X-Recovery-Token': token,
+          ...(credential ? { Authorization: credential } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+    return {
+      ...h,
+      app,
+      f,
+      input,
+      post,
+      starts: () => starts,
+      uncertain: () => {
+        uncertain = true;
+      },
+    };
+  }
+
+  Deno.test('MPP social metadata, discovery and OpenAPI advertise six-decimal price without changing Stellar', async () => {
+    const h = socialHarness();
+    const doc =
+      await (await h.app.request('/v1/services/video.social', { headers: { 'X-Payment-Protocol': 'mpp' } }))
+        .json();
+    equal(doc.protocol, 'mpp');
+    equal(doc.mpp.amount, '110000');
+    equal(doc.mpp.recipient, payer);
+    equal(h.calls.requirements, 0);
+    const stellar = await (await h.app.request('/v1/services/video.social')).json();
+    equal(stellar.accepts[0].amount, '1100000');
+    equal(stellar.accepts[0].network, 'stellar:testnet');
+    equal(stellar.mpp.amount, '110000');
+    const discovery = await (await h.app.request('/discovery/resources')).json();
+    equal(discovery.resources.find((s: { id: string }) => s.id === 'video.social').mpp.amount, '110000');
+    const openapi = await (await h.app.request('/openapi.json')).json();
+    const ajv = new Ajv2020({ strict: false, validateFormats: false });
+    equal(
+      ajv.compile(
+        openapi.paths['/v1/services/video.social'].get.responses['200'].content['application/json'].schema,
+      )(doc),
+      true,
+    );
+    h.dependencies.config.mpp = config;
+    const inherited = await (await createApp(h.dependencies).request('/v1/services/video.social', {
+      headers: { 'X-Payment-Protocol': 'mpp' },
+    })).json();
+    equal(inherited.mpp.amount, '110000');
+    equal(inherited.mpp.recipient, recipient);
+    h.dependencies.config.mpp = { ...config, social: { recipient: 'bad', amount: '110000' } };
+    throws(() => createApp(h.dependencies), /Invalid Tempo/);
+    equal(h.starts(), 0);
+  });
+
+  Deno.test('MPP social: unpaid/underpaid never starts; duplicate payment starts once and recovers the same video receipt', async () => {
+    const h = socialHarness();
+    const id = crypto.randomUUID();
+    const quote = await h.post(id);
+    equal(quote.status, 402);
+    equal(h.starts(), 0);
+    const c = Challenge.deserialize(quote.headers.get('WWW-Authenticate')!);
+    equal(c.request.amount, '110000');
+    equal(c.request.recipient, payer);
+    h.f.settled(c, { amount: 10000n, to: payer });
+    equal((await h.post(id, authorize(c))).status, 503);
+    equal(h.starts(), 0);
+    h.f.settled(c, { amount: 110000n, to: payer });
+    const credential = authorize(c);
+    const paid = await Promise.all([h.post(id, credential), h.post(id, credential)]);
+    equal(h.starts(), 1);
+    equal(h.calls.settle, 0);
+    equal(h.calls.submit, 0);
+    for (const response of paid) equal(response.status, 202);
+    equal((await h.post(id, credential, { ...h.input, narration: 'Changed.' })).status, 409);
+    const done = await h.app.request(`/v1/jobs/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const body = await done.json();
+    equal(body.status, 'succeeded');
+    equal(body.output.video.content_type, 'video/mp4');
+    equal(body.payment.amount, '110000');
+    equal(Receipt.deserialize(done.headers.get('Payment-Receipt')!).reference, tx);
+    const ajv = new Ajv2020({ strict: false, validateFormats: false });
+    const doc = await (await h.app.request('/v1/services/video.social')).json();
+    equal(ajv.compile(doc.output_schema)(body), true);
+    equal((await h.post(id, credential)).status, 200);
+    equal(h.starts(), 1);
+    equal(h.store.fingerprints.size, 1);
+    const otherId = crypto.randomUUID();
+    const otherQuote = await h.post(otherId);
+    const other = Challenge.deserialize(otherQuote.headers.get('WWW-Authenticate')!);
+    h.f.settled(other, { amount: 110000n, to: payer });
+    equal((await h.post(otherId, authorize(other))).status, 409);
+    equal(h.starts(), 1);
+  });
+
+  Deno.test('MPP social uncertain internal stage keeps the paid identity and never restarts on recovery', async () => {
+    const h = socialHarness();
+    const id = crypto.randomUUID();
+    const quote = await h.post(id);
+    const c = Challenge.deserialize(quote.headers.get('WWW-Authenticate')!);
+    h.f.settled(c, { amount: 110000n, to: payer });
+    h.uncertain();
+    const paid = await h.post(id, authorize(c));
+    equal((await paid.json()).status, 'submission-uncertain');
+    const read = await h.app.request(`/v1/jobs/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    equal((await read.json()).status, 'submission-uncertain');
+    await h.post(id, authorize(c));
+    equal(h.starts(), 1);
+    equal(h.store.fingerprints.size, 1);
   });
   Deno.test('phone input hashes use the same normalization in backend, plugin and native builder', () => {
     for (

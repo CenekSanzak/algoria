@@ -1,6 +1,11 @@
 # Composing paid services
 
-Complete the entrypoint's balance check before reading schemas or planning
+For explicitly selected Tempo `video.social`, use
+[the Tempo social-video flow](tempo-payments.md#social-videos): one service-scoped
+PathUSD permission and one native purchase, with all internal stages included.
+Do not fund Stellar or use the fallback primitive chain for a Tempo-only request.
+
+For Stellar tasks, complete the entrypoint's balance check before reading schemas or planning
 creative stages. An empty wallet goes directly to the top-up link. Retain the
 original brief and approved cap while funding is pending, then resume this
 workflow after the deposit and balance are verified. Do not ask the user to

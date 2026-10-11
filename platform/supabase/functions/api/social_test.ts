@@ -118,9 +118,23 @@ async function harness(input = normalizeSocial(SOCIAL_SERVICE.exampleInput)) {
     resource_url: 'https://api.example/video.social',
     expires_at: new Date(Date.now() + 600000).toISOString(),
   }]);
-  async function pay() {
-    await rpc('platform_claim_payment', [id, 'fingerprint', 'GPAYER', {}]);
-    await rpc('platform_finish_payment', [id, 'success', { success: true }]);
+  async function pay(protocol = 'x402') {
+    const receipt = protocol === 'mpp'
+      ? {
+        success: true,
+        protocol,
+        network: 'eip155:42431',
+        amount: '110000',
+        transaction: `0x${'a'.repeat(64)}`,
+      }
+      : { success: true };
+    await rpc('platform_claim_payment', [
+      id,
+      'fingerprint',
+      protocol === 'mpp' ? `0x${'1'.repeat(40)}` : 'GPAYER',
+      {},
+    ]);
+    await rpc('platform_finish_payment', [id, 'success', receipt]);
   }
   return {
     db,
@@ -139,48 +153,57 @@ async function harness(input = normalizeSocial(SOCIAL_SERVICE.exampleInput)) {
   };
 }
 
-Deno.test('social workflow: five images plus speech parallel, one reservation, timed render and captions, retry-safe', async () => {
-  const h = await harness();
-  try {
-    await h.workflow.start(await h.get());
-    assert.equal(h.calls.length, 0); // An unpaid plan cannot generate anything.
-    await h.pay();
-    let release!: () => void;
-    h.setWait(
-      new Promise<void>((resolve) => {
-        release = resolve;
-      }),
-    );
-    const starting = h.workflow.start(await h.get());
-    for (let i = 0; i < 200 && h.calls.length < 6; i++) await new Promise((r) => setTimeout(r, 5));
-    assert.equal(h.calls.length, 6); // Every provider submission starts before any can finish.
-    release();
-    await starting;
-    await Promise.all([h.workflow.advance(await h.get()), h.workflow.advance(await h.get())]);
-    assert.equal(h.calls.length, 7);
-    const slideshow = h.calls[6];
-    assert.match(slideshow.target.model, /images-to-video/);
-    assert.equal((slideshow.input.images as { frames: number }[]).reduce((n, i) => n + i.frames, 0), 288);
-    await h.workflow.advance(await h.get());
-    assert.match(h.calls[7].target.model, /merge-audio-video/);
-    await h.workflow.advance(await h.get());
-    assert.match(h.calls[8].target.model, /auto-subtitle/);
-    await h.workflow.advance(await h.get());
-    assert.equal((await h.get()).status, 'succeeded');
-    assert.equal((await h.get()).output?.duration, 12);
-    assert.equal((await h.get()).output?.width, 576);
-    await h.workflow.start(await h.get());
-    await h.workflow.advance(await h.get());
-    assert.equal(h.calls.length, 9);
-    const progress = await h.workflow.progress(await h.get());
-    assert.equal(progress.completed, 9);
-    assert.equal(progress.total, 9);
-    assert.equal((await h.rpc<{ totalUsed: number }>('platform_capacity')).totalUsed, 1);
-    await assert.rejects(h.db.exec('set role anon; select * from public.social_steps'), /permission denied/);
-  } finally {
-    await h.db.close();
-  }
-});
+for (const protocol of ['x402', 'mpp']) {
+  Deno.test(`social workflow ${protocol}: five images plus speech parallel, one reservation, timed render and captions, retry-safe`, async () => {
+    const h = await harness();
+    try {
+      await h.workflow.start(await h.get());
+      assert.equal(h.calls.length, 0); // An unpaid plan cannot generate anything.
+      await h.pay(protocol);
+      let release!: () => void;
+      h.setWait(
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+      );
+      const starting = h.workflow.start(await h.get());
+      for (let i = 0; i < 200 && h.calls.length < 6; i++) await new Promise((r) => setTimeout(r, 5));
+      assert.equal(h.calls.length, 6); // Every provider submission starts before any can finish.
+      release();
+      await starting;
+      await Promise.all([h.workflow.advance(await h.get()), h.workflow.advance(await h.get())]);
+      assert.equal(h.calls.length, 7);
+      const slideshow = h.calls[6];
+      assert.match(slideshow.target.model, /images-to-video/);
+      assert.equal((slideshow.input.images as { frames: number }[]).reduce((n, i) => n + i.frames, 0), 288);
+      await h.workflow.advance(await h.get());
+      assert.match(h.calls[7].target.model, /merge-audio-video/);
+      await h.workflow.advance(await h.get());
+      assert.match(h.calls[8].target.model, /auto-subtitle/);
+      await h.workflow.advance(await h.get());
+      assert.equal((await h.get()).status, 'succeeded');
+      assert.equal((await h.get()).output?.duration, 12);
+      assert.equal((await h.get()).output?.width, 576);
+      await h.workflow.start(await h.get());
+      await h.workflow.advance(await h.get());
+      assert.equal(h.calls.length, 9);
+      const progress = await h.workflow.progress(await h.get());
+      assert.equal(progress.completed, 9);
+      assert.equal(progress.total, 9);
+      if (protocol === 'mpp') {
+        assert.equal((await h.get()).payment_receipt?.network, 'eip155:42431');
+        assert.equal((await h.get()).payment_receipt?.amount, '110000');
+      }
+      assert.equal((await h.rpc<{ totalUsed: number }>('platform_capacity')).totalUsed, 1);
+      await assert.rejects(
+        h.db.exec('set role anon; select * from public.social_steps'),
+        /permission denied/,
+      );
+    } finally {
+      await h.db.close();
+    }
+  });
+}
 Deno.test('social sends independent still-image scenes to fal and keeps campaign/audio instructions separate', async () => {
   for (const useReferences of [false, true]) {
     const input = normalizeSocial({

@@ -12,9 +12,9 @@ import { tempoPreflight } from '../../../lib/services/tempo-preflight.mjs';
 const USAGE = `algoria pay — buy AI services and resume saved tasks
 
   readiness                                           local Tempo/Touch ID checks; no payment
-  preflight --budget <name> [--service image.generate|phone.call]
+  preflight --budget <name> [--service image.generate|phone.call|video.social]
                                                       read-only demo setup checks; no signing
-  task --service image.generate|phone.call --input <json-file> --budget <name>
+  task --service image.generate|phone.call|video.social --input <json-file> --budget <name>
                                                       prepare one Tempo task (default: image)
   task <saved-id> [--approve] [--wait]                  resume/open the same task
                                                       approved tasks wait by default; --no-wait opts out
@@ -32,7 +32,7 @@ Options: --json; quote --id <UUID-v4> reuses a known identity and identical inpu
 Tempo: budget/quote --protocol mpp; run --approve (testnet faucet funding is automatic).
 Use --no-fund-testnet for manual test-token funding; --fund-testnet remains an alias.
 Tempo budget requires --agent claude|codex --recipient 0x... --expires ISO_DATE.
-Use budget --service phone.call for calls; default image permissions cannot pay for calls.
+Use budget --service phone.call for calls or --service video.social for videos; image permissions cannot pay for either.
 Grant/change opens Touch ID; revoke does not undo submitted payments.
 Tempo uses test PathUSD, a separate budget, and the native Touch ID companion.
 External: quote stellar8004:<agent>:<service-index> --method GET|POST ...

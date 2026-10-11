@@ -67,6 +67,54 @@ test('cannot reuse an approved signature after changing the recipient', () => {
 });
 
 const callInput = { contact: 'berkin', goal: 'Ask about the demo — İstanbul', on_behalf_of: 'Dogukan', language: 'tr' };
+const socialInput = { brief: 'A quiet garden video', scenes: ['A vertical garden photograph', 'A wooden bridge'],
+  narration: 'Take a breath. Find your quiet moment.', voice: 'Olivia (en)',
+  references: [{ url: `https://vqqbvydiehuwdzbgvmun.supabase.co/storage/v1/object/sign/outputs/references/${challenge.meta.job_id}/${'a'.repeat(64)}.png?token=offline.fixture`, role: 'style' }], captions: true };
+function socialRequest() {
+  const service = 'video.social';
+  const c = Challenge.from({ secretKey: 'offline-test-secret'.repeat(3), method: 'tempo', intent: 'charge',
+    realm: challenge.realm, expires: challenge.expires,
+    meta: { resource: tempoResource(service), job_id: challenge.meta.job_id,
+      input_hash: Hash.sha256(Bytes.fromString(JSON.stringify({ service, input: socialInput })), { as: 'Hex' }).slice(2) },
+    request: { ...challenge.request, amount: '110000' } });
+  const policy = { version: 1, id: challenge.meta.job_id, budget: 'videos', agent: 'codex', service,
+    resource: tempoResource(service), network: 'eip155:42431', token: c.request.currency, recipient: c.request.recipient,
+    totalAtomic: '2200000', perCallAtomic: '1100000', validAfter: now - 1, validUntil: now + 600, previousId: null };
+  return { ...request, input: structuredClone(socialInput), challenge: c, permission: signedPermission(policy) };
+}
+test('native social purchase binds the full plan, exact 0.11 transfer, permission and bundled implementation', async () => {
+  const r = socialRequest(); const value = preparePurchase(r, publicKey, now);
+  assert.equal(value.summary.service, 'video.social'); assert.deepEqual(value.summary.social, socialInput);
+  assert.match(value.summary.action, /social video.*0.110000/); assert.equal(value.transaction.calls.length, 1);
+  const transfer = AbiFunction.from('function transferWithMemo(address to, uint256 amount, bytes32 memo) returns (bool)');
+  const [, amount, memo] = AbiFunction.decodeData(transfer, value.transaction.calls[0].data);
+  assert.equal(amount, 110000n); assert.ok(Attribution.verifyChallengeBinding(memo, r.challenge.id));
+  const der = Signature.toDerHex(P256.sign({ privateKey, payload: value.digest }));
+  const output = JSON.parse(completePurchaseJSON(JSON.stringify(r), publicKey, der, now));
+  assert.ok(SignatureEnvelope.verify(TxEnvelopeTempo.deserialize(output.serializedTransaction).signature,
+    { payload: value.digest, address: output.address }));
+  const { loadTempoSdk } = await import('../../../agent-skills/plugins/algoria/lib/services/tempo-sdk.mjs');
+  const bundled = (await loadTempoSdk()).preparePurchase(r, publicKey, now);
+  assert.equal(bundled.digest, value.digest); assert.deepEqual(bundled.summary, value.summary);
+});
+for (const [field, value] of Object.entries({ brief: 'Changed', scenes: ['Changed'], narration: 'Changed', voice: 'Sarah (en)',
+  captions: false, references: [{ url: 'https://example.test/ref.png', role: 'product' }] })) {
+  test(`native social rejects ${field} substitution`, () => {
+    const r = socialRequest(); r.input[field] = value; assert.throws(() => preparePurchase(r, publicKey, now));
+  });
+}
+test('native social rejects image/call scope, low per-purchase cap, expiry and noncanonical defaults', () => {
+  for (const service of ['image.generate', 'phone.call']) {
+    const r = socialRequest(); r.permission = signedPermission({ ...r.permission.policy, service, resource: tempoResource(service) });
+    assert.throws(() => preparePurchase(r, publicKey, now), /out-of-scope/);
+  }
+  const low = socialRequest(); low.permission = signedPermission({ ...low.permission.policy, perCallAtomic: '1000000' });
+  assert.throws(() => preparePurchase(low, publicKey, now), /out-of-scope/);
+  const expired = socialRequest(); expired.permission = signedPermission({ ...expired.permission.policy, validAfter: now - 60, validUntil: now - 1 });
+  assert.throws(() => preparePurchase(expired, publicKey, now));
+  const noncanonical = socialRequest(); delete noncanonical.input.captions;
+  assert.throws(() => preparePurchase(noncanonical, publicKey, now));
+});
 function callRequest() {
   const c = Challenge.from({ secretKey: 'offline-test-secret'.repeat(3), method: 'tempo', intent: 'charge',
     realm: challenge.realm, expires: challenge.expires,

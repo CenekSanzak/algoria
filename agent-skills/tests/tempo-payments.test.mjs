@@ -39,6 +39,7 @@ function result(job) {
     status, status_url: `${API_BASE}/v1/jobs/${job.id}`,
     payment, output: job.paid && status === 'succeeded' ? (contract.id === 'phone.call' ? { call: { contact: 'berkin', status: 'completed', duration_seconds: 25,
       summary: 'Confirmed the demo.', goal_achieved: true, transcript: [{ speaker: 'contact', text: 'I am ready.' }] } }
+      : contract.id === 'video.social' ? { video: { url: 'https://media.example/video.mp4', content_type: 'video/mp4', width: 576, height: 1024, duration: 15 }, url_expires_in: 3600 }
       : { images: [{ url: 'https://media.example/image.png', content_type: 'image/png' }], url_expires_in: 3600 }) : null,
     error: null };
 }
@@ -106,6 +107,72 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 afterAll(async () => { await rm(home, { recursive: true, force: true }); });
 
 const callInput = { contact: 'berkin', goal: 'Confirm the demo', on_behalf_of: 'Dogukan', language: 'tr' };
+const socialInput = { brief: 'A peaceful garden video', scenes: ['A vertical photograph of a misty Japanese garden', 'A wooden bridge in warm morning light'],
+  narration: 'Take a breath. Find your quiet moment.', voice: 'Olivia (en)', references: [], captions: true };
+async function socialSetup() {
+  contract = JSON.parse(await readFile(new URL('../../platform/docs/skill-integration/video.social.json', import.meta.url), 'utf8'));
+  contract.mpp = { protocol: 'mpp', chain: 'eip155:42431', token: '0x20c0000000000000000000000000000000000000',
+    decimals: 6, recipient, amount: '110000' };
+  contract.output_schema.properties.payment.anyOf[0].properties.network = { enum: ['stellar:testnet', 'eip155:42431'] };
+  await setBudget('videos', '0.22', '0.11', 'mpp', { agent: 'codex', service: 'video.social', recipient,
+    expires: new Date(Date.now() + 3600000).toISOString() });
+}
+describe('Tempo social-video payments', () => {
+  it('quotes once, uses video-scoped approval and delivers a vertical MP4 with an explorer receipt', async () => {
+    await socialSetup(); walletFixture = { update: vi.fn(), finish: vi.fn() };
+    pendingStatuses = ['running', 'succeeded'];
+    const q = await tempoTask({ service: 'video.social', input: { scenes: socialInput.scenes, narration: socialInput.narration, brief: ' A peaceful garden video ' }, budget: 'videos' });
+    expect(q.amount).toBe('0.1100000'); expect(signatures).toBe(0);
+    expect(JSON.parse((await readJob(q.id)).body)).toEqual(socialInput);
+    const done = await tempoTask({ id: q.id, approve: true, wait: true });
+    expect(done.status).toBe('succeeded');
+    expect(done.delivery).toMatchObject({ previewRequired: true, media: [{ contentType: 'video/mp4' }] });
+    expect(done.payment.explorerUrl).toBe(`https://explore.testnet.tempo.xyz/tx/${transaction}`);
+    expect(walletFixture.finish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'succeeded' }));
+    await tempoTask({ id: q.id, approve: true });
+    expect(signatures).toBe(1); expect(paidPosts).toBe(1); expect(remote.size).toBe(1);
+    expect((await getBudget('videos')).spent).toBe('0.1100000');
+  });
+  it('rejects image and call permissions, low limits and revoked grants before signing', async () => {
+    await socialSetup();
+    const wrong = await quoteTempo('video.social', socialInput, 'tempo');
+    await expect(runJob(wrong.id, { approve: true })).rejects.toThrow('outside');
+    await setBudget('calls', '0.22', '0.11', 'mpp', { agent: 'codex', service: 'phone.call', recipient,
+      expires: new Date(Date.now() + 3600000).toISOString() });
+    const callScope = await quoteTempo('video.social', socialInput, 'calls');
+    await expect(runJob(callScope.id, { approve: true })).rejects.toThrow('outside');
+    await setBudget('videos', '0.22', '0.10', 'mpp', { agent: 'codex', service: 'video.social', recipient,
+      expires: new Date(Date.now() + 3600000).toISOString() });
+    const limited = await quoteTempo('video.social', socialInput, 'videos');
+    await expect(runJob(limited.id, { approve: true })).rejects.toThrow('outside');
+    await revokeBudget('videos'); await expect(runJob(limited.id, { approve: true })).rejects.toThrow();
+    expect(signatures).toBe(0); expect(paidPosts).toBe(0);
+  });
+  it('rejects changes to any part of the saved video plan', async () => {
+    await socialSetup(); const q = await tempoTask({ service: 'video.social', input: socialInput, budget: 'videos' });
+    for (const patch of [{ brief: 'Changed' }, { scenes: ['Changed'] }, { narration: 'Changed' }, { voice: 'Sarah (en)' },
+      { captions: false }, { references: [{ url: `https://vqqbvydiehuwdzbgvmun.supabase.co/storage/v1/object/sign/outputs/references/${randomUUID()}/${'a'.repeat(64)}.png?token=fixture`, role: 'product' }] }]) {
+      await expect(tempoTask({ id: q.id, input: { ...socialInput, ...patch } })).rejects.toThrow('changed');
+    }
+    await expect(tempoTask({ id: q.id, service: 'image.generate' })).rejects.toThrow('service changed');
+    expect(signatures).toBe(0); expect(remote.size).toBe(1);
+  });
+  it('cancels without payment, then recovers a lost paid reply after revocation without paying again', async () => {
+    await socialSetup(); const q = await quoteTempo('video.social', socialInput, 'videos');
+    vi.mocked(signer.signAndPayTempo).mockRejectedValueOnce(new Error('cancelled'));
+    await expect(runJob(q.id, { approve: true })).rejects.toThrow('cancelled');
+    expect((await getBudget('videos')).reserved).toBe('0.0000000'); expect(paidPosts).toBe(0);
+    loseResponse = true; await expect(runJob(q.id, { approve: true })).rejects.toThrow('unconfirmed');
+    await revokeBudget('videos'); const done = await runJob(q.id);
+    expect(done.status).toBe('succeeded'); expect(signatures).toBe(1); expect(paidPosts).toBe(1);
+  });
+  it('keeps an uncertain video transaction reserved and resends only the saved hash credential', async () => {
+    await socialSetup(); const q = await quoteTempo('video.social', socialInput, 'videos');
+    loseBroadcast = true; await expect(runJob(q.id, { approve: true })).rejects.toThrow('uncertain');
+    expect((await getBudget('videos')).reserved).toBe('0.1100000');
+    const done = await runJob(q.id); expect(done.status).toBe('succeeded'); expect(signatures).toBe(1); expect(paidPosts).toBe(1);
+  });
+});
 
 describe('continuous native task journey', () => {
   it('uses async submission, waits by default and finishes the same wallet with the result', async () => {

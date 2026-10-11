@@ -27,6 +27,13 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('read-only demo preflight', () => {
+  it('checks video.social metadata and its separate 0.11 PathUSD permission without paying', async () => {
+    offer.amount = '110000'; budget.remaining = '0.11'; budget.perCall = '0.11'; budget.permission.service = 'video.social';
+    vi.mocked(fetch).mockResolvedValue(Response.json({ id: 'video.social', resource: serviceUrl('video.social'), mpp: offer }));
+    const result = await tempoPreflight({ budget: 'videos', service: 'video.social', agent: 'codex' });
+    expect(result).toMatchObject({ ready: true, service: 'video.social', servicePrice: '0.110000', paymentAttempted: false });
+    expect(rpc.sendRawTransaction).not.toHaveBeenCalled();
+  });
   it('checks actual setup and allowance without creating, quoting, funding or paying', async () => {
     const result = await tempoPreflight({ budget: 'demo', agent: 'codex' });
     expect(result).toMatchObject({ ready: true, servicePrice: '0.010000', paymentAttempted: false, keyCreated: false, faucetRequested: false });

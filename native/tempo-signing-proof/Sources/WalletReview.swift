@@ -150,6 +150,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     }
     private var permission: [String: Any]? { summary["permission"] as? [String: Any] }
     private var call: [String: Any]? { summary["call"] as? [String: Any] }
+    private var social: [String: Any]? { summary["social"] as? [String: Any] }
 
     private func build() {
         guard let content = window?.contentView else { return }
@@ -174,9 +175,9 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         } else {
             let amount = (summary["amount"] as? String).flatMap(Double.init).map { String(format: "%.6f", $0 / 1e6) } ?? "0.000001"
             heroViews = [walletText("PAYMENT REQUEST", size: 10, color: WalletDesign.muted, mono: true),
-                         walletText(call != nil ? "Place one real phone call" : summary["prompt"] == nil ? "Review your self-transfer" : "Generate one image", size: 21, weight: .medium),
+                         walletText(call != nil ? "Place one real phone call" : social != nil ? "Create one social video" : summary["prompt"] == nil ? "Review your self-transfer" : "Generate one image", size: 21, weight: .medium),
                          walletText(amount, size: 38, weight: .semibold, mono: true),
-                         walletText("test PathUSD · \(call != nil ? "Algoria phone service" : summary["prompt"] == nil ? "your temporary account" : "Algoria image service")", size: 12, color: WalletDesign.secondary),
+                         walletText("test PathUSD · \(call != nil ? "Algoria phone service" : social != nil ? "Algoria social video service" : summary["prompt"] == nil ? "your temporary account" : "Algoria image service")", size: 12, color: WalletDesign.secondary),
                          walletText(call != nil ? "Real call · test-token payment. Dialing is not simulated. Gas is separate." : "Test tokens only. No monetary value. Network fee is separate.", size: 11, color: call != nil ? WalletDesign.warning : WalletDesign.muted)]
         }
         walletPin(walletStack(heroViews, spacing: 6), to: hero, inset: 20)
@@ -264,7 +265,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     }
 
     private func purchasePages() -> [NSView] {
-        let prompt = call?["goal"] as? String ?? summary["prompt"] as? String ?? "Transfer one micro-unit back to this same temporary account."
+        let prompt = call?["goal"] as? String ?? social?["brief"] as? String ?? summary["prompt"] as? String ?? "Transfer one micro-unit back to this same temporary account."
         let promptView: NSView
         if prompt.count > 260 {
             let scroll = scrollPage([walletText(prompt, size: 14)])
@@ -283,6 +284,20 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         }
         if call != nil {
             requestViews.append(walletText("This will call a real person. Test tokens do not make the call simulated. Once dialed, closing this wallet cannot cancel the call.", size: 12, color: WalletDesign.warning))
+        }
+        if let social {
+            requestViews.append(walletText("APPROVED VIDEO PLAN", size: 10, color: WalletDesign.muted, mono: true))
+            for (index, scene) in (social["scenes"] as? [String] ?? []).enumerated() {
+                requestViews.append(walletText("Scene \(index + 1): \(scene)", size: 12))
+            }
+            requestViews += [walletText("EXACT NARRATION", size: 10, color: WalletDesign.muted, mono: true),
+                             walletText(value("narration", from: social), size: 13),
+                             walletRow("English voice", value("voice", from: social)),
+                             walletRow("Captions", social["captions"] as? Bool == true ? "On" : "Off")]
+            for (index, reference) in (social["references"] as? [[String: Any]] ?? []).enumerated() {
+                requestViews.append(walletRow("Reference \(index + 1) · \(value("role", from: reference))", value("url", from: reference), mono: true))
+            }
+            requestViews.append(walletText("One vertical MP4 from generated still scenes, narration and optional captions. One payment covers all internal stages. Does not post to TikTok. Real provider usage; fees are separate.", size: 12, color: WalletDesign.muted))
         }
         let gas = UInt64(value("gasLimit")) ?? 0
         let fee = UInt64(value("maxFeePerGas")) ?? 0
@@ -396,19 +411,22 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
     }
 
     // Explicit fixture modes never reach key creation, SDK signing, or RPC.
-    static func fixture(_ kind: WalletReviewKind, longPrompt: Bool = false, phone: Bool = false) -> [String: Any] {
-        let service = phone ? "phone.call" : "image.generate"
-        let policy: [String: Any] = ["id": "00000000-0000-0000-0000-000000000001", "budget": phone ? "demo-calls" : "demo-images", "agent": "codex",
-            "total": "5.000000", "perCall": "0.100000", "expires": "2030-10-05T18:30:00Z"]
+    static func fixture(_ kind: WalletReviewKind, longPrompt: Bool = false, phone: Bool = false, video: Bool = false) -> [String: Any] {
+        let service = phone ? "phone.call" : video ? "video.social" : "image.generate"
+        let policy: [String: Any] = ["id": "00000000-0000-0000-0000-000000000001", "budget": phone ? "demo-calls" : video ? "demo-videos" : "demo-images", "agent": "codex",
+            "total": "5.000000", "perCall": video ? "0.110000" : "0.100000", "expires": "2030-10-05T18:30:00Z"]
         let scope: [String: Any] = ["network": "Tempo Moderato (42431)", "token": "0x20c0000000000000000000000000000000000000",
             "recipient": "0x1111111111111111111111111111111111111111"]
         if kind == .permission {
             return scope.merging(policy) { _, new in new }.merging(["policyId": policy["id"]!, "service": service,
                 "resource": "https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/api/v1/services/\(service)"]) { _, new in new }
         }
-        let input: [String: Any] = phone ? ["call": ["contact": "berkin", "goal": longPrompt ? String(repeating: "Confirm the demo in İstanbul. ", count: 30) : "Remind him about the hackathon demo at 3pm and ask if he is ready.", "on_behalf_of": "Dogukan", "language": "tr"]] : ["prompt": longPrompt ? String(repeating: "A quiet Japanese garden with warm morning light. ", count: 80) : "A quiet Japanese garden with warm morning light, soft mist and a small wooden bridge. Editorial photography, natural colours."]
+        var input: [String: Any] = phone ? ["call": ["contact": "berkin", "goal": longPrompt ? String(repeating: "Confirm the demo in İstanbul. ", count: 30) : "Remind him about the hackathon demo at 3pm and ask if he is ready.", "on_behalf_of": "Dogukan", "language": "tr"]] : ["prompt": longPrompt ? String(repeating: "A quiet Japanese garden with warm morning light. ", count: 80) : "A quiet Japanese garden with warm morning light, soft mist and a small wooden bridge. Editorial photography, natural colours."]
+        if video {
+            input = ["social": ["brief": "A peaceful Japanese garden social video", "scenes": (1...(longPrompt ? 5 : 2)).map { "Scene \($0): " + (longPrompt ? String(repeating: "A quiet Japanese garden with morning light. ", count: 30) : "A quiet Japanese garden with morning light.") }, "narration": "Take a breath. Find your quiet moment.", "voice": "Olivia (en)", "references": [["url": "https://example.test/reference.png", "role": "style"]], "captions": true]]
+        }
         return scope.merging(input) { _, new in new }.merging(["service": service,
-            "amount": phone ? "100000" : "10000", "address": "0x2222222222222222222222222222222222222222", "gasLimit": "1000000",
+            "amount": phone ? "100000" : video ? "110000" : "10000", "address": "0x2222222222222222222222222222222222222222", "gasLimit": "1000000",
             "maxFeePerGas": "20000000000", "expires": "2030-10-05T18:30:00Z", "permission": policy,
             "jobId": "00000000-0000-0000-0000-000000000002"]) { _, new in new }
     }
@@ -417,8 +435,8 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
         guard directory.hasPrefix("/"), FileManager.default.fileExists(atPath: directory) else { throw fail("PREVIEW_DIRECTORY_REQUIRED") }
         var paths: [String] = []
         for dark in [false, true] {
-            for (kind, phone) in [(WalletReviewKind.purchase, false), (.permission, false), (.purchase, true), (.permission, true)] {
-                let controller = WalletReviewController(summary: fixture(kind, phone: phone), kind: kind, preview: true)
+            for (kind, phone, video) in [(WalletReviewKind.purchase, false, false), (.permission, false, false), (.purchase, true, false), (.permission, true, false), (.purchase, false, true), (.permission, false, true)] {
+                let controller = WalletReviewController(summary: fixture(kind, phone: phone, video: video), kind: kind, preview: true)
                 controller.window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
                 guard let view = controller.window?.contentView else { throw fail("PREVIEW_RENDER_FAILED") }
                 for index in controller.pages.indices {
@@ -429,7 +447,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
                         view.cacheDisplay(in: view.bounds, to: bitmap)
                     }
                     guard let png = bitmap.representation(using: .png, properties: [:]) else { throw fail("PREVIEW_RENDER_FAILED") }
-                    let name = "\(phone ? "phone-" : "")\(kind == .purchase ? "purchase" : "budget")-\(index)-\(dark ? "dark" : "light").png"
+                    let name = "\(phone ? "phone-" : video ? "video-" : "")\(kind == .purchase ? "purchase" : "budget")-\(index)-\(dark ? "dark" : "light").png"
                     let path = URL(fileURLWithPath: directory).appendingPathComponent(name)
                     try png.write(to: path, options: .atomic)
                     paths.append(path.path)
@@ -450,8 +468,8 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
               Bundle.main.url(forResource: "algoria-logo", withExtension: "svg") != nil else {
             throw fail("UI_BRAND_ASSETS_FAILED")
         }
-        for (kind, phone) in [(WalletReviewKind.purchase, false), (.permission, false), (.purchase, true), (.permission, true)] {
-            let controller = WalletReviewController(summary: fixture(kind, longPrompt: true, phone: phone), kind: kind, preview: true)
+        for (kind, phone, video) in [(WalletReviewKind.purchase, false, false), (.permission, false, false), (.purchase, true, false), (.permission, true, false), (.purchase, false, true), (.permission, false, true)] {
+            let controller = WalletReviewController(summary: fixture(kind, longPrompt: true, phone: phone, video: video), kind: kind, preview: true)
             controller.window?.contentView?.layoutSubtreeIfNeeded()
             for index in controller.pages.indices {
                 controller.tabs[index].performClick(nil)
@@ -477,7 +495,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             controller.approve(nil)
             guard !controller.approved else { throw fail("PREVIEW_APPROVAL_FAILED") }
             controller.window?.close()
-            let live = WalletReviewController(summary: fixture(kind), kind: kind)
+            let live = WalletReviewController(summary: fixture(kind, phone: phone, video: video), kind: kind)
             live.updateExpiry(now: walletParseDate(live.value("expires"))!.addingTimeInterval(-30))
             guard live.approveButton.isEnabled else { throw fail("UI_FRESH_EXPIRY_FAILED") }
             live.approve(nil)
@@ -488,7 +506,7 @@ final class WalletReviewController: NSWindowController, NSWindowDelegate {
             guard !live.approved else { throw fail("UI_CLOSE_FAILED") }
             live.window?.close()
             for expiry in ["2020-01-01T00:00:00Z", "2020-01-01T00:00:00.123Z", "invalid"] {
-                var expired = fixture(kind)
+                var expired = fixture(kind, phone: phone, video: video)
                 expired["expires"] = expiry
                 let stale = WalletReviewController(summary: expired, kind: kind)
                 stale.approve(nil)
@@ -653,11 +671,11 @@ final class WalletJourneyController: NSWindowController, NSWindowDelegate {
         "paid": ("Payment confirmed", "Continue this saved task in your assistant. No additional payment.", 2),
         "starting": ("Starting your service", "Your approved request is being submitted.", 3),
         "queued": ("Your request is queued", "Waiting for the service. Follow this same task.", 3),
-        "generating": ("Creating your image", "Your assistant will show the result in your conversation.", 3),
+        "generating": ("Creating your result", "Your assistant will show the finished image or video in your conversation.", 3),
         "calling": ("Your call is in progress", "This is a real call. Closing this window will not end it.", 3),
         "saving": ("Preparing your result", "Saving the result for delivery in your conversation.", 3),
         "preparing-delivery": ("Preparing your result", "Refreshing access to your saved result.", 3),
-        "ready": ("Your result is ready", "Return to your assistant to see the image or call summary and receipt.", 4),
+        "ready": ("Your result is ready", "Return to your assistant to see the image, video or call summary and receipt.", 4),
         "failed": ("The service could not finish", "Check the saved task and receipt in your assistant. No automatic retry or refund.", 3),
         "needs-attention": ("Your task is saved", "Payment or execution needs verification. Resume the same task; do not pay again.", 2),
         "paused": ("Continue in your assistant", "Your task is saved. Resume this same task to check its progress.", 3),

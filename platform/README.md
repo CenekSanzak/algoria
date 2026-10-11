@@ -22,7 +22,7 @@ The seven implemented services share the same durable job contract. Discovery li
 
 - `video.social`: one approved plan, optional reference photos, 1–5 vertical scenes,
   English narration (female by default), automatic timing, composition and optional captions.
-  **0.11 test USDC**, one payment/job. See [social video service](docs/SOCIAL_VIDEO.md) for
+  **0.11 test USDC** or **0.11 test PathUSD on Tempo** (`110000` six-decimal atomic units), one payment/job. See [social video service](docs/SOCIAL_VIDEO.md) for
   uploads, planning, durable execution and deployment.
 - `phone.call`: `{ "contact": "berkin", "goal": "Remind him about the 3pm demo", "on_behalf_of": "Dogukan" }`.
   Places one real Twilio call to an operator-approved contact (`PHONE_CALL_CONTACTS`; raw numbers are
@@ -66,7 +66,7 @@ An unpaid call returns standard x402 v2 `402` with `PAYMENT-REQUIRED`. A local w
 Stellar testnet authorization. Repeat the same input and headers with `PAYMENT-SIGNATURE`.
 Each service has its own receiving wallet and fixed price listed above; use its actual 402 offer.
 
-For `image.generate` and `phone.call`, `X-Payment-Protocol: mpp` on metadata/POST
+For `image.generate`, `phone.call` and `video.social`, `X-Payment-Protocol: mpp` on metadata/POST
 selects Tempo Moderato (42431). Metadata exposes `mpp.amount` (six decimals) and
 `mpp.recipient`. The 402 uses `WWW-Authenticate`; repeat the same saved request
 with `Authorization: Payment <hash credential>`. Successful responses include
@@ -74,8 +74,11 @@ with `Authorization: Payment <hash credential>`. Successful responses include
 Phone calls default to `100000` test PathUSD atomic units and inherit
 `TEMPO_IMAGE_RECIPIENT`. Optional `TEMPO_PHONE_RECIPIENT` and
 `TEMPO_PHONE_PRICE_ATOMIC` override only phone payments. `MPP_SECRET_KEY` remains
-stable/shared; do not rotate it on deployment. Other services remain Stellar-only.
+stable/shared; do not rotate it on deployment. Social videos default to `110000`
+atomic units and inherit `TEMPO_IMAGE_RECIPIENT`; `TEMPO_SOCIAL_RECIPIENT` and
+`TEMPO_SOCIAL_PRICE_ATOMIC` override only social payments. Other services remain Stellar-only.
 No database migration is needed. See [Tempo phone implementation](../docs/TEMPO_PHONE_PAYMENTS.md).
+See [Tempo social-video implementation](../docs/TEMPO_SOCIAL_PAYMENTS.md) for the video route.
 
 `sync` is the default, with a 45-second waiting budget; `wait_ms` accepts 0–60000. Payment and provider
 submission are mandatory acceptance steps; a very short wait does not skip them. Completion within the
@@ -188,6 +191,6 @@ input, ID, and recovery token, without `PAYMENT-SIGNATURE`; GET does not submit 
 An accepted fal request whose ID was lost must be matched by an operator before attachment;
 there is no automatic resubmission or refund path.
 
-The project supports Stellar testnet and Tempo Moderato testnet (image and phone only).
+The project supports Stellar testnet and Tempo Moderato testnet (images, phone calls and social videos).
 The composite social service supports reference-guided image
 editing internally. The skill/plugin client remains a separate package in `agent-skills/`.
