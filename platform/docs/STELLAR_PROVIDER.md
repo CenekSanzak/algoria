@@ -121,8 +121,31 @@ in your browser: connect the payout account in your wallet (Freighter, xBull, Al
 USDC trustline and the Stellar 8004 registration. The script saves the agent id, deploys again so the manifest
 names it [I2], and runs `provider-kit check` and `verifier check` against the live manifest.
 
-Each step also runs alone: `migrate`, `schedule`, `secrets`, `deploy`, `register`, `check`. Running them again
-is safe.
+Each step also runs alone: `preflight`, `migrate`, `schedule`, `secrets`, `deploy`, `register`, `check`.
+Running them again is safe.
+
+## Live, and the first paid call
+
+Live since 2026-11-03 as **Stellar 8004 agent 71** on `stellar:pubnet`, paid to
+`GBJKC563MYDURY24H5TNSS7GG7TXCDNGNF3YBPYZ3BDUYEQRCKQL7ORH`. `verifier check` passes C1, C2, C3, C6 and C7. See
+how agents find it with `npx -y stellar-agent-search@0.2.0 profile 71`.
+
+The paid checks, C4 (a paid call proven on chain) and C5 (recovery without paying again), need a payer. Use a
+small, dedicated mainnet account of your own, never your main wallet: about 2 XLM, a USDC trustline and 1
+USDC. Its secret goes in an environment variable for this one command, typed in your own terminal:
+
+```sh
+export VERIFIER_PAYER_SECRET=S...   # the dedicated payer account's secret key
+npx -y @stellar-agent-services/verifier@0.1.0 verify \
+  https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/stellar/.well-known/stellar-agent-services.json \
+  --pay --allow-pubnet --max-price 1 --max-spend 1 --rpc https://mainnet.sorobanrpc.com --service phone-call \
+  --input '{"to":"+<your number>","goal":"Say this is a test call from the new Stellar phone service and ask whether they can hear you clearly.","on_behalf_of":"<your name>"}'
+unset VERIFIER_PAYER_SECRET
+```
+
+Your phone rings once; the 1 USDC goes from the payer to the payout account. `--max-spend 1` pays for that one
+call only, so C7's paid part is skipped. A number is called at most 3 times a day
+(`STELLAR_PHONE_CALLS_PER_NUMBER`).
 
 ## Configuration
 
