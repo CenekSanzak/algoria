@@ -2,12 +2,14 @@
   "version": "5",
   "specifiers": {
     "npm:@electric-sql/pglite@0.3.14": "0.3.14",
+    "npm:@stellar-agent-services/protocol@0.1.0": "0.1.0",
     "npm:@stellar/stellar-sdk@16.2.0": "16.2.0",
     "npm:@supabase/supabase-js@2.112.3": "2.112.3",
     "npm:@x402/core@2.22.0": "2.22.0",
     "npm:@x402/stellar@2.22.0": "2.22.0",
     "npm:ajv@8.20.0": "8.20.0",
     "npm:hono@4.13.8": "4.13.8",
+    "npm:libphonenumber-js@1.13.15": "1.13.15",
     "npm:mppx@0.13.1": "0.13.1_@x402+core@2.22.0_hono@4.13.8_viem@2.57.3",
     "npm:viem@2.57.3": "2.57.3_zod@4.6.5"
   },
@@ -53,6 +55,9 @@
         "@noble/hashes@1.8.0",
         "@scure/base"
       ]
+    },
+    "@stellar-agent-services/protocol@0.1.0": {
+      "integrity": "sha512-JWpz6dl286UesaHccqIQRco9Mh8+xY3+qMFVfHSJ3OXQwin97HRmUKUKGrlRZGOQOVYIZsDPTXJ40B0TT5LJeA=="
     },
     "@stellar/js-xdr@4.0.0": {
       "integrity": "sha512-+NmNa7Tk5BI5XFdy/6xGTqAN4J9a9KgCrCGhj2uEUTCBhLkch0M+QbKzNH8zEnejWe0p8w+0q5hUVX6L3OzoVA=="
@@ -352,6 +357,9 @@
     },
     "json-schema-traverse@1.0.0": {
       "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug=="
+    },
+    "libphonenumber-js@1.13.15": {
+      "integrity": "sha512-AHdhEQeDFEJ4GKDAQ9AwxChy+v2kUILUB3TGQRpkXMkWePjXTU/WQEzWVQoIx/Gz8fE73Wr5SEuZCy2vk8jrMQ=="
     },
     "math-intrinsics@1.1.0": {
       "integrity": "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="

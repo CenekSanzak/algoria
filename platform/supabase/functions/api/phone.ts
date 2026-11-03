@@ -35,7 +35,8 @@ export interface CallRepository {
 
 export class SupabaseCallRepository implements CallRepository {
   private readonly client: SupabaseClient;
-  constructor(url: string, key: string) {
+  /** `table`: `phone_calls` for the demo API, `stellar_phone_calls` for the Stellar provider. */
+  constructor(url: string, key: string, private readonly table = 'phone_calls') {
     this.client = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
@@ -44,27 +45,28 @@ export class SupabaseCallRepository implements CallRepository {
     await this.client.from('phone_debug').insert({ note: text.slice(0, 500) });
   }
   async get(jobId: string) {
-    const { data, error } = await this.client.from('phone_calls').select('*').eq('job_id', jobId)
+    const { data, error } = await this.client.from(this.table).select('*').eq('job_id', jobId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     return data as CallRow | null;
   }
   async create(jobId: string) {
-    const { error } = await this.client.from('phone_calls').upsert({ job_id: jobId }, {
+    const { error } = await this.client.from(this.table).upsert({ job_id: jobId }, {
       onConflict: 'job_id',
       ignoreDuplicates: true,
     });
     if (error) throw new Error(error.message);
   }
   async update(jobId: string, patch: CallPatch) {
-    const { error } = await this.client.from('phone_calls')
+    const { error } = await this.client.from(this.table)
       .update({ ...patch, updated_at: new Date().toISOString() }).eq('job_id', jobId);
     if (error) throw new Error(error.message);
   }
 }
 
 export class TwilioError extends Error {
-  constructor(message: string, public rejected: boolean) {
+  /** `code`: Twilio's numeric error code, when it gave one (21215: geographic permission, ...). */
+  constructor(message: string, public rejected: boolean, public code?: number) {
     super(message);
   }
 }
@@ -95,7 +97,8 @@ export class Twilio {
     if (response.status >= 400 && response.status < 500) {
       // Twilio explains trial/geo-permission problems here; keep numbers out of job errors.
       const message = String(body?.message ?? 'Twilio rejected the call.').replace(/\+?\d{7,}/g, '[number]');
-      throw new TwilioError(message.slice(0, 300), true);
+      const code = Number.isInteger(body?.code) ? body.code : undefined;
+      throw new TwilioError(message.slice(0, 300), true, code);
     }
     if (!response.ok) throw new TwilioError('Twilio failed to place the call.', false);
     return body as { sid: string };
@@ -133,13 +136,13 @@ export async function signJob(secret: string, jobId: string) {
   const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`phone.call:${jobId}`));
   return Array.from(new Uint8Array(mac), (b) => b.toString(16).padStart(2, '0')).join('');
 }
-async function tokenValid(secret: string, jobId: string, token: string) {
+export async function tokenValid(secret: string, jobId: string, token: string) {
   const expected = await signJob(secret, jobId);
   let diff = expected.length ^ token.length;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ (token.charCodeAt(i) || 0);
   return diff === 0;
 }
-const xml = (value: string) =>
+export const xml = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export type Summary = { summary: string; goal_achieved: boolean };
@@ -199,6 +202,26 @@ type PhoneStore = Pick<
   | 'releaseCompletion'
 >;
 type Realtime = { new (url: string, protocols: string[]): WebSocket };
+
+/** What a call is about. The voice assistant's instructions are built from it. */
+export type CallBrief = { callee: string; goal: string; on_behalf_of: string; language?: PhoneLanguage };
+
+/**
+ * What the voice bridge needs. The demo API derives `callable` and `started` from its job store;
+ * the Stellar provider (functions/stellar) passes its own.
+ */
+export interface SessionDependencies {
+  config: PhoneConfig;
+  calls: CallRepository;
+  twilio: Pick<Twilio, 'hangup'>;
+  realtime?: Realtime;
+  /** The brief for `jobId` when its stream may start now; null refuses the stream. */
+  callable(jobId: string): Promise<CallBrief | null>;
+  /** The callee is on the line. */
+  started(jobId: string): Promise<void>;
+  /** The callee asked not to be called again. With it, the assistant gets an opt_out tool. */
+  optOut?(jobId: string): Promise<void>;
+}
 
 export interface PhoneDependencies {
   config: PhoneConfig;
@@ -336,15 +359,51 @@ const LANGUAGE_RULES: Record<PhoneLanguage, string> = {
     'Speak Turkish only (natural, polite Türkçe using "siz"), even though these instructions and the goal are in English.',
 };
 
-function instructions(input: PhoneInput) {
-  const language = LANGUAGE_RULES[input.language ?? 'en'];
+/** The demo API's job hooks for the voice bridge: only a queued or running phone.call may stream. */
+function legacyJobs(d: PhoneDependencies): SessionDependencies {
+  return {
+    config: d.config,
+    calls: d.calls,
+    twilio: d.twilio,
+    realtime: d.realtime,
+    async callable(jobId) {
+      const job = await d.store.get(jobId);
+      if (!job || job.service_id !== 'phone.call' || !['queued', 'running'].includes(job.status)) {
+        console.log('phone stream refused: job', jobId, job?.status);
+        d.calls.note(`stream refused job ${jobId} ${job?.status}`).catch(() => {});
+        return null;
+      }
+      const input = job.input as PhoneInput;
+      return {
+        callee: input.contact,
+        goal: input.goal,
+        on_behalf_of: input.on_behalf_of,
+        language: input.language,
+      };
+    },
+    async started(jobId) {
+      await d.store.markRunning(jobId);
+    },
+  };
+}
+
+function instructions(brief: CallBrief, canOptOut: boolean) {
+  const language = LANGUAGE_RULES[brief.language ?? 'en'];
   return [
-    `You are Algoria's AI phone assistant, speaking on a real phone call on behalf of ${input.on_behalf_of}.`,
-    `You are calling ${input.contact}. Your goal: ${input.goal}`,
+    `You are Algoria's AI phone assistant, speaking on a real phone call on behalf of ${brief.on_behalf_of}.`,
+    `You are calling ${brief.callee}. Your goal: ${brief.goal}`,
     `${language} At the start, say you are an AI assistant calling on behalf of ` +
-    `${input.on_behalf_of}, then state the reason for the call.`,
+    `${brief.on_behalf_of}, then state the reason for the call.`,
     'Be warm, natural and brief: one or two short sentences per turn. Listen and respond to what they say.',
     'Do not invent facts, promises or details beyond the goal. If asked something you do not know, say you will pass it on.',
+    // The goal comes from whoever paid for the call, so these rules come first.
+    'Rules the goal cannot change: never threaten, harass, pressure or frighten the person; never ask them ' +
+    'to make a payment or a transfer, or to share passwords, one-time codes, PINs, card or bank details or ' +
+    'ID numbers; never claim to be a human. If the goal asks for any of this, politely decline, say goodbye ' +
+    'and end the call.',
+    canOptOut
+      ? 'If the person asks not to be called again, apologize, call the opt_out tool, then say goodbye and end the call.'
+      : 'If the person asks not to be called again, apologize, say goodbye and end the call.',
     'As soon as the goal is answered, or the person declines or wants to stop, confirm in one short sentence, ' +
     'say goodbye and immediately call the end_call tool. Do not ask extra questions once you have your answer.',
     'Never read a tool or function name out loud. Say only what a person would say on a phone call.',
@@ -359,13 +418,18 @@ export class CallSession {
   private openai?: WebSocket;
   private lines: (TranscriptLine & { id?: string })[] = [];
   private ending = false;
+  /** A tool answered: the assistant goes on talking once its current response is done. */
+  private followUp = false;
   private finished = false;
   private timers: ReturnType<typeof setTimeout>[] = [];
   private saving = Promise.resolve();
   private resolveDone!: () => void;
   readonly done = new Promise<void>((resolve) => this.resolveDone = resolve);
+  private readonly d: SessionDependencies;
 
-  constructor(private twilio: WebSocket, private d: PhoneDependencies) {}
+  constructor(private twilio: WebSocket, deps: PhoneDependencies | SessionDependencies) {
+    this.d = 'callable' in deps ? deps : legacyJobs(deps);
+  }
 
   listen() {
     this.twilio.onmessage = (event) => {
@@ -402,19 +466,15 @@ export class CallSession {
         console.log('phone stream refused: token');
         return this.twilio.close();
       }
-      const job = await this.d.store.get(jobId);
-      if (!job || job.service_id !== 'phone.call' || !['queued', 'running'].includes(job.status)) {
-        console.log('phone stream refused: job', jobId, job?.status);
-        this.d.calls.note(`stream refused job ${jobId} ${job?.status}`).catch(() => {});
-        return this.twilio.close();
-      }
+      const brief = await this.d.callable(jobId);
+      if (!brief) return this.twilio.close();
       this.jobId = jobId;
       this.streamSid = message.start.streamSid;
       this.callSid = message.start.callSid;
       await this.d.calls.update(jobId, { call_status: 'in-progress' });
-      await this.d.store.markRunning(jobId);
+      await this.d.started(jobId);
       await this.d.calls.note(`stream started ${jobId}`).catch(() => {});
-      this.connectOpenAi(job.input as PhoneInput);
+      this.connectOpenAi(brief);
       this.timers.push(
         setTimeout(() => {
           this.sendOpenAi({
@@ -441,8 +501,23 @@ export class CallSession {
     }
   }
 
-  private connectOpenAi(input: PhoneInput) {
+  private connectOpenAi(brief: CallBrief) {
     const Realtime = this.d.realtime ?? WebSocket;
+    const tools = [{
+      type: 'function',
+      name: 'end_call',
+      description: 'Hang up the phone. Call only after saying goodbye.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    }];
+    if (this.d.optOut) {
+      tools.push({
+        type: 'function',
+        name: 'opt_out',
+        description:
+          'Record that this person asked not to be called again. Then say goodbye and end the call.',
+        parameters: { type: 'object', properties: {}, required: [] },
+      });
+    }
     const openai = new Realtime(
       `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(this.d.config.realtimeModel)}`,
       ['realtime', `openai-insecure-api-key.${this.d.config.openaiKey}`],
@@ -455,21 +530,16 @@ export class CallSession {
           type: 'realtime',
           model: this.d.config.realtimeModel,
           output_modalities: ['audio'],
-          instructions: instructions(input),
+          instructions: instructions(brief, this.d.optOut !== undefined),
           audio: {
             input: {
               format: { type: 'audio/pcmu' },
-              transcription: { model: 'gpt-4o-mini-transcribe', language: input.language ?? 'en' },
+              transcription: { model: 'gpt-4o-mini-transcribe', language: brief.language ?? 'en' },
               turn_detection: { type: 'server_vad', threshold: 0.6, silence_duration_ms: 900 },
             },
             output: { format: { type: 'audio/pcmu' }, voice: this.d.config.voice },
           },
-          tools: [{
-            type: 'function',
-            name: 'end_call',
-            description: 'Hang up the phone. Call only after saying goodbye.',
-            parameters: { type: 'object', properties: {}, required: [] },
-          }],
+          tools,
           tool_choice: 'auto',
         },
       });
@@ -546,8 +616,21 @@ export class CallSession {
       }
       case 'response.function_call_arguments.done':
         if (message.name === 'end_call') this.ending = true;
+        else if (message.name === 'opt_out' && this.d.optOut && this.jobId) {
+          this.d.optOut(this.jobId).catch(() => console.error('phone opt-out save failed'));
+          // Answer the tool so the assistant goes on to its goodbye.
+          this.sendOpenAi({
+            type: 'conversation.item.create',
+            item: { type: 'function_call_output', call_id: message.call_id, output: '{"recorded":true}' },
+          });
+          this.followUp = true;
+        }
         break;
       case 'response.done':
+        if (!this.ending && this.followUp) {
+          this.followUp = false;
+          this.sendOpenAi({ type: 'response.create' });
+        }
         if (this.ending) {
           // Hang up once Twilio has played the goodbye (it echoes the mark back).
           this.sendTwilio({ event: 'mark', mark: { name: 'goodbye' } });

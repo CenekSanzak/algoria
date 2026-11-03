@@ -4,3 +4,10 @@ project_id = "algoria-platform"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/api/index.ts"
+
+# Stellar Agent Services provider (Provider Standard v1): AI phone calls paid in USDC on Stellar.
+# x402 payments, job tokens and Twilio's signed callback URLs authenticate its routes, not Supabase Auth.
+[functions.stellar]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stellar/index.ts"

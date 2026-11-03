@@ -9,6 +9,15 @@ For the future local wallet/skill client, see the
 [skill integration handoff](docs/SKILL_INTEGRATION.md): discovery, mock-anchor top-up,
 x402 signing, sync/async execution, persistent recovery, and acceptance tests.
 
+## Stellar mainnet: AI phone calls for agents
+
+`supabase/functions/stellar` is a separate Edge Function that sells `phone-call` for **1 USDC on Stellar mainnet**
+under [Provider Standard v1](https://github.com/AlgoriaLabs/stellar-agent-services): any number, a realtime AI voice,
+the transcript and a summary back. It is registered in the Stellar 8004 registry, so Stellar Agent Search finds it.
+Manifest: `https://vqqbvydiehuwdzbgvmun.supabase.co/functions/v1/stellar/.well-known/stellar-agent-services.json`.
+See [docs/STELLAR_PROVIDER.md](docs/STELLAR_PROVIDER.md) for the service, its safety checks and
+`node scripts/stellar-deploy.mjs`. The demo API below is unchanged.
+
 ## Use the API
 
 - `GET /discovery/resources`: Algoria's own service catalogue; filters `type`, `network`, `scheme`, `payTo`, `extensions`, `limit`, `offset`.
