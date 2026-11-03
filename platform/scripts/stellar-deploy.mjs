@@ -2,6 +2,7 @@
 // on Stellar mainnet, and registers it in the Stellar 8004 registry so Stellar Agent Search finds it.
 //
 //   node scripts/stellar-deploy.mjs            everything below, in order
+//   node scripts/stellar-deploy.mjs preflight  the facilitator takes the key; the payout account has XLM
 //   node scripts/stellar-deploy.mjs migrate    the stellar_* tables and functions, recorded in migration history
 //   node scripts/stellar-deploy.mjs schedule   the minute sweep (pg_cron + pg_net), its secret kept in Vault
 //   node scripts/stellar-deploy.mjs secrets    the STELLAR_* function secrets
@@ -100,6 +101,73 @@ async function settings() {
     save('STELLAR_RPC_URL', 'https://mainnet.sorobanrpc.com');
   }
   if (!process.env.STELLAR_SWEEP_SECRET) save('STELLAR_SWEEP_SECRET', randomBytes(32).toString('base64url'));
+}
+
+/**
+ * Before anything changes: the facilitator takes the API key and settles this network with sponsored
+ * fees, and the payout account exists with XLM for the USDC trustline's reserve and the registration fees.
+ */
+async function preflight() {
+  const network = process.env.STELLAR_NETWORK;
+  const mainnet = network === 'stellar:pubnet';
+  const facilitator = (process.env.STELLAR_FACILITATOR_URL ||
+    (mainnet ? 'https://channels.openzeppelin.com/x402' : 'https://www.x402.org/facilitator')).replace(
+      /\/+$/,
+      '',
+    );
+  const supported = await fetch(`${facilitator}/supported`, {
+    headers: {
+      Accept: 'application/json',
+      ...(process.env.STELLAR_FACILITATOR_AUTH
+        ? { Authorization: process.env.STELLAR_FACILITATOR_AUTH }
+        : {}),
+    },
+    redirect: 'error',
+    signal: AbortSignal.timeout(15000),
+  });
+  if (supported.status === 401 || supported.status === 403) {
+    throw new Error(
+      'The facilitator refused the API key: get a new one at https://channels.openzeppelin.com/gen, ' +
+        'put it in .env.local as STELLAR_FACILITATOR_AUTH="Bearer <key>" and run this again',
+    );
+  }
+  const kinds = supported.ok ? (await supported.json()).kinds ?? [] : [];
+  const kind = kinds.find((k) => k.x402Version === 2 && k.scheme === 'exact' && k.network === network);
+  if (!kind || kind.extra?.areFeesSponsored !== true) {
+    throw new Error(
+      `The facilitator (${supported.status}) does not settle sponsored "exact" payments on ${network}`,
+    );
+  }
+  console.log(`✓ The facilitator takes the key and settles ${network}.`);
+
+  const horizon = mainnet ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org';
+  const payTo = process.env.STELLAR_PAY_TO;
+  const response = await fetch(`${horizon}/accounts/${payTo}`, { signal: AbortSignal.timeout(15000) });
+  if (response.status === 404) {
+    throw new Error(`${payTo} does not exist on ${network} yet: send it a few XLM first`);
+  }
+  if (!response.ok) throw new Error(`Horizon answered ${response.status} for ${payTo}`);
+  const account = await response.json();
+  const xlm = Number(account.balances.find((b) => b.asset_type === 'native')?.balance ?? 0);
+  const usdc = account.balances.find((b) =>
+    b.asset_code === 'USDC' &&
+    b.asset_issuer === (mainnet
+        ? 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
+        : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5')
+  );
+  // Each subentry, such as the USDC trustline, locks 0.5 XLM on top of the account's own 1 XLM.
+  const reserve = (2 + account.subentry_count + (usdc ? 0 : 1) + (account.num_sponsoring ?? 0) -
+    (account.num_sponsored ?? 0)) * 0.5;
+  const spare = xlm - reserve;
+  console.log(
+    `✓ ${payTo}: ${xlm} XLM, ${usdc ? `USDC trustline (${usdc.balance} USDC)` : 'no USDC trustline yet'}`,
+  );
+  if (spare < 1) {
+    console.log(
+      `! Only ${spare.toFixed(2)} XLM would be left for fees once the trustline's reserve is locked. ` +
+        'Send it a few more XLM before approving the registration in your wallet.',
+    );
+  }
 }
 
 async function migrate() {
@@ -256,10 +324,11 @@ function check() {
   kit([VERIFIER, 'check', manifestUrl, ...rpc]);
 }
 
-const actions = { migrate, schedule, secrets, deploy, register, check };
+const actions = { preflight, migrate, schedule, secrets, deploy, register, check };
 const action = process.argv[2];
 if (action === undefined) {
   await settings();
+  await preflight();
   await migrate();
   await schedule();
   await secrets();
