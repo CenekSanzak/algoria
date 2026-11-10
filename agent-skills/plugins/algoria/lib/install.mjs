@@ -15,6 +15,7 @@ const USAGE = `algoria install — install the Algoria plugin for your coding ag
 
 Options:
   --agent codex|claude   required; install into that application's user account
+  --source <absolute>   local marketplace root; installs uncommitted development files
   --ref <branch/tag>    GitHub ref (default main)
   --cli <absolute-path> use a specific installed host CLI
   --dry-run             show the commands without running or installing anything
@@ -64,15 +65,15 @@ export function findHost(agent, { cli, platform = process.platform, path = proce
 /** Use each host's supported Git-ref syntax; never construct a shell command.
  * @param {'codex' | 'claude'} agent @param {string} ref
  */
-export function installCommands(agent, ref) {
+export function installCommands(agent, ref, source = '') {
   validateRef(ref);
   if (agent === 'codex') return [
-    ['plugin', 'marketplace', 'add', REPOSITORY, '--ref', ref],
-    ['plugin', 'marketplace', 'upgrade', MARKETPLACE],
+    ['plugin', 'marketplace', 'add', ...(source ? [source] : [REPOSITORY, '--ref', ref])],
+    ...(source ? [] : [['plugin', 'marketplace', 'upgrade', MARKETPLACE]]),
     ['plugin', 'add', PLUGIN]
   ];
   if (agent === 'claude') return [
-    ['plugin', 'marketplace', 'add', `${REPOSITORY}@${ref}`, '--scope', 'user'],
+    ['plugin', 'marketplace', 'add', source || `${REPOSITORY}@${ref}`, '--scope', 'user'],
     ['plugin', 'install', PLUGIN, '--scope', 'user']
   ];
   throw new Error('--agent must be codex or claude');
@@ -93,15 +94,20 @@ export function runHost(cli, args, quiet = false) {
 }
 
 /** @param {'codex' | 'claude'} agent @param {string} cli @param {string} ref
- * @param {(cli: string, args: string[], quiet?: boolean) => string} [execute]
+ * @param {(cli: string, args: string[], quiet?: boolean) => string} [execute] @param {string} [source]
  */
-export function installPlugin(agent, cli, ref, execute = runHost) {
+export function installPlugin(agent, cli, ref, execute = runHost, source = '') {
   // Check capabilities before mutating a marketplace. Older host CLIs fail
   // clearly instead of leaving a partial install after an unsupported command.
-  execute(cli, ['plugin', 'marketplace', 'add', '--help'], true);
-  if (agent === 'codex') execute(cli, ['plugin', 'marketplace', 'upgrade', '--help'], true);
+  const marketplaceHelp = execute(cli, ['plugin', 'marketplace', 'add', '--help'], true);
+  if (agent === 'codex' && !source) execute(cli, ['plugin', 'marketplace', 'upgrade', '--help'], true);
   execute(cli, ['plugin', agent === 'codex' ? 'add' : 'install', '--help'], true);
-  for (const args of installCommands(agent, ref)) execute(cli, args);
+  for (const args of installCommands(agent, ref, source)) {
+    // Older Claude Code supports only user-level marketplace registration and
+    // rejects --scope there. Keep user scope explicit on plugin installation.
+    const command = agent === 'claude' && args[1] === 'marketplace' && !marketplaceHelp.includes('--scope') ? args.slice(0, -2) : args;
+    execute(cli, command);
+  }
 }
 
 /** @param {string[]} argv */
@@ -109,26 +115,33 @@ export async function main(argv) {
   return run(async () => {
     const { flags, positional } = parseArgs(argv);
     if (!argv.length || flags.help || positional[0] === 'help') { process.stdout.write(USAGE + '\n'); return; }
-    const allowed = new Set(['agent', 'ref', 'cli', 'dry-run', 'json']);
+    const allowed = new Set(['agent', 'ref', 'cli', 'source', 'dry-run', 'json']);
     if (positional.length || Object.keys(flags).some((key) => !allowed.has(key))) throw new Error('unexpected install argument; use algoria install --help');
     if (flags.agent !== 'codex' && flags.agent !== 'claude') throw new Error('--agent codex or --agent claude is required');
     if ((flags.ref !== undefined && typeof flags.ref !== 'string') || (flags.cli !== undefined && typeof flags.cli !== 'string') ||
         (flags['dry-run'] !== undefined && flags['dry-run'] !== true) || (flags.json !== undefined && flags.json !== true)) throw new Error('invalid install option value');
     const agent = flags.agent;
+    let source = '';
+    if (flags.source !== undefined) {
+      if (typeof flags.source !== 'string' || !isAbsolute(flags.source) || flags.ref) throw new Error('--source must be an absolute local marketplace root; do not combine with --ref');
+      source = flags.source;
+      // Reject missing roots early rather than falling back to Git/main.
+      if (!statSync(source).isDirectory()) throw new Error('local marketplace root is missing');
+    }
     const ref = validateRef(typeof flags.ref === 'string' ? flags.ref : 'main');
     const cli = findHost(agent, { cli: typeof flags.cli === 'string' ? flags.cli : undefined });
-    const commands = installCommands(agent, ref);
+    const commands = installCommands(agent, ref, source);
     if (flags['dry-run']) {
-      emit(flags, { dryRun: true, agent, cli: cli ?? agent, cliFound: Boolean(cli), repository: REPOSITORY, ref, commands },
+      emit(flags, { dryRun: true, agent, cli: cli ?? agent, cliFound: Boolean(cli), repository: source || REPOSITORY, ref: source ? null : ref, commands },
         [`Preview only: ${agent}, ${REPOSITORY}@${ref}`, ...commands.map((args) => JSON.stringify([cli ?? agent, ...args])),
           ...(cli ? [] : [`${agent} CLI was not found; install it or supply --cli before running installation.`])]);
       return;
     }
     if (!cli) throw new Error(`${agent} CLI not found. Install ${agent === 'codex' ? 'Codex (or the desktop app)' : 'Claude Code'} with plugin support, or pass --cli /absolute/path/to/${agent}.`);
-    process.stderr.write(`Installing Algoria for ${agent} from ${REPOSITORY}@${ref}...\n`);
-    installPlugin(agent, cli, ref);
+    process.stderr.write(`Installing Algoria for ${agent} from ${source || `${REPOSITORY}@${ref}`}...\n`);
+    installPlugin(agent, cli, ref, runHost, source);
     const next = agent === 'codex' ? 'Open a new task in Codex/ChatGPT desktop to load the plugin.' : 'Start a new Claude Code session to load the plugin.';
-    emit(flags, { installed: true, agent, repository: REPOSITORY, ref, plugin: PLUGIN, next },
+    emit(flags, { installed: true, agent, repository: source || REPOSITORY, ref: source ? null : ref, plugin: PLUGIN, next },
       [`Algoria installed for ${agent}.`, next, 'Try: "Create an image for me using up to 0.02 test USDC."']);
   });
 }

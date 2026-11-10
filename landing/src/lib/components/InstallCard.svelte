@@ -6,7 +6,7 @@
   type Client = { id: string; name: string; stages: Stage[] };
 
   // Keep in sync with agent-skills/README.md (marketplace name and CLI commands).
-  const firstPrompt: Snippet = { code: 'Set up my Algoria wallet and top up 200 TRY.', label: 'Copy prompt', variant: 'ask' };
+  const firstPrompt: Snippet = { code: 'Check if my local Tempo wallet is ready. Do not sign or pay yet.', label: 'Copy prompt', variant: 'ask' };
 
   const clients: Client[] = [
     {
@@ -39,12 +39,11 @@
       stages: [
         {
           marker: '›',
-          title: 'Paste into Claude Code or Codex, one line at a time',
+          title: 'Run safe checks in your terminal',
           hint: true,
           snippets: [
-            { code: '! npx algoria wallet onboard --network testnet', label: 'Copy wallet command', variant: 'line' },
-            { code: '! npx algoria topup start --try 200', label: 'Copy top-up command', variant: 'line' },
-            { code: '! npx algoria discover search image', label: 'Copy discover command', variant: 'line' }
+            { code: 'npx algoria@latest pay readiness --json', label: 'Copy readiness command', variant: 'line' },
+            { code: 'npx algoria@latest pay --help', label: 'Copy payment help command', variant: 'line' }
           ]
         }
       ]
@@ -91,14 +90,14 @@
             {/each}
           </div>
           {#if stage.hint}
-            <p class="hint"><code>!</code> runs the line as a shell command in the chat. Drop it in a plain terminal. Node.js 22+.</p>
+            <p class="hint">Node.js 22+. These commands do not create a key, sign or pay. Build the local companion below before buying an image.</p>
           {/if}
         </div>
       {/each}
     </div>
   {/each}
 
-  <div class="foot"><span class="live-dot" aria-hidden="true"></span>Live on Stellar testnet</div>
+  <div class="foot"><span class="live-dot" aria-hidden="true"></span>Tempo testnet · native companion setup required</div>
 </div>
 
 <style>
@@ -199,15 +198,6 @@
     font-size: 12px;
     line-height: 1.6;
     color: var(--txt-muted);
-  }
-
-  .hint code {
-    padding: 1px 5px;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    background: var(--well);
-    font: 11px var(--mono);
-    color: var(--txt-sec);
   }
 
   .foot {

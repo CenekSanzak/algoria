@@ -42,16 +42,28 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
 
+      # The Tempo bundle shares the native companion's pure-JS transaction
+      # builder. TypeScript resolves that source's SDK imports from this package,
+      # not from agent-skills/node_modules. No macOS app is built on this runner.
+      - name: Install locked Tempo builder dependencies
+        working-directory: native/tempo-signing-proof
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Type check
         run: pnpm check
 
       - name: Unit tests
         run: pnpm test
 
-      - name: Committed SDK bundles match the lockfile
+      - name: Tempo builder unit tests (offline)
+        working-directory: native/tempo-signing-proof
+        run: npm test
+
+      - name: Committed SDK bundles match the lockfiles
         run: |
           pnpm bundle:sdk
           pnpm bundle:services
+          pnpm bundle:tempo
           git diff --exit-code -- plugins/algoria/lib/vendor/
 
       - name: Pack dry run

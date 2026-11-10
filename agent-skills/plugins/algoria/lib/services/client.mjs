@@ -8,6 +8,7 @@ import { validateChallenge } from './policy.mjs';
 import { loadServicesSdk } from './sdk.mjs';
 import { editLedger, getBudget, publicJob, readJob, readLedger, reserveBudget, updateJob } from './state.mjs';
 import { quoteExternal, runExternal } from './external-client.mjs';
+import { runTempo, statusTempo } from './tempo-client.mjs';
 
 /** @param {string} service @param {unknown} input @param {string} budget @param {string} [id] @param {string} [method] */
 export async function quote(service, input, budget, id = randomUUID(), method) {
@@ -105,10 +106,11 @@ async function fetchStatus(job) {
 }
 
 /** Pay at most once for this job. --approve represents the user's approved budget.
- * @param {string} id @param {{approve?: boolean}} [options]
+ * @param {string} id @param {{approve?: boolean, fundTestnet?: boolean}} [options]
  */
-export async function runJob(id, { approve = false } = {}) {
+export async function runJob(id, { approve = false, fundTestnet = false } = {}) {
   jobUrl(id);
+  if ((await readJob(id)).protocol === 'mpp') return runTempo(id, { approve, fundTestnet });
   if ((await readJob(id)).transport === 'mcp') throw new Error('MCP calls cannot run through pay; use algoria mcp status for this saved call');
   if ((await readJob(id)).source === 'stellar8004') return runExternal(id, { approve });
   return withLock(`job-${id}`, async () => {
@@ -157,6 +159,7 @@ export async function statusJob(id, { wait = false, timeout = 180 } = {}) {
   jobUrl(id);
   if (!Number.isFinite(timeout) || timeout < 0 || timeout > 3600) throw new Error('timeout must be 0–3600 seconds');
   const saved = await readJob(id);
+  if (saved.protocol === 'mpp') return statusTempo(id, { wait, timeout });
   if (saved.source === 'stellar8004') return publicJob(saved);
   return withLock(`job-${id}`, async () => {
     const deadline = Date.now() + timeout * 1000;

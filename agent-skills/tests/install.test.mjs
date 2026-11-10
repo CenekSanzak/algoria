@@ -14,7 +14,7 @@ await writeFile(fake, `#!/usr/bin/env node
 import {appendFileSync} from 'node:fs';
 const args=process.argv.slice(2);
 appendFileSync(process.env.ALGORIA_INSTALL_TEST_LOG, JSON.stringify(args)+'\\n');
-if(args.includes('--help')) {console.log('Plugin commands supported');process.exit(0);}
+if(args.includes('--help')) {console.log('Plugin commands supported --scope');process.exit(0);}
 if(process.env.ALGORIA_INSTALL_TEST_FAIL && args.includes(process.env.ALGORIA_INSTALL_TEST_FAIL)) {console.error('host rejected install');process.exit(7);}
 console.log('Host operation completed');
 `, { mode: 0o755 });
@@ -30,6 +30,23 @@ function invoke(args, env = {}) {
 const calls = async () => (await readFile(log, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
 
 describe('plugin installer', () => {
+  it('supports older Claude marketplace CLI while keeping plugin install at user scope', () => {
+    const execute = vi.fn((/** @type {string} */ _cli, /** @type {string[]} */ _args) => 'supported commands');
+    installPlugin('claude', '/cli', 'main', execute, '/local/source');
+    expect(execute.mock.calls.at(-2)?.[1]).toEqual(['plugin', 'marketplace', 'add', '/local/source']);
+    expect(execute.mock.calls.at(-1)?.[1]).toEqual(['plugin', 'install', 'algoria@algoria-skills', '--scope', 'user']);
+  });
+  it('installs a local marketplace without a Git ref or main checkout', async () => {
+    for (const agent of ['claude', 'codex']) {
+      await rm(log, { force: true });
+      const result = invoke(['--agent', agent, '--cli', fake, '--source', temp, '--json']);
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ installed: true, repository: temp, ref: null });
+      const writes = (await calls()).filter(args => !args.includes('--help'));
+      expect(writes[0]).toEqual(['plugin', 'marketplace', 'add', temp, ...(agent === 'claude' ? ['--scope', 'user'] : [])]);
+      expect(writes.flat()).not.toContain('main');
+    }
+  });
   it('installs Codex via argv from any directory, with spaces in the CLI path and an explicit branch', async () => {
     const result = invoke(['--agent', 'codex', '--cli', fake, '--ref', 'codex/stellar8004-testnet-services', '--json']);
     expect(result.status, result.stderr).toBe(0);

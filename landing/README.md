@@ -5,9 +5,18 @@ standalone SvelteKit app, separate from the chat app at the repository root, and
 HTML with `@sveltejs/adapter-static`. There are no accounts, wallet connections, payment actions,
 tracking scripts, or frontend secrets.
 
+The Tempo preview focuses on the implemented `image.generate` MPP route on
+Moderato testnet, with test PathUSD and a separately built macOS Touch ID wallet.
+The homepage animation is scripted, not a live purchase or biometric prompt.
+It shows local permission approval followed by a separate exact-payment approval.
+The setup guide discloses disposable signing accounts, local-only budgets and
+the lack of a packaged/notarized wallet installer. Other existing plugin service
+routes are not advertised as Tempo-compatible.
+
 The design follows [algoria.chat](https://algoria.chat): its slate tokens, Prompt and Geist Mono, glass
-cards, dark by default with a light toggle. `static/favicon.svg` and `static/algoria-thumbnail.png` are
-copied from there.
+cards, dark by default with a light toggle. `static/favicon.svg` is copied from
+there. Social cards use `static/algoria-tempo-preview.jpg`, a screenshot of this
+Tempo landing page. The older Stellar thumbnail is retained but no longer linked.
 
 ## Local development
 
@@ -18,6 +27,7 @@ pnpm install
 pnpm dev       # http://127.0.0.1:4173
 pnpm check     # svelte-check
 pnpm build     # prerenders to dist/
+pnpm test      # checks the built pages for Tempo copy and setup disclosures
 pnpm preview   # serves the built dist/
 ```
 
@@ -36,13 +46,15 @@ src/lib/components/
   HeroDemo.svelte                scripted, mocked Claude Code / Codex session for the hero
   InstallCard.svelte             Claude Code / Codex / npx tabs, defined as data
   CodeBlock.svelte               a command or prompt with its copy button
-  ThemeToggle.svelte  SiteHeader.svelte  SiteFooter.svelte  StellarMark.svelte
+  ThemeToggle.svelte  SiteHeader.svelte  SiteFooter.svelte
 static/                          favicon and Open Graph image
 ```
 
 The install commands in `InstallCard.svelte` mirror `agent-skills/README.md`; update both together when
-the marketplace name (`algoria-skills`) or CLI commands change. The npx tab shows `! npx algoria …`
-lines, which run as shell commands when pasted into Claude Code or Codex.
+the marketplace name (`algoria-skills`) or CLI commands change. The npx tab shows
+read-only Tempo readiness/help commands for a terminal, not legacy wallet/top-up commands.
+The build instructions use the same native companion setup as
+`native/tempo-signing-proof/README.md`.
 
 ## Hosting
 
@@ -54,8 +66,10 @@ detected; leave the output directory empty. Node.js 22 comes from `engines` in `
 
 On Vercel `svelte.config.js` passes no options to `adapter-static`, which switches it to zero-config
 mode: it writes `.vercel/output/` with clean URLs (`/how-to-use`) and immutable caching for `_app/`.
-No environment variables are needed. Once the domain is known, update `site.url` in
-`src/lib/links.ts` so canonical and Open Graph URLs point at it.
+No website environment variables are needed. `site.url` in `src/lib/links.ts`
+points canonical and Open Graph URLs at `https://algoria-x.vercel.app/`.
+The local signing companion's environment variable belongs to the plugin host,
+not Vercel.
 
 ### Sites
 

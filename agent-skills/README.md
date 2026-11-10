@@ -311,14 +311,24 @@ read that pin.
 
 ```bash
 pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+npm ci --prefix ../native/tempo-signing-proof --ignore-scripts --no-audit --no-fund
 pnpm test
+npm test --prefix ../native/tempo-signing-proof # offline transaction/permission tests
 pnpm check                        # tsc --noEmit over JSDoc-typed .mjs
 pnpm bundle:sdk                   # wallet and SEP-10 bundle
 pnpm bundle:services              # x402 signing, registry reads, schema validation
+pnpm bundle:tempo                 # MPP and shared native transaction builder
 ```
 
 `--ignore-workspace` keeps this package out of the root app's dependency graph,
 so the two are installed, tested and released on their own.
+
+The Tempo entry point imports the companion's shared JavaScript transaction
+builder from `../native/tempo-signing-proof/src/`. Its SDK imports resolve against
+that directory's `node_modules`, so both locked installs are required before
+`pnpm check` or `pnpm bundle:tempo`, including in CI. This does not build or launch
+the macOS wallet, request Touch ID, or send payments; the installed plugin still
+ships the committed bundle without runtime npm dependencies.
 
 The tests never touch a real wallet: `ALGORIA_HOME` is pointed at a temp folder
 before the keystore module is imported. Use the same variable to try the scripts

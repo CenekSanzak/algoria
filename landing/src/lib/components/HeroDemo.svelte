@@ -1,28 +1,23 @@
 <script lang="ts">
-  // A scripted, mocked session: nothing here calls the network. It follows the
-  // real skill flow (wallet onboard → TRY top-up → quote → pay per service) with
-  // the five Algoria services that make a narrated, captioned video.
+  // A scripted illustration of the supported Tempo image journey.
+  // Nothing here contacts a service, invokes Touch ID or makes a payment.
   import { onMount } from 'svelte';
 
   const hosts = [
     { id: 'claude', name: 'Claude Code', agent: 'Claude', path: 'claude ~/hackathon' },
     { id: 'codex', name: 'Codex', agent: 'Codex', path: 'codex ~/hackathon' }
   ];
-  const prompt = 'Create a TikTok video with voiceover for my hackathon project.';
+  const prompt = 'Generate one sailboat image using Tempo, within my approved budget.';
 
-  // Prices are the live testnet prices of each service, in USDC.
+  // Illustrative quote only; real purchases always use the backend's exact quote.
   const plan = [
-    { label: 'Images ×3', id: 'image.generate', usdc: '0.03' },
-    { label: 'Voiceover', id: 'speech.generate', usdc: '0.02' },
-    { label: 'Slideshow', id: 'video.slideshow', usdc: '0.01' },
-    { label: 'Narration', id: 'video.compose', usdc: '0.01' },
-    { label: 'Captions', id: 'video.caption', usdc: '0.02' }
+    { label: 'One image', id: 'image.generate', amount: '0.010000' }
   ];
 
-  // Phases: 1 asked · 2 plan · 3 onboarding · 4 wallet ready · 5 top-up opened
-  // 6 lira received · 7 quote · 8 approved · 9–13 services run · 14 all paid · 15 video
+  // Phases: 1 asked · 2 readiness · 3 check · 4 ready · 5 permission review
+  // 6 permission approved · 7 exact quote · 8 Touch ID signing · 9 generation · 10 result
   const RUN = 9;
-  const delays = [600, 700, 1200, 600, 1900, 900, 1700, 500, 800, 800, 800, 800, 800, 500, 6500];
+  const delays = [600, 700, 1200, 600, 1900, 900, 1700, 1400, 1500, 6500];
   const last = delays.length;
 
   let host = $state(0);
@@ -108,37 +103,38 @@
       </div>
 
       {#if phase >= 2}
-        <p class="msg enter"><b>{agent}</b> I can't make videos myself, but Algoria can. First, a wallet.</p>
+        <p class="msg enter"><b>{agent}</b> I'll use Algoria's Tempo image service. First, a local wallet check.</p>
       {/if}
 
       {#if phase >= 3}
         <div class="tool enter">
           {@render state(phase >= 4)}
-          <code>algoria wallet onboard</code>
-          {#if phase >= 4}<span class="out enter">GBX4…Q7LM · key stays here</span>{/if}
+          <code>algoria pay readiness</code>
+          {#if phase >= 4}<span class="out enter">Companion + Touch ID ready</span>{/if}
         </div>
       {/if}
 
       {#if phase >= 5}
-        <p class="msg enter"><b>{agent}</b> Your wallet is empty. Send 200 TRY by bank transfer:</p>
+        <p class="msg enter"><b>{agent}</b> Review your local spending permission. This does not pay for anything.</p>
         <div class="panel enter">
           <div class="p-top">
-            <span class="p-name">Top up · 200 TRY</span>
-            <span class="p-note">≈ 4.76 USDC</span>
+            <span class="p-name">Local spending permission</span>
+            <span class="p-note">No payment now</span>
           </div>
           <dl>
-            <div><dt>IBAN</dt><dd class="mono">TR33 0006 1005 1978 6457 8413 26</dd></div>
-            <div><dt>Reference</dt><dd class="mono">TRMA-7K2Q</dd></div>
+            <div><dt>Total / per purchase</dt><dd class="mono">0.01 test PathUSD</dd></div>
+            <div><dt>Scope</dt><dd>Algoria images · Tempo testnet</dd></div>
+            <div><dt>Expiry</dt><dd>In one hour</dd></div>
           </dl>
           <div class="p-status" class:ok={phase >= 6}>
             {@render state(phase >= 6)}
-            {phase >= 6 ? 'Received · 4.76 USDC in your wallet' : 'Waiting for your transfer…'}
+            {phase >= 6 ? 'Permission approved with Touch ID' : 'Review locally, then approve with Touch ID…'}
           </div>
         </div>
       {/if}
 
       {#if phase >= 7}
-        <p class="msg enter"><b>{agent}</b> 5 Algoria services make a 30-second video with voice and captions.</p>
+        <p class="msg enter"><b>{agent}</b> Here is the MPP quote. Review the exact payment in your local wallet.</p>
         <div class="panel enter">
           <ul class="plan">
             {#each plan as step, i (step.id)}
@@ -150,33 +146,30 @@
                 {/if}
                 <span class="s-label">{step.label}</span>
                 <code>{step.id}</code>
-                <span class="s-price">{step.usdc}</span>
+                <span class="s-price">{step.amount}</span>
               </li>
             {/each}
           </ul>
           <div class="p-foot">
-            <span>Total <b>0.09 USDC</b> · ≈ ₺3.78</span>
-            <span class="approve" class:done={phase >= 8}>{phase >= 8 ? '✓ Approved' : 'Approve'}</span>
+            <span>Example <b>0.01 test PathUSD</b></span>
+            <span class="approve" class:done={phase >= 9}>{phase >= 9 ? '✓ Signed' : 'Touch ID'}</span>
           </div>
         </div>
       {/if}
 
-      {#if phase >= 15}
+      {#if phase >= 9}
+        <p class="msg enter"><b>{agent}</b> MPP receipt verified. Generating your image—same saved task if interrupted.</p>
+      {/if}
+
+      {#if phase >= 10}
         <div class="result enter">
-          <div class="video" aria-hidden="true">
-            <div class="v-bg"></div>
-            <div class="v-top">
-              <span class="v-brand">algoria</span>
-              <span class="v-title">Buy AI services<br />inside {agent}</span>
-            </div>
-            <span class="v-play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
-            <span class="v-cap">Pay in <mark>lira</mark> on Stellar</span>
-            <span class="v-bar"><i></i></span>
+          <div class="image-placeholder" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M32 10v33H13L32 10Z M37 19l13 24H37V19Z M10 48h44l-7 7H18l-8-7Z M9 59c5-3 9 3 14 0s9 3 14 0 9 3 14 0" /></svg>
           </div>
           <div class="r-copy">
-            <p><b>{agent}</b> Done. Your video is ready to post.</p>
-            <span class="meta"><code>hackathon-tiktok.mp4</code></span>
-            <span class="meta">0:28 · voice + captions<br />paid 0.09 USDC ≈ ₺3.78</span>
+            <p><b>{agent}</b> Done. Your image is ready.</p>
+            <span class="meta"><code>sailboat.png</code></span>
+            <span class="meta">Tempo testnet · MPP receipt<br />0.010000 test PathUSD · illustration only</span>
           </div>
         </div>
       {/if}
@@ -185,7 +178,7 @@
 
   <div class="foot">
     <span class="live-dot" aria-hidden="true"></span>
-    <span>Mocked demo · the real flow runs on Stellar testnet</span>
+    <span>Mocked demo · Tempo testnet · no payment here</span>
     <button type="button" class="replay" onclick={restart} aria-label="Replay demo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
       Replay
@@ -498,103 +491,23 @@
     gap: 18px;
   }
 
-  /* Placeholder for the finished vertical video: a looping still with captions. */
-  .video {
-    position: relative;
-    width: 124px;
-    aspect-ratio: 9 / 16;
+  /* Repo-native illustration, not a generated service result. */
+  .image-placeholder {
+    display: grid;
+    place-items: center;
+    width: 100px;
+    aspect-ratio: 1;
     flex-shrink: 0;
     overflow: hidden;
     border: 1px solid var(--border-strong);
     border-radius: 14px;
-    color: #fff;
-    background: #0d1020;
+    color: var(--accent);
+    background: var(--raised);
   }
 
-  .v-bg {
-    position: absolute;
-    inset: -40%;
-    background:
-      radial-gradient(circle at 30% 30%, #7c5cff 0, transparent 45%),
-      radial-gradient(circle at 70% 60%, #ff5c8a 0, transparent 42%),
-      radial-gradient(circle at 40% 85%, #2fd3c5 0, transparent 40%);
-    filter: blur(8px);
-    opacity: 0.85;
-    animation: drift 7s ease-in-out infinite alternate;
-  }
-
-  .v-top {
-    position: absolute;
-    inset: 16px 12px auto;
-    display: grid;
-    gap: 6px;
-  }
-
-  .v-brand {
-    font: 600 9px var(--mono);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    opacity: 0.8;
-  }
-
-  .v-title {
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.15;
-    text-shadow: 0 1px 8px #0006;
-  }
-
-  .v-play {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #ffffff33;
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-    transform: translate(-50%, -30%);
-  }
-
-  .v-play svg {
-    width: 16px;
-    height: 16px;
-    margin-left: 2px;
-  }
-
-  .v-cap {
-    position: absolute;
-    inset: auto 10px 20px;
-    padding: 4px 6px;
-    border-radius: 6px;
-    background: #000000a6;
-    font-size: 10px;
-    font-weight: 500;
-    text-align: center;
-  }
-
-  .v-cap mark {
-    background: none;
-    color: #ffd166;
-  }
-
-  .v-bar {
-    position: absolute;
-    inset: auto 10px 9px;
-    height: 3px;
-    border-radius: 2px;
-    background: #ffffff33;
-    overflow: hidden;
-  }
-
-  .v-bar i {
-    display: block;
-    height: 100%;
-    background: #fff;
-    animation: play 6s linear infinite;
+  .image-placeholder svg {
+    width: 64px;
+    height: 64px;
   }
 
   .r-copy {
@@ -680,21 +593,6 @@
     }
   }
 
-  @keyframes drift {
-    to {
-      transform: translate(12%, -8%) rotate(20deg);
-    }
-  }
-
-  @keyframes play {
-    from {
-      width: 0;
-    }
-    to {
-      width: 100%;
-    }
-  }
-
   @media (max-width: 560px) {
     .path {
       display: none;
@@ -720,10 +618,6 @@
 
     .plan code {
       display: none;
-    }
-
-    .video {
-      width: 104px;
     }
 
     .result {

@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "bundle:tempo": "node build/bundle-tempo.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit",
@@ -26,6 +27,9 @@
     "@x402/core": "2.22.0",
     "@x402/stellar": "2.22.0",
     "ajv": "8.20.0",
-    "ajv-formats": "3.0.1"
+    "ajv-formats": "3.0.1",
+    "mppx": "0.13.1",
+    "ox": "1.8.5",
+    "viem": "2.57.3"
   }
 }

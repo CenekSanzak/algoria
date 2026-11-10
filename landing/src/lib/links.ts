@@ -5,7 +5,7 @@ export const links = {
 } as const;
 
 export const site = {
-  url: 'https://algoria-services.robust-lime-0047.chatgpt.site/',
-  title: 'Algoria',
-  description: 'Buy AI services that go beyond Claude and Codex, like image, voice and video generation and paid APIs, right inside them. Pay in Turkish lira on Stellar.'
+  url: 'https://algoria-x.vercel.app/',
+  title: 'Algoria — AI payments on Tempo',
+  description: 'Buy AI-generated images inside Claude Code and Codex with MPP on Tempo testnet. Review payments in a local wallet, set spending limits and approve with Touch ID.'
 } as const;

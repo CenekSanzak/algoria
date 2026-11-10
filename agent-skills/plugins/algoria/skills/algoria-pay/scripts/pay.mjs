@@ -3,12 +3,20 @@ import { uploadReference } from '../../../lib/services/references.mjs';
 import { readFile } from 'node:fs/promises';
 import { emit, isMain, parseArgs, run } from '../../../lib/cli.mjs';
 import { listJobs, quote, runJob, statusJob } from '../../../lib/services/client.mjs';
-import { getBudget, setBudget } from '../../../lib/services/state.mjs';
+import { getBudget, setBudget, revokeBudget } from '../../../lib/services/state.mjs';
+import { quoteTempo } from '../../../lib/services/tempo-client.mjs';
+import { imageTask } from '../../../lib/services/task.mjs';
+import { tempoReadiness } from '../../../lib/services/tempo-readiness.mjs';
 
-const USAGE = `algoria pay — execute services with local x402 testnet USDC payments
+const USAGE = `algoria pay — buy AI services and resume saved tasks
+
+  readiness                                           local Tempo/Touch ID checks; no payment
+  task --input <json-file> --budget <name>              prepare one Tempo image task
+  task <saved-id> [--approve --fund-testnet] [--wait]    resume/open the same task
 
   budget --name <name> --total <USDC> --per-call <USDC>   set a named spending cap
   budget --name <name>                                 remaining/spent/reserved
+  revoke --name <name>                                 stop new Tempo signatures locally
   quote <service-id> --input <json-file> --budget <name> save job and price; no payment
   run <job-id> --approve                               pay within budget or resume
   status <job-id> [--wait] [--timeout 180]               same job and fresh media URLs
@@ -16,6 +24,10 @@ const USAGE = `algoria pay — execute services with local x402 testnet USDC pay
   upload-reference <photo-path> [--id <UUID-v4>]         private reference upload; no payment
 
 Options: --json; quote --id <UUID-v4> reuses a known identity and identical input.
+Tempo: budget/quote --protocol mpp; run --approve --fund-testnet.
+Tempo budget requires --agent claude|codex --recipient 0x... --expires ISO_DATE.
+Grant/change opens Touch ID; revoke does not undo submitted payments.
+Tempo uses test PathUSD, a separate budget, and the native Touch ID companion.
 External: quote stellar8004:<agent>:<service-index> --method GET|POST ...
 Use the method from service documentation. GET input is scalar query parameters.
 External status is local only; a lost paid response must never be auto-retried.
@@ -35,13 +47,34 @@ export function main(argv) {
     const [command, target] = positional;
     if (!command || command === 'help' || flags.help) { process.stdout.write(USAGE + '\n'); return; }
     // Never let a caller believe these services use their pubnet wallet.
-    if (flags.network && !['testnet', 'stellar:testnet'].includes(String(flags.network))) throw new Error('Algoria services currently support testnet only');
+    const protocol = typeof flags.protocol === 'string' ? flags.protocol : 'x402';
+    if (!['x402', 'mpp'].includes(protocol)) throw new Error('expected --protocol x402 or mpp');
+    if (flags.network && !(protocol === 'mpp' ? ['testnet', 'eip155:42431'] : ['testnet', 'stellar:testnet']).includes(String(flags.network))) throw new Error('Algoria services currently support testnet only');
     let result;
-    if (command === 'budget') {
+    if (command === 'readiness') result = tempoReadiness();
+    else if (command === 'task') {
+      let input;
+      if (typeof flags.input === 'string') {
+        const data = await readFile(flags.input, 'utf8');
+        if (Buffer.byteLength(data) > 32768) throw new Error('input file exceeds 32768 bytes');
+        input = JSON.parse(data);
+      }
+      if (target && flags.id && target !== flags.id) throw new Error('conflicting task IDs');
+      result = await imageTask({ id: target ?? (typeof flags.id === 'string' ? flags.id : undefined), input,
+        budget: typeof flags.budget === 'string' ? flags.budget : undefined,
+        approve: flags.approve === true, fundTestnet: flags['fund-testnet'] === true,
+        wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
+      if ('interrupted' in result && result.interrupted) process.exitCode = 1;
+    } else if (command === 'budget') {
       const name = value(flags, 'name');
       result = flags.total || flags['per-call']
-        ? await setBudget(name, value(flags, 'total'), value(flags, 'per-call'))
+        ? await setBudget(name, value(flags, 'total'), value(flags, 'per-call'), protocol,
+          { agent: typeof flags.agent === 'string' ? flags.agent : undefined,
+            recipient: typeof flags.recipient === 'string' ? flags.recipient : undefined,
+            expires: typeof flags.expires === 'string' ? flags.expires : undefined })
         : await getBudget(name);
+    } else if (command === 'revoke') {
+      result = await revokeBudget(value(flags, 'name'));
     } else if (command === 'list') result = { jobs: await listJobs() };
     else {
       if (!target) throw new Error('a service ID or saved job ID is required');
@@ -49,12 +82,20 @@ export function main(argv) {
       else if (command === 'quote') {
         const data = await readFile(value(flags, 'input'), 'utf8');
         if (Buffer.byteLength(data) > 32768) throw new Error('input file exceeds 32768 bytes');
-        result = await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined, typeof flags.method === 'string' ? flags.method : undefined);
-      } else if (command === 'run') result = await runJob(target, { approve: flags.approve === true });
+        result = protocol === 'mpp'
+          ? await quoteTempo(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined)
+          : await quote(target, JSON.parse(data), value(flags, 'budget'), typeof flags.id === 'string' ? flags.id : undefined, typeof flags.method === 'string' ? flags.method : undefined);
+      } else if (command === 'run') result = await runJob(target, { approve: flags.approve === true, fundTestnet: flags['fund-testnet'] === true });
       else if (command === 'status') result = await statusJob(target, { wait: flags.wait === true, timeout: Number(flags.timeout ?? 180) });
-      else throw new Error('expected budget, quote, run, status, list or upload-reference');
+      else throw new Error('expected readiness, task, budget, quote, run, status, list or upload-reference');
     }
-    emit(flags, result, [JSON.stringify(result, null, 2)]);
+    const human = 'journey' in result ? ['message' in result ? result.message : result.journey.message,
+      `Task: ${result.id}`, `Price: ${result.amount ?? 'pending'} ${result.unit ?? ''}`,
+      `Next: ${'nextAction' in result ? result.nextAction : result.journey.nextAction}`,
+      ...(result.payment?.success ? ['Payment confirmed; receipt saved.'] : [])]
+      : command === 'readiness' ? [result.ready ? 'Tempo wallet is ready for a testnet purchase.' : 'Tempo wallet needs setup.', result.nextAction]
+      : [JSON.stringify(result, null, 2)];
+    emit(flags, result, human);
   });
 }
 

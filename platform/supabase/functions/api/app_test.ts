@@ -8,6 +8,7 @@ import { type FalPollResult, FalSubmissionError, type FalTarget } from './fal.ts
 import { ASSET, NETWORK, PaymentGateway, type PaymentPayload, type PaymentRequirements } from './payments.ts';
 import { hash } from './security.ts';
 import type { ClaimResult, CompletionClaim, Job, NewJob } from './store.ts';
+import { registerMppTests } from './mpp-test-cases.ts';
 
 const RECIPIENT = 'GCTVT52AAFK7KYO74JAO3QOLNT6BUYTCZYHTRD7C2VZG6C5CJNRVEV6Y';
 const PAYER = 'GDSGS53IUWOSFIW7EWW5NJ4WJLUNVRSH3MYQ3YFGWEJI7VZCVE3C6JDT';
@@ -184,7 +185,7 @@ class MemoryStore implements JobStore {
   }
 }
 
-function harness(allServices = false) {
+export function harness(allServices = false) {
   const store = new MemoryStore();
   const downloadedUrls: string[] = [];
   const submissions: { input: Record<string, unknown>; target?: FalTarget }[] = [];
@@ -368,6 +369,21 @@ function harness(allServices = false) {
     webhook,
   };
 }
+registerMppTests(harness);
+
+Deno.test('operator failure logs expose stages and safe codes, never SDK messages or tokens', async () => {
+  const h = harness();
+  h.store.get = () => Promise.reject(Object.assign(new Error('private-sdk-message-and-token'), { code: 'PGRST301' }));
+  const entries: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { entries.push(args); };
+  try {
+    const response = await h.post(crypto.randomUUID(), { payment: false });
+    equal(response.status, 503);
+    deepEqual(entries, [['API request failed', 'Error', 'read-job', 'PGRST301']]);
+    ok(!JSON.stringify(await response.json()).includes('private-sdk-message'));
+  } finally { console.error = original; }
+});
 
 /** A durable paid snapshot from a prior request, with no external source or payment I/O. */
 async function paidMediaJob(h: ReturnType<typeof harness>, kind: 'audio' | 'video') {

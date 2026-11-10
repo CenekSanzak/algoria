@@ -4,7 +4,7 @@
 </script>
 
 <footer class="wrap">
-  <span class="brand"><img src="/favicon.svg" alt="" width="18" height="18" />Algoria — on Stellar</span>
+  <span class="brand"><img src="/favicon.svg" alt="" width="18" height="18" />Algoria — Tempo testnet</span>
   <nav aria-label="Footer">
     <a href={links.github} target="_blank" rel="noopener noreferrer">GitHub</a>
     <a href={links.npm} target="_blank" rel="noopener noreferrer">npm</a>
